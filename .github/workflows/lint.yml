@@ -1,0 +1,31 @@
+name: Lint
+
+on: [push]
+
+jobs:
+  run-linters:
+    name: Run linters
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v3
+
+      - name: Set up node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm i && git add --renormalize .
+
+      - name: Run linters
+        uses: wearerequired/lint-action@v2
+        with:
+          github_token: ${{ secrets.github_token }}
+          continue_on_error: false
+          auto_fix: true
+          prettier: true
+          prettier_extensions: "css,html,json,jsx,md,sass,scss,ts,tsx,vue,yaml,yml,sol"
+          git_no_verify: true
+          git_email: devs@panoptic.xyz

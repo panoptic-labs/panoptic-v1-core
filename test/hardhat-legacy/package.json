@@ -1,0 +1,80 @@
+{
+  "author": "Axicon Labs Limited",
+  "name": "@panoptic/v1-core",
+  "homepage": "https://www.panoptic.xyz/",
+  "license": "GPL-2.0-or-later",
+  "version": "1.0.0",
+  "description": "Smart contracts of Panoptic",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "panoptic",
+    "options",
+    "defi",
+    "uniswap",
+    "v3"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/panoptic-labs/panoptic-v1-core"
+  },
+  "main": "index.js",
+  "scripts": {
+    "testnogas": "rm -rf __tmp/ && mkdir __tmp/ && mv -f test/Uniswapv3/__snapshots__ __tmp/ 2>/dev/null; true && yarn test && rm -rf test/Uniswapv3/__snapshots__ && mv -f __tmp/__snapshots__ test/Uniswapv3/ 2>/dev/null; true && rm -rf __tmp/ && cd ..",
+    "test": "hardhat test --parallel",
+    "compile": "hardhat compile"
+  },
+  "engines": {
+    "node": ">=10"
+  },
+  "dependencies": {
+    "solmate": "^6.6.1"
+  },
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.0.5",
+    "@nomiclabs/hardhat-waffle": "^2.0.3",
+    "@openzeppelin/contracts": "^4.8.3",
+    "@thanpolas/univ3prices": "^3.0.2",
+    "@typechain/ethers-v5": "^10.0.0",
+    "@typechain/hardhat": "^6.1.3",
+    "@types/chai": "^4.2.21",
+    "@types/mocha": "^9.1.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@uniswap/v3-core": "^1.0.1",
+    "@uniswap/v3-periphery": "^1.4.3",
+    "@uniswap/v3-sdk": "=3.8.2",
+    "chai": "^4.3.4",
+    "dotenv": "^16.0.3",
+    "eslint": "^8.26.0",
+    "eslint-config-standard-with-typescript": "^23.0.0",
+    "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-n": "^15.0.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "ethereum-waffle": "^3.4.4",
+    "ethers": "^5.6.2",
+    "forge-std": "^1.1.2",
+    "hardhat": "^2.13.0",
+    "hardhat-abi-exporter": "^2.10.0",
+    "hardhat-contract-sizer": "^2.5.1",
+    "hardhat-deploy": "^0.11.4",
+    "hardhat-deploy-ethers": "^0.3.0-beta.13",
+    "hardhat-gas-reporter": "^1.0.8",
+    "int24": "^0.0.1",
+    "lint-staged": "^12.3.7",
+    "mocha": "^9.2.2",
+    "mocha-chai-jest-snapshot": "^1.1.4",
+    "prettier": "^2.6.2",
+    "prettier-plugin-solidity": "^1.1.2",
+    "solhint": "^3.3.6",
+    "solhint-plugin-prettier": "^0.0.5",
+    "solidity-analyzer": "^1.0.0",
+    "solidity-coverage": "sc-forks/solidity-coverage#783/head",
+    "ts-node": "^10.7.0",
+    "typechain": "^8.0.0",
+    "typescript": "*"
+  },
+  "lint-staged": {
+    "*.{js,css,md,sol,ts}": "prettier --write"
+  }
+}

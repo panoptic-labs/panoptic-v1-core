@@ -1,0 +1,94 @@
+name: Tests
+on: [push]
+jobs:
+  foundry:
+    strategy:
+      fail-fast: true
+    name: Foundry suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Build
+        env:
+          FOUNDRY_PROFILE: test
+        run: |
+          forge --version
+          forge build
+        id: build
+      - name: Run Forge tests
+        env:
+          FOUNDRY_PROFILE: test
+        run: |
+          forge test --fork-url ${{ secrets.NODE_URL }} -vvv
+        id: forge-test
+
+  contract_sizes:
+    strategy:
+      fail-fast: true
+    name: Check contract size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Build and check sizes (normal)
+        env:
+          FOUNDRY_PROFILE: ci_sizes
+        run: |
+          forge --version
+          forge build --sizes
+        id: build_normal
+      - name: Build and check sizes (via-IR)
+        env:
+          FOUNDRY_PROFILE: ci_sizes_ir
+        run: |
+          forge --version
+          forge build --sizes --skip PanopticHelper
+        id: build
+
+  deploy_sepolia:
+    strategy:
+      fail-fast: true
+    name: Deploy on Sepolia
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Build
+        run: |
+          forge --version
+          forge build
+        id: build
+      - name: Deploy factory on Sepolia
+        env:
+          DEPLOYER_PRIVATE_KEY: "0x375de66eef8034f72ad6736c91e68d94c1ff56ebaab41976bfdd5d875302fca1"
+          UNISWAP_V3_FACTORY: "0x3220B52A7f878a9DA5bc54C224e1bd34642dF65B"
+          WETH9: "0x3BbCB7bB7606C7afAad97e2c5135a97e94103B6f"
+        run: |
+          forge script deploy/DeployProtocol.s.sol:DeployProtocol --rpc-url sepolia -vvvv
+        id: deploy-protocol-sepolia
+      - name: Deploy new pool on Sepolia
+        env:
+          DEPLOYER_PRIVATE_KEY: "0x375de66eef8034f72ad6736c91e68d94c1ff56ebaab41976bfdd5d875302fca1"
+          UNISWAP_V3_FACTORY: "0x3220B52A7f878a9DA5bc54C224e1bd34642dF65B"
+          SFPM: "0x562A05400b793461F85DB478Cf0fcbBC30811217"
+          PANOPTIC_FACTORY: "0xE15EB47eA8A8f88A6204a90D3FC6a5a0372F1731"
+        run: |
+          forge script scripts/DeployTestPool.s.sol:DeployTestPool --rpc-url sepolia -vvvv
+        id: deploy-pool-sepolia
