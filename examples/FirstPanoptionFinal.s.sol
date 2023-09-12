@@ -51,15 +51,16 @@ contract FirstPanoption is Script {
             salt: 1337
         });
 
-        DAI.approve({spender: address(pp.collateralToken0()), amount: type(uint256).max});
-        WBTC.approve({spender: address(pp.collateralToken1()), amount: type(uint256).max});
+        WBTC.approve({spender: address(pp.collateralToken0()), amount: type(uint256).max});
+        DAI.approve({spender: address(pp.collateralToken1()), amount: type(uint256).max});
 
         pp.collateralToken0().deposit({
-            assets: 100 * 10 ** 18,
+            assets: 10 ** 8,
             receiver: vm.addr(vm.envUint("DEPLOYER_PRIVATE_KEY"))
         });
+
         pp.collateralToken1().deposit({
-            assets: 10 ** 7,
+            assets: 100 * 10 ** 18,
             receiver: vm.addr(vm.envUint("DEPLOYER_PRIVATE_KEY"))
         });
 
@@ -69,11 +70,11 @@ contract FirstPanoption is Script {
             .addLeg({
                 legIndex: 0,
                 _optionRatio: 1,
-                _asset: 0,
+                _asset: 1,
                 _isLong: 0,
-                _tokenType: 0,
+                _tokenType: 1,
                 _riskPartner: 0,
-                _strike: 5000,
+                _strike: -5000,
                 _width: 2
             });
 
