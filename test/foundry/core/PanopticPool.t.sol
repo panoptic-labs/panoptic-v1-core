@@ -5026,7 +5026,7 @@ contract PanopticPoolTest is PositionUtils {
             (priceArray, medianTick) = pp.getPriceArray();
             for (uint256 j = 0; j < 8; ++j) {
                 console2.log(expectedArray[j]);
-                console2.log(expectedArray[j+1]);
+                console2.log(expectedArray[j + 1]);
                 console2.log(priceArray[j]);
                 console2.log(block.timestamp);
                 console2.log(lastTimestamp);
