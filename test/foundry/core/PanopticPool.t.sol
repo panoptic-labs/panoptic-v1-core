@@ -4993,7 +4993,7 @@ contract PanopticPoolTest is PositionUtils {
     ) public {
         for (uint256 i = 0; i < 50; ++i) {
             pokeTicks[i] = bound(pokeTicks[i], TickMath.MIN_TICK, TickMath.MAX_TICK);
-            blockTimes[i] = bound(blockTimes[i], 0, type(uint32).max);
+            blockTimes[i] = bound(blockTimes[i], 0, 21990232555);
         }
 
         _initWorldAtTick(x, int24(pokeTicks[0]));
@@ -5012,10 +5012,10 @@ contract PanopticPoolTest is PositionUtils {
             0
         ];
 
-        uint256 lastBlockNumber = block.number;
+        uint256 lastTimestamp = block.timestamp;
 
         for (uint256 i = 1; i < 10; ++i) {
-            vm.roll(block.number + blockTimes[i]);
+            vm.warp(block.timestamp + blockTimes[i]);
 
             UniPoolPriceMock(address(pool)).updatePrice(int24(pokeTicks[i]));
 
@@ -5025,12 +5025,17 @@ contract PanopticPoolTest is PositionUtils {
             expectedArray[8] = int24(pokeTicks[i]);
             (priceArray, medianTick) = pp.getPriceArray();
             for (uint256 j = 0; j < 8; ++j) {
-                // only shift array if an update occured, i.e more than 5 blocks passed since the last update
-                expectedArray[j] = block.number > lastBlockNumber + 4
+                console2.log(expectedArray[j]);
+                console2.log(expectedArray[j+1]);
+                console2.log(priceArray[j]);
+                console2.log(block.timestamp);
+                console2.log(lastTimestamp);
+                // only shift array if an update occured, i.e more than 60 seconds passed since the last update
+                expectedArray[j] = block.timestamp >= lastTimestamp + 60
                     ? expectedArray[j + 1]
                     : expectedArray[j];
-
                 assertEq(priceArray[j], expectedArray[j]);
+                if (priceArray[j] != expectedArray[j]) revert();
             }
 
             // sort the array using quicksort and verify correctness of the median
@@ -5039,8 +5044,8 @@ contract PanopticPoolTest is PositionUtils {
             assertEq(medianTick, (sortedPriceArray[3] + sortedPriceArray[4]) / 2);
 
             // bump last updated block number if an update occured
-            if (block.number > lastBlockNumber + 4) {
-                lastBlockNumber = block.number;
+            if (block.timestamp >= lastTimestamp + 60) {
+                lastTimestamp = block.timestamp;
             }
         }
     }
