@@ -221,6 +221,16 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         _;
     }
 
+    /// @notice Used to gate deposit functions such that they are only callable via the MerkleDistributor.
+    /// Additionally the Owner of the factory may deposit unconditionally.
+    modifier onlyMerkle() {
+        if (
+            msg.sender != address(s_panopticPool.merkleDistributor()) ||
+            msg.sender != factory.factoryOwner()
+        ) revert Errors.unauthorizedDepositor();
+        _;
+    }
+
     /*//////////////////////////////////////////////////////////////
                   INITIALIZATION & PARAMETER SETTINGS
     //////////////////////////////////////////////////////////////*/
@@ -394,46 +404,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     }
 
     /*//////////////////////////////////////////////////////////////
-                     LIMITED TRANSFER FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @dev See {IERC20-transfer}.
-    /// Requirements:
-    /// - the caller must have a balance of at least 'amount'.
-    /// - the msg.sender must not have any position on the panoptic pool
-    function transfer(
-        address recipient,
-        uint256 amount
-    ) public override(ERC20Minimal) returns (bool) {
-        // make sure the caller does not have any open option positions
-        // if they do: we don't want them sending panoptic pool shares to others
-        // since that's like reducing collateral
-
-        if (s_panopticPool.numberOfPositions(msg.sender) != 0) revert Errors.PositionCountNotZero();
-
-        return ERC20Minimal.transfer(recipient, amount);
-    }
-
-    /// @dev See {IERC20-transferFrom}.
-    /// Requirements:
-    /// - the 'from' must have a balance of at least 'amount'.
-    /// - the caller must have allowance for 'from' of at least 'amount' tokens.
-    /// - 'from' must not have any open positions on the panoptic pool.
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public override(ERC20Minimal) returns (bool) {
-        // make sure the caller does not have any open option positions
-        // if they do: we don't want them sending panoptic pool shares to others
-        // as this would reduce their amount of collateral against the opened positions
-
-        if (s_panopticPool.numberOfPositions(from) != 0) revert Errors.PositionCountNotZero();
-
-        return ERC20Minimal.transferFrom(from, to, amount);
-    }
-
-    /*//////////////////////////////////////////////////////////////
                      STANDARD ERC4626 INTERFACE
     //////////////////////////////////////////////////////////////*/
 
@@ -493,7 +463,10 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param assets Amount of assets deposited.
     /// @param receiver User to receive the shares.
     /// @return shares The amount of Panoptic pool shares that were minted to the recipient.
-    function deposit(uint256 assets, address receiver) external returns (uint256 shares) {
+    function deposit(
+        uint256 assets,
+        address receiver
+    ) external onlyMerkle returns (uint256 shares) {
         if (assets > type(uint104).max) revert Errors.DepositTooLarge();
 
         // update the Panoptic pool median with the current tick
@@ -552,7 +525,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param shares Amount of shares to be minted.
     /// @param receiver User to receive the shares.
     /// @return assets The amount of assets deposited to mint the desired amount of shares.
-    function mint(uint256 shares, address receiver) external returns (uint256 assets) {
+    function mint(uint256 shares, address receiver) external onlyMerkle returns (uint256 assets) {
         // update the panoptic pool median with the current tick
         s_panopticPool.pokeMedian();
 

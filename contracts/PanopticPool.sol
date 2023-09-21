@@ -3,6 +3,8 @@ pragma solidity =0.8.18;
 
 // Interfaces
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
+import {GatedFactory} from "@contracts/GatedFactory.sol";
+import {MerkleDistributor} from "@contracts/MerkleDistributor.sol";
 import {IERC20Partial} from "@tokens/interfaces/IERC20Partial.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
@@ -228,6 +230,12 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @dev underlying collateral token1
     CollateralTracker internal s_collateralToken1;
 
+    /// @dev reference to panoptic factory which deployed this pool
+    GatedFactory public s_factory;
+
+    // The MerkleDistributor which will be queried by the CollateralTracker
+    MerkleDistributor public merkleDistributor;
+
     /// @dev Nested mapping that tracks the option formation: address => tokenId => leg => premiaGrowth
     // premia growth is taking a snapshot of the chunk premium in SFPM, which is measuring the amount of fees
     // collected for every chunk per unit of liquidity (net or short, depending on the isLong value of the specific leg index)
@@ -254,6 +262,51 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// this hash can be cheaply verified on every operation with a user provided positionIdList - and we can use that for operations
     /// without having to every load any other data from storage
     mapping(address account => uint256 positionsHash) internal s_positionsHash;
+
+    /*//////////////////////////////////////////////////////////////
+                            ACCESS CONTROL
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice booleans representing gating status
+    /// @dev by default these values are initialized as false
+    bool internal s_closeOnly; // whether opening(mints, rolls) are enabled
+    bool internal s_paused; // whether all opening/closing actions are globally disallowed
+    // @note pause withdrawals as well? move to collateral tracker?
+
+    /// @notice Ensure that the Panoptic Factory owner is the caller. Revert if not.
+    /// @notice the Panoptic Factory is what spins out new Panoptic Pools.
+    modifier onlyFactoryOwner() {
+        if (msg.sender != s_factory.factoryOwner()) revert Errors.NotOwner();
+        _;
+    }
+
+    /// @notice if s_paused is set to to true, all opening and closing actions will be disabled.
+    modifier whenNotPaused() {
+        if (s_paused) revert Errors.NotOpen();
+        _;
+    }
+
+    /// @notice if s_closeOnly is set to to true, all opening actions will be disabled.
+    modifier whenNotCloseOnly() {
+        if (s_closeOnly) revert Errors.NotOpen();
+        _;
+    }
+
+    /// @notice allows factory owner to set the contract gating status.
+    /// @dev set to booleans to true to enable gating. As false implies all actions are allowed.
+    /// @param closeOnly if s_closeOnly is set to to true, all opening actions will be disabled.
+    /// @param paused if s_paused is set to to true, all opening and closing actions will be disabled.
+    function setGateStatus(bool closeOnly, bool paused) public onlyFactoryOwner {
+        s_closeOnly = closeOnly;
+        s_paused = paused;
+    }
+
+    /// @notice View the current gating status.
+    /// @dev if s_closeOnly is set to to true, all opening actions will be disabled.
+    /// @dev if s_paused is set to to true, all opening and closing actions will be disabled.
+    function viewGateStatus() external view returns (bool closeOnly, bool paused) {
+        return (s_closeOnly, s_paused);
+    }
 
     /*//////////////////////////////////////////////////////////////
                              INITIALIZATION
@@ -286,6 +339,9 @@ contract PanopticPool is ERC1155Holder, Multicall {
         // reverts if the Uniswap pool has already been initialized
         if (address(s_univ3pool) != address(0)) revert Errors.PoolAlreadyInitialized();
 
+        // store the owner of the Gated Panoptic Factory
+        s_factory = GatedFactory(msg.sender);
+
         // Store the univ3Pool variable
         s_univ3pool = IUniswapV3Pool(univ3pool);
 
@@ -314,6 +370,17 @@ contract PanopticPool is ERC1155Holder, Multicall {
         // CollateralTracker0 - token0
         // CollateralTracker1 - token1
         InteractionHelper.doApprovals(sfpm, collateralTracker0, collateralTracker1, token0, token1);
+
+        // This creates a new Merkle Distributor contract
+        // and stores the reference
+        merkleDistributor = new MerkleDistributor(
+            s_collateralToken0,
+            s_collateralToken1,
+            token0,
+            token1,
+            s_factory,
+            address(this) // pass Panoptic pool address
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -694,7 +761,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int256 totalSwapped,
         int256 oldPositionPremia,
         uint256[] calldata positionIdList
-    ) internal returns (uint128 poolUtilizations) {
+    ) internal whenNotCloseOnly whenNotPaused returns (uint128 poolUtilizations) {
         // update storage data, take commission IMPORTANT: use post minting utilizations!
 
         int256 portfolioPremium;
@@ -968,7 +1035,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal {
+    ) internal whenNotPaused {
         // Ensure that the current price is within the tick limits
         int24 currentTick;
         (currentTick, , tickLimitLow, tickLimitHigh) = _getPriceAndCheckSlippageViolation(
