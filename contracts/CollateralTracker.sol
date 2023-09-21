@@ -154,7 +154,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @dev When parameters are updated, the factory calls on behalf of the EOA/multisig/DAO that owns it, so we need this to gate access to the function.
     PanopticFactory internal factory;
 
-    // The address of the MerkleDistribution contract that is allowed to deposit assets.
+    // The address of the MerkleDistributor contract that is allowed to deposit assets.
     address internal merkleDistributor;
 
     /// @dev Cached amount of assets accounted to be held by the Panoptic Pool - ignores donations, pending fee payouts, and other untracked balance changes.
@@ -245,7 +245,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     function startToken(
         address underlyingToken,
         IUniswapV3Pool uniswapPool,
-        PanopticPool panopticPool
+        PanopticPool panopticPool,
+        address _merkleDistributor
     ) external {
         // fails if already initialized
         if (s_initialized) revert Errors.CollateralTokenAlreadyInitialized();
@@ -260,6 +261,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // Ensuring that the deployer/owner sets the correct parameters on genesis
         // Calling 'startToken' on the reference itself is not a concern, as it's storage is never accessed
         factory = PanopticFactory(msg.sender);
+
+        // store the address of the MerkleDistributor contract that is allowed to deposit assets
+        merkleDistributor = _merkleDistributor;
 
         // store the address of the underlying ERC20 token
         s_underlyingToken = underlyingToken;
