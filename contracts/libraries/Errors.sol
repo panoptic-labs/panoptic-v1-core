@@ -114,21 +114,4 @@ library Errors {
 
     /// @notice The Uniswap pool's `tickSpacing` is not defined by 2 * swapFee/100 and therefore is not supported.
     error UniswapPoolNotSupported();
-
-    /*//////////////////////////////////////////////////////////////
-                        Merkle Distributor Errors
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice The caller is not the Merkle Distributor
-    error unauthorizedDepositor();
-
-    /// @notice Claim attempted for an already claimed deposit
-    /// Or claim window has been closed by the owner
-    error InvalidClaim();
-
-    /// @notice Provided Merkle Proof and parameters evaluated as invalid against the root hash
-    error InvalidProof();
-
-    /// @notice Mints and rolls are currently disabled
-    error NotOpen();
 }
