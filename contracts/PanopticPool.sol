@@ -175,6 +175,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /*//////////////////////////////////////////////////////////////
                                 STORAGE 
     //////////////////////////////////////////////////////////////*/
+    // whether opening positions (mints, rolls) is enabled
+    bool internal s_closeOnly;
 
     /// @dev The Gated Panoptic Factory that deployed this Panoptic Pool
     PanopticFactory internal factory;
@@ -262,11 +264,6 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /*//////////////////////////////////////////////////////////////
                             ACCESS CONTROL
     //////////////////////////////////////////////////////////////*/
-
-    /// @notice booleans representing gating status
-    /// @dev by default these values are initialized as false
-    bool internal s_closeOnly; // whether opening(mints, rolls) are enabled
-    // @note pause withdrawals as well? move to collateral tracker?
 
     /// @notice Ensure that the Panoptic Factory owner is the caller. Revert if not.
     /// @notice the Panoptic Factory is what spins out new Panoptic Pools.
