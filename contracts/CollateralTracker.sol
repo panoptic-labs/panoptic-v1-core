@@ -154,6 +154,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @dev When parameters are updated, the factory calls on behalf of the EOA/multisig/DAO that owns it, so we need this to gate access to the function.
     PanopticFactory internal factory;
 
+    // The address of the MerkleDistribution contract that is allowed to deposit assets.
+    address internal merkleDistributor;
+
     /// @dev Cached amount of assets accounted to be held by the Panoptic Pool - ignores donations, pending fee payouts, and other untracked balance changes.
     uint128 internal s_poolAssets;
     /// @dev Amount of assets moved from the Panoptic Pool to the AMM.
@@ -222,12 +225,10 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     }
 
     /// @notice Used to gate deposit functions such that they are only callable via the MerkleDistributor.
-    /// Additionally the Owner of the factory may deposit unconditionally.
+    /// The current owner of the factory may deposit unconditionally.
     modifier onlyMerkle() {
-        if (
-            msg.sender != address(s_panopticPool.merkleDistributor()) ||
-            msg.sender != factory.factoryOwner()
-        ) revert Errors.unauthorizedDepositor();
+        if (msg.sender != merkleDistributor && msg.sender != factory.factoryOwner())
+            revert Errors.UnauthorizedDepositor();
         _;
     }
 

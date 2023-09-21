@@ -114,4 +114,14 @@ library Errors {
 
     /// @notice The Uniswap pool's `tickSpacing` is not defined by 2 * swapFee/100 and therefore is not supported.
     error UniswapPoolNotSupported();
+
+    /*//////////////////////////////////////////////////////////////
+                          GATED LAUNCH ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The option mint, burn, or roll cannot be completed because the Panoptic Pool is paused or in close-only mode
+    error NotOpen();
+
+    /// @notice The caller does not have permission to deposit collateral
+    error UnauthorizedDepositor();
 }
