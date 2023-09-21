@@ -155,6 +155,9 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// May be configurable on a pool-by-pool basis in the future, but hardcoded for now
     uint32 internal constant TWAP_WINDOW = 600;
 
+    // The minimum amount of time, in seconds, permitted between mini/median TWAP updates.
+    uint256 internal constant MEDIAN_PERIOD = 60;
+
     /// @dev The maximum allowed ratio for a single chunk, defined as: shortLiquidity / netLiquidity
     /// The long premium spread multiplier that corresponds with the MAX_SPREAD value depends on VEGOID,
     /// which can be explored in this calculator: https://www.desmos.com/calculator/mdeqob2m04
@@ -180,8 +183,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
     /// @notice Mini-median storage slot
     /// @dev The data for the last 8 interactions is stored as such:
-    /// LAST UPDATED BLOCK NUMBER (32 bits)
-    /// [BLOCK.NUMBER]
+    /// LAST UPDATED BLOCK TIMESTAMP (40 bits)
+    /// [BLOCK.TIMESTAMP]
     // (00000000000000000000000000000000) // dynamic
     //
     /// @dev ORDERING of tick indices least --> greatest (24 bits)
@@ -209,9 +212,6 @@ contract PanopticPool is ERC1155Holder, Multicall {
     //
     // [Constants.MAX_V3POOL_TICK] [2]
     // 000011011000100111101001
-    //
-    /// @dev [TickMath.MAX_TICK] [2]
-    /// 000011011000100111101001
     //
     ///  @dev [CURRENT TICK] [4]
     /// (000000000000000000000000) // dynamic
@@ -296,7 +296,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
         unchecked {
             s_miniMedian =
-                (uint256(block.number) << 216) +
+                (uint256(block.timestamp) << 216) +
                 // magic number which adds (7,5,3,1,0,2,4,6) order and minTick in positions 7, 5, 3 and maxTick in 6, 4, 2
                 // see comment on s_miniMedian initialization for format of this magic number
                 (uint256(0xF590A6F276170D89E9F276170D89E9F276170D89E9000000000000)) +
@@ -1574,8 +1574,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
     function updateMedian(int24 currentTick) internal {
         uint256 oldMedianData = s_miniMedian;
         unchecked {
-            // only proceed if last block is more than 1 min old (ie. 5 blocks or older)
-            if (block.number > uint256(uint40(oldMedianData >> 216)) + 4) {
+            // only proceed if last entry is at least MEDIAN_PERIOD seconds old
+            if (block.timestamp >= uint256(uint40(oldMedianData >> 216)) + MEDIAN_PERIOD) {
                 uint24 orderMap = uint24(oldMedianData >> 192);
 
                 uint24 newOrderMap;
@@ -1601,9 +1601,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
                     newOrderMap = newOrderMap + ((rank + 1) << (3 * (i + shift - 1)));
                 }
-
                 s_miniMedian =
-                    (block.number << 216) +
+                    (block.timestamp << 216) +
                     (uint256(newOrderMap) << 192) +
                     uint256(uint192(oldMedianData << 24)) +
                     uint256(uint24(currentTick));
