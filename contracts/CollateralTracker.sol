@@ -420,13 +420,16 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         address recipient,
         uint256 amount
     ) public override(ERC20Minimal) returns (bool) {
-        // make sure the caller does not have any open option positions
-        // if they do: we don't want them sending panoptic pool shares to others
-        // since that's like reducing collateral
+        // // make sure the caller does not have any open option positions
+        // // if they do: we don't want them sending panoptic pool shares to others
+        // // since that's like reducing collateral
 
-        if (s_panopticPool.numberOfPositions(msg.sender) != 0) revert Errors.PositionCountNotZero();
+        // if (s_panopticPool.numberOfPositions(msg.sender) != 0) revert Errors.PositionCountNotZero();
 
-        return ERC20Minimal.transfer(recipient, amount);
+        // return ERC20Minimal.transfer(recipient, amount);
+
+        // Transfers are disabled for the gated launch:
+        revert();
     }
 
     /// @dev See {IERC20-transferFrom}.
@@ -439,13 +442,16 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         address to,
         uint256 amount
     ) public override(ERC20Minimal) returns (bool) {
-        // make sure the caller does not have any open option positions
-        // if they do: we don't want them sending panoptic pool shares to others
-        // as this would reduce their amount of collateral against the opened positions
+        // // make sure the caller does not have any open option positions
+        // // if they do: we don't want them sending panoptic pool shares to others
+        // // as this would reduce their amount of collateral against the opened positions
 
-        if (s_panopticPool.numberOfPositions(from) != 0) revert Errors.PositionCountNotZero();
+        // if (s_panopticPool.numberOfPositions(from) != 0) revert Errors.PositionCountNotZero();
 
-        return ERC20Minimal.transferFrom(from, to, amount);
+        // return ERC20Minimal.transferFrom(from, to, amount);
+
+        // Transfers are disabled for the gated launch:
+        revert();
     }
 
     /*//////////////////////////////////////////////////////////////
