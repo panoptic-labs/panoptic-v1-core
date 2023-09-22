@@ -520,7 +520,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         uint64 effectiveLiquidityLimitX32,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) external {
+    ) external whenNotCloseOnly {
         _mintOptions(
             positionIdList,
             positionSize,
@@ -567,7 +567,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         uint64 effectiveLiquidityLimitX32,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) external {
+    ) external whenNotCloseOnly {
         // checks that the current tick is within the limits provided
         int24 currentTick;
         int24 medianTick;
@@ -727,7 +727,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int256 totalSwapped,
         int256 oldPositionPremia,
         uint256[] calldata positionIdList
-    ) internal whenNotCloseOnly returns (uint128 poolUtilizations) {
+    ) internal returns (uint128 poolUtilizations) {
         // update storage data, take commission IMPORTANT: use post minting utilizations!
 
         int256 portfolioPremium;
