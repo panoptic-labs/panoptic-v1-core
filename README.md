@@ -14,7 +14,7 @@ The Panoptic protocol is noncustodial, has no counterparty risk, offers instanta
 - [Panoptic's Website](https://www.panoptic.xyz)
 - [Whitepaper](https://paper.panoptic.xyz/)
 - [Litepaper](https://intro.panoptic.xyz)
-- [Documentation](https://www.docs.panoptic.xyz)
+- [Documentation](https://panoptic.xyz/docs/intro)
 - [Twitter](https://twitter.com/Panoptic_xyz)
 - [Discord](https://discord.gg/7fE8SN9pRT)
 - [Blog](https://www.panoptic.xyz/blog)
@@ -100,7 +100,7 @@ contracts/
 ├── SemiFungiblePositionManager — "The 'engine' of Panoptic - manages all Uniswap V3 positions in the protocol as well as being a more advanced, gas-efficient alternative to NFPM for Uniswap LPs"
 ├── tokens
 │   ├── ERC1155Minimal — "A minimalist implementation of the ERC1155 token standard without metadata"
-│   ├── ERC20Minimal — "A minimialist implementation of the ERC20 token standard without metadata"
+│   ├── ERC20Minimal — "A minimalist implementation of the ERC20 token standard without metadata"
 │   └── interfaces
 │       └── IERC20Partial — "An incomplete ERC20 interface containing functions used in Panoptic with some return values omitted to support noncompliant tokens such as USDT"
 ├── types
