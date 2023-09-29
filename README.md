@@ -14,7 +14,7 @@ The Panoptic protocol is noncustodial, has no counterparty risk, offers instanta
 - [Panoptic's Website](https://www.panoptic.xyz)
 - [Whitepaper](https://paper.panoptic.xyz/)
 - [Litepaper](https://intro.panoptic.xyz)
-- [Documentation](https://panoptic.xyz/docs/intro)
+- [Documentation](https://docs.panoptic.xyz/)
 - [Twitter](https://twitter.com/Panoptic_xyz)
 - [Discord](https://discord.gg/7fE8SN9pRT)
 - [Blog](https://www.panoptic.xyz/blog)
