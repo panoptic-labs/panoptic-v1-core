@@ -287,6 +287,10 @@ library Math {
                             LIQUIDITY AMOUNTS (STRIKE+WIDTH)
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Calculates the amount of token0 received for a given liquidityChunk
+    /// @dev Had to use a less optimal calculation to match Uniswap's implementation
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @return amount0 The amount of token0
     function getAmount0ForLiquidity(
         uint256 liquidityChunk
     ) internal pure returns (uint256 amount0) {
@@ -303,6 +307,9 @@ library Math {
         //return (uint256(liquidityChunk.liquidity()) << 96) / lowPriceX96 -  (uint256(liquidityChunk.liquidity()) << 96) / highPriceX96;
     }
 
+    /// @notice Calculates the amount of token1 received for a given liquidityChunk
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @return amount1 The amount of token1
     function getAmount1ForLiquidity(
         uint256 liquidityChunk
     ) internal pure returns (uint256 amount1) {
@@ -312,6 +319,11 @@ library Math {
         return mulDiv96(liquidityChunk.liquidity(), highPriceX96 - lowPriceX96);
     }
 
+    /// @notice Calculates the amount of token0 and token1 received for a given liquidityChunk at the provided currentTick
+    /// @param currentTick the current tick to be evaluated
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @return amount0 The amount of token0
+    /// @return amount1 The amount of token1
     function getAmountsForLiquidity(
         int24 currentTick,
         uint256 liquidityChunk
@@ -331,6 +343,11 @@ library Math {
         }
     }
 
+    /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk 
+    /// @dev Had to use a less optimal calculation to match Uniswap's implementation
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @param amount0 The amoint of token0
+    /// @return liquidity The calculated amount of liquidity 
     function getLiquidityForAmount0(
         uint256 liquidityChunk,
         uint256 amount0
@@ -344,6 +361,10 @@ library Math {
             );
     }
 
+    /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk 
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @param amount1 The amoint of token1
+    /// @return liquidity The calculated amount of liquidity 
     function getLiquidityForAmount1(
         uint256 liquidityChunk,
         uint256 amount1
