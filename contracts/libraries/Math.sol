@@ -10,6 +10,18 @@ library Math {
     // equivalent to type(uint256).max - used in assembly blocks as a replacement
     uint256 internal constant MAX_UINT256 = 2 ** 256 - 1;
 
+    /// @dev Last value for which 1.0001^MIN_TICK is greater than 2**-128
+    int24 internal constant MIN_TICK = -887272;
+    
+    /// @dev Last value for which 1.0001^MAX_TICK is less than 2**128
+    int24 internal constant MAX_TICK = -MIN_TICK;
+
+    /// @dev Value of getSqrtRatioAtTick(MIN_TICK)
+    uint160 internal constant MIN_SQRT_RATIO = 4295128739;
+
+    /// @dev Value of getSqrtRatioAtTick(MAX_TICK)
+    uint160 internal constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342;
+
     /*//////////////////////////////////////////////////////////////
                           GENERAL MATH HELPERS
     //////////////////////////////////////////////////////////////*/
@@ -76,6 +88,171 @@ library Math {
             }
             if (x >= 0x10) {
                 r += 1;
+            }
+        }
+    }
+
+    /// @notice Returns the index of the most significant bit of the number,
+    ///     where the least significant bit is at index 0 and the most significant bit is at index 255
+    /// @dev The function satisfies the property:
+    ///     x >= 2**mostSignificantBit(x) and x < 2**(mostSignificantBit(x)+1)
+    /// @param x the value for which to compute the most significant bit, must be greater than 0
+    /// @return r the index of the most significant bit
+    function mostSignificantBit(uint256 x) internal pure returns (uint8 r) {
+        require(x > 0);
+
+        if (x >= 0x100000000000000000000000000000000) {
+            x >>= 128;
+            r += 128;
+        }
+        if (x >= 0x10000000000000000) {
+            x >>= 64;
+            r += 64;
+        }
+        if (x >= 0x100000000) {
+            x >>= 32;
+            r += 32;
+        }
+        if (x >= 0x10000) {
+            x >>= 16;
+            r += 16;
+        }
+        if (x >= 0x100) {
+            x >>= 8;
+            r += 8;
+        }
+        if (x >= 0x10) {
+            x >>= 4;
+            r += 4;
+        }
+        if (x >= 0x4) {
+            x >>= 2;
+            r += 2;
+        }
+        if (x >= 0x2) r += 1;
+    }    
+
+    /*//////////////////////////////////////////////////////////////
+                                TICK MATHS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates 1.0001^(tick/2) as an X96 number
+    /// @dev Implemented using Uniswap's "incorrect" constants. Supplying commented-out real values for an accurate calculation
+    /// @dev Will revert if |tick| > max tick
+    /// @param tick Value of the tick for which sqrt(1.0001^tick) is calculated
+    /// @return sqrtPriceX96 A Q64.96 number representing the sqrt price at the provided tick
+    function getSqrtRatioAtTick(int24 tick) internal pure returns (uint160 sqrtPriceX96) {
+        unchecked {
+            uint256 absTick = tick < 0 ? uint256(-int256(tick)) : uint256(int256(tick));
+            if (absTick > uint256(int256(MAX_TICK))) revert Errors.InvalidTick();
+
+            uint256 sqrtR =
+                absTick & 0x1 != 0 ? 0xfffcb933bd6fad37aa2d162d1a594001 : 0x100000000000000000000000000000000;
+                           // RealV: 0xfffcb933bd6fad37aa2d162d1a594001
+            if (absTick & 0x2 != 0) sqrtR = (sqrtR * 0xfff97272373d413259a46990580e213a) >> 128;
+                                           // RealV: 0xfff97272373d413259a46990580e2139
+            if (absTick & 0x4 != 0) sqrtR = (sqrtR * 0xfff2e50f5f656932ef12357cf3c7fdcc) >> 128;
+                                           // RealV: 0xfff2e50f5f656932ef12357cf3c7fdca
+            if (absTick & 0x8 != 0) sqrtR = (sqrtR * 0xffe5caca7e10e4e61c3624eaa0941cd0) >> 128;
+                                           // RealV: 0xffe5caca7e10e4e61c3624eaa0941ccd
+            if (absTick & 0x10 != 0) sqrtR = (sqrtR * 0xffcb9843d60f6159c9db58835c926644) >> 128;
+                                            // RealV: 0xffcb9843d60f6159c9db58835c92663e
+            if (absTick & 0x20 != 0) sqrtR = (sqrtR * 0xff973b41fa98c081472e6896dfb254c0) >> 128;
+                                            // RealV: 0xff973b41fa98c081472e6896dfb254b6
+            if (absTick & 0x40 != 0) sqrtR = (sqrtR * 0xff2ea16466c96a3843ec78b326b52861) >> 128;
+                                            // RealV: 0xff2ea16466c96a3843ec78b326b5284f
+            if (absTick & 0x80 != 0) sqrtR = (sqrtR * 0xfe5dee046a99a2a811c461f1969c3053) >> 128;
+                                            // RealV: 0xfe5dee046a99a2a811c461f1969c3032
+            if (absTick & 0x100 != 0) sqrtR = (sqrtR * 0xfcbe86c7900a88aedcffc83b479aa3a4) >> 128;
+                                             // RealV: 0xfcbe86c7900a88aedcffc83b479aa363
+            if (absTick & 0x200 != 0) sqrtR = (sqrtR * 0xf987a7253ac413176f2b074cf7815e54) >> 128;
+                                             // RealV: 0xf987a7253ac413176f2b074cf7815dd0
+            if (absTick & 0x400 != 0) sqrtR = (sqrtR * 0xf3392b0822b70005940c7a398e4b70f3) >> 128;
+                                             // RealV: 0xf3392b0822b70005940c7a398e4b6ff1
+            if (absTick & 0x800 != 0) sqrtR = (sqrtR * 0xe7159475a2c29b7443b29c7fa6e889d9) >> 128;
+                                             // RealV: 0xe7159475a2c29b7443b29c7fa6e887f2
+            if (absTick & 0x1000 != 0) sqrtR = (sqrtR * 0xd097f3bdfd2022b8845ad8f792aa5825) >> 128;
+                                              // RealV: 0xd097f3bdfd2022b8845ad8f792aa548c
+            if (absTick & 0x2000 != 0) sqrtR = (sqrtR * 0xa9f746462d870fdf8a65dc1f90e061e5) >> 128;
+                                              // RealV: 0xa9f746462d870fdf8a65dc1f90e05b52
+            if (absTick & 0x4000 != 0) sqrtR = (sqrtR * 0x70d869a156d2a1b890bb3df62baf32f7) >> 128;
+                                              // RealV: 0x70d869a156d2a1b890bb3df62baf27ff
+            if (absTick & 0x8000 != 0) sqrtR = (sqrtR * 0x31be135f97d08fd981231505542fcfa6) >> 128;
+                                              // RealV: 0x31be135f97d08fd981231505542fbfe8
+            if (absTick & 0x10000 != 0) sqrtR = (sqrtR * 0x9aa508b5b7a84e1c677de54f3e99bc9) >> 128;
+                                               // RealV: 0x9aa508b5b7a84e1c677de54f3e988fe
+            if (absTick & 0x20000 != 0) sqrtR = (sqrtR * 0x5d6af8dedb81196699c329225ee604) >> 128;
+                                               // RealV: 0x5d6af8dedb81196699c329225ed28d
+            if (absTick & 0x40000 != 0) sqrtR = (sqrtR * 0x2216e584f5fa1ea926041bedfe98) >> 128;
+                                               // RealV: 0x2216e584f5fa1ea926041bedeaf4
+            if (absTick & 0x80000 != 0) sqrtR = (sqrtR * 0x48a170391f7dc42444e8fa2) >> 128;
+                                               // RealV: 0x48a170391f7dc42444e7be7
+
+            if (tick > 0) sqrtR = type(uint256).max / sqrtR;
+
+            // Downcast + rounding up to keep is consistent with Uniswap's
+            sqrtPriceX96 = uint160((sqrtR >> 32) + (sqrtR % (1 << 32) == 0 ? 0 : 1));
+        }
+    }   
+
+
+    /// @notice Calculates the greatest tick value such that getRatioAtTick(tick) <= ratio
+    /// @dev Revets if sqrtPriceX96 < MIN_SQRT_RATIO or sqrtPrice > MAX_SQRT_RATIO
+    /// @param sqrtPriceX96 The sqrt ratio for which to compute the tick as a Q64.96
+    /// @return tick The greatest tick for which the ratio is less than or equal to the input ratio
+    function getTickAtSqrtRatio(uint160 sqrtPriceX96) internal pure returns (int24) {
+        unchecked {
+            // second inequality must be < because the price can never reach the price at the max tick
+            if (sqrtPriceX96 < MIN_SQRT_RATIO || sqrtPriceX96 > MAX_SQRT_RATIO) revert Errors.InvalidSqrtRatio();
+
+            // Find the expression for sqrtPriceX96 = m * 2**msb, where m is a X32 number
+            uint256 msb = mostSignificantBit(sqrtPriceX96);
+
+            // find the mantissa
+            uint256 m = msb > 128 ? uint256(sqrtPriceX96) >> (msb-128) : uint256(sqrtPriceX96) << (128 - msb);
+
+            /// @dev Do a Taylor expansion of Ln[x] around x=1.5, x is always betweeen (1, 2):
+            /// @dev Log[x] = Log[3/2] + 2/3*(x-3/2) - 2/9*(x-3/2)**2 + 8/81*(x-3/2)**3 - 4/81*(x-3/2)**4 + 32/1215*(x-3/2)**5 - 32/2187*(x-3/2)**6 + 
+            ///                  128/15309*(x-3/2)**7 - 32/6561*(x-3/2)**8 + 512/177147*(x-3/2)**9
+
+            int256 x3_2 = int256((m - (3<<128) / 2));
+
+            int256 log_mX128 = 0;
+            //log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(32768 << 128) /int256(215233605);
+            //log_mX128 = (log_mX128 * x3_2) / 2**128 - int256(8192 << 128) / int256(33480783);
+            //log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(8192 << 128) /int256(20726199);
+            //log_mX128 = (log_mX128 * x3_2) / 2**128 - int256(1024 << 128) / int256(1594323);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(2048 << 128) /int256(1948617);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 - int256(512 << 128) / int256(295245);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(512 << 128) /int256(177147);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 - int256(32 << 128) / int256(6561);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(128 << 128) /int256(15309);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 - int256(32 << 128) / int256(2187);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(32 << 128) / int256(1215);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 - int256(4 << 128) / int256(81);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(8 << 128) / int256(81);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 - int256(2 << 128) / int256(9);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(2 << 128) / int256(3);
+            log_mX128 = (log_mX128 * x3_2) / 2**128 + int256(137972626690900373465550041896316339718);
+
+            int256 numerator = log_mX128 + int256(msb - 96) * int256(235865763225513294137944142764154484399);
+            int256 tick;
+            int256 tickDown;
+            if (msb < 96) {
+                tick = (numerator + 8506633848419547728916991634454851 + 1701326769683909545783398326890970) / 17013267696839095457833983268909703 - 1;
+                tickDown = (numerator + 8506633848419547728916991634454851 - 1701326769683909545783398326890970) / 17013267696839095457833983268909703;
+            } else {
+                tick = (numerator + 1701326769683909545783398326890970) / 17013267696839095457833983268909703;
+                tickDown = (numerator - 1701326769683909545783398326890970) / 17013267696839095457833983268909703;
+            }
+
+            if (tick == tickDown) {
+                return int24(tick);
+            } else {
+                if (sqrtPriceX96 < getSqrtRatioAtTick(int24(tick))) {
+                    tick -= 1;
+                }
+                return int24(tick);
             }
         }
     }
@@ -528,4 +705,5 @@ library Math {
         }
         return data;
     }
+
 }
