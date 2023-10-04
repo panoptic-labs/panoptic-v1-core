@@ -15,9 +15,6 @@ import {FeesCalc} from "@libraries/FeesCalc.sol";
 import {Math} from "@libraries/Math.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
 import {SafeTransferLib} from "@libraries/SafeTransferLib.sol";
-// Uniswap Libraries
-import {LiquidityAmounts} from "@univ3-libraries/LiquidityAmounts.sol";
-import {TickMath} from "@univ3-libraries/TickMath.sol";
 // Custom types
 import {LeftRight} from "@types/LeftRight.sol";
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
@@ -1022,20 +1019,14 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
                 );
 
                 unchecked {
-                    uint160 sqrtLower = TickMath.getSqrtRatioAtTick(liquidityChunk.tickLower());
-                    uint160 sqrtUpper = TickMath.getSqrtRatioAtTick(liquidityChunk.tickUpper());
 
                     // increment accumulators of the upper bound on tokens contained across all legs of the position at any given tick
-                    amount0 += LiquidityAmounts.getAmount0ForLiquidity(
-                        sqrtLower,
-                        sqrtUpper,
-                        liquidityChunk.liquidity()
+                    amount0 += Math.getAmount0ForLiquidity(
+                        liquidityChunk
                     );
 
-                    amount1 += LiquidityAmounts.getAmount1ForLiquidity(
-                        sqrtLower,
-                        sqrtUpper,
-                        liquidityChunk.liquidity()
+                    amount1 += Math.getAmount1ForLiquidity(
+                        liquidityChunk
                     );
                 }
             }
