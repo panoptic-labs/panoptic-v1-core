@@ -170,24 +170,23 @@ contract MathTest is Test {
         harness.getTickAtSqrtRatio(r);
     }
 
-
     /**
-    * forge-config: default.fuzz.runs = 100
-    */
+     * forge-config: default.fuzz.runs = 100
+     */
     function test_Success_getTickAtSqrtRatio(int24 x) public {
-        x = int24(bound(x, int24(-887271), int24(887271))); 
+        x = int24(bound(x, int24(-887271), int24(887271)));
         uint160 inputPrice = harness.getSqrtRatioAtTick(x);
 
         int24 uniV3Result = TickMath.getTickAtSqrtRatio(inputPrice);
         int24 returnedResult = harness.getTickAtSqrtRatio(inputPrice);
         assertEq(uniV3Result, returnedResult);
 
-        uniV3Result = TickMath.getTickAtSqrtRatio(inputPrice-1);
-        returnedResult = harness.getTickAtSqrtRatio(inputPrice-1);
+        uniV3Result = TickMath.getTickAtSqrtRatio(inputPrice - 1);
+        returnedResult = harness.getTickAtSqrtRatio(inputPrice - 1);
         assertEq(uniV3Result, returnedResult);
-        
-        uniV3Result = TickMath.getTickAtSqrtRatio(inputPrice+1);
-        returnedResult = harness.getTickAtSqrtRatio(inputPrice+1);
+
+        uniV3Result = TickMath.getTickAtSqrtRatio(inputPrice + 1);
+        returnedResult = harness.getTickAtSqrtRatio(inputPrice + 1);
         assertEq(uniV3Result, returnedResult);
     }
 
@@ -200,102 +199,95 @@ contract MathTest is Test {
     }
 
     function test_Success_getSqrtRatioAtTick(int24 x) public {
-        x = int24(bound(x, int24(-887271), int24(887271))); 
+        x = int24(bound(x, int24(-887271), int24(887271)));
         uint160 uniV3Result = TickMath.getSqrtRatioAtTick(x);
         uint160 returnedResult = harness.getSqrtRatioAtTick(x);
         assertEq(uniV3Result, returnedResult);
     }
 
-
     function test_Success_getAmount0ForLiquidity(uint128 a) public {
-
-        a = uint128(bound(a, uint128(1), uint128(2**128-1)));
+        a = uint128(bound(a, uint128(1), uint128(2 ** 128 - 1)));
         uint256 uniV3Result = LiquidityAmounts.getAmount0ForLiquidity(
-            TickMath.getSqrtRatioAtTick(int24(-14)), 
-            TickMath.getSqrtRatioAtTick(int24(10)), 
+            TickMath.getSqrtRatioAtTick(int24(-14)),
+            TickMath.getSqrtRatioAtTick(int24(10)),
             a
         );
-        
+
         uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
         chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
         chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
 
         uint256 returnedResult = harness.getAmount0ForLiquidity(chunk);
-        
+
         assertEq(uniV3Result, returnedResult);
     }
 
     function test_Success_getAmount1ForLiquidity(uint128 a) public {
-
         uint256 uniV3Result = LiquidityAmounts.getAmount1ForLiquidity(
-            TickMath.getSqrtRatioAtTick(int24(-14)), 
-            TickMath.getSqrtRatioAtTick(int24(10)), 
+            TickMath.getSqrtRatioAtTick(int24(-14)),
+            TickMath.getSqrtRatioAtTick(int24(10)),
             a
         );
-        
+
         uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
         chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
         chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
 
         uint256 returnedResult = harness.getAmount1ForLiquidity(chunk);
-        
+
         assertEq(uniV3Result, returnedResult);
     }
 
     function test_Success_getAmountsForLiquidity(uint128 a) public {
-
         (uint256 uniV3Result0, uint256 uniV3Result1) = LiquidityAmounts.getAmountsForLiquidity(
-            TickMath.getSqrtRatioAtTick(int24(2)), 
-            TickMath.getSqrtRatioAtTick(int24(-14)), 
-            TickMath.getSqrtRatioAtTick(int24(10)), 
+            TickMath.getSqrtRatioAtTick(int24(2)),
+            TickMath.getSqrtRatioAtTick(int24(-14)),
+            TickMath.getSqrtRatioAtTick(int24(10)),
             a
         );
-        
+
         uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
         chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
         chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
 
-        (uint256 returnedResult0, uint256 returnedResult1) = harness.getAmountsForLiquidity(int24(2), chunk);
-        
+        (uint256 returnedResult0, uint256 returnedResult1) = harness.getAmountsForLiquidity(
+            int24(2),
+            chunk
+        );
+
         assertEq(uniV3Result0, returnedResult0);
         assertEq(uniV3Result1, returnedResult1);
     }
 
     function test_Success_getLiquidityForAmount0(uint112 a) public {
-
         uint256 uniV3Result = LiquidityAmounts.getLiquidityForAmount0(
-            TickMath.getSqrtRatioAtTick(int24(-14)), 
-            TickMath.getSqrtRatioAtTick(int24(10)), 
+            TickMath.getSqrtRatioAtTick(int24(-14)),
+            TickMath.getSqrtRatioAtTick(int24(10)),
             a
         );
-        
+
         uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), 0);
         chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
         chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
 
         uint256 returnedResult = harness.getLiquidityForAmount0(chunk, a);
-        
+
         assertEq(uniV3Result, returnedResult);
     }
 
-
     function test_Success_getLiquidityForAmount1(uint112 a) public {
-
         uint256 uniV3Result = LiquidityAmounts.getLiquidityForAmount1(
-            TickMath.getSqrtRatioAtTick(int24(-14)), 
-            TickMath.getSqrtRatioAtTick(int24(10)), 
+            TickMath.getSqrtRatioAtTick(int24(-14)),
+            TickMath.getSqrtRatioAtTick(int24(10)),
             a
         );
-        
+
         uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), 0);
         chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
         chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
 
         uint256 returnedResult = harness.getLiquidityForAmount1(chunk, a);
-        
+
         assertEq(uniV3Result, returnedResult);
     }
-
-
-
 }

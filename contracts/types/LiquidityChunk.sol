@@ -126,7 +126,6 @@ library LiquidityChunk {
         }
     }
 
-
     /// @notice Copy the tick range (upper and lower ticks) of a chunk `from` to `self`.
     /// @notice This is helpful if you have a pre-existing liquidity amount, say "100" as a uint128. Simply cast to a uint256 and then we want
     ///  to pack in the tick range as well so we add that to the front (towards the MSB) of the bit pattern keeping the liquidity amount the same.
