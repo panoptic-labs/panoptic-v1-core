@@ -343,11 +343,11 @@ library Math {
         }
     }
 
-    /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk 
+    /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk
     /// @dev Had to use a less optimal calculation to match Uniswap's implementation
     /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
     /// @param amount0 The amoint of token0
-    /// @return liquidity The calculated amount of liquidity 
+    /// @return liquidity The calculated amount of liquidity
     function getLiquidityForAmount0(
         uint256 liquidityChunk,
         uint256 amount0
@@ -361,10 +361,10 @@ library Math {
             );
     }
 
-    /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk 
+    /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk
     /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
     /// @param amount1 The amoint of token1
-    /// @return liquidity The calculated amount of liquidity 
+    /// @return liquidity The calculated amount of liquidity
     function getLiquidityForAmount1(
         uint256 liquidityChunk,
         uint256 amount1
