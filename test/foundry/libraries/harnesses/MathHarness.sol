@@ -123,4 +123,15 @@ contract MathHarness {
         (uint256 result0, uint256 result1) = Math.getAmountsForLiquidity(t, a);
         return (result0, result1);
     }
+    
+    function getLiquidityForAmount0(uint256 c, uint256 a0) public pure returns (uint256) {
+        uint256 result = Math.getLiquidityForAmount0(c, a0);
+        return result;
+    }
+    
+    function getLiquidityForAmount1(uint256 c, uint256 a1) public pure returns (uint256) {
+        uint256 result = Math.getLiquidityForAmount1(c, a1);
+        return result;
+    }
+
 }
