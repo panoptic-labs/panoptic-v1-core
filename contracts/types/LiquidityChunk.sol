@@ -103,6 +103,30 @@ library LiquidityChunk {
         }
     }
 
+    /// @notice Overwrites the lower tick to this chunk.
+    /// @param self the LiquidityChunk
+    /// @param _tickLower the lower tick to add
+    /// @return the chunk with added lower tick
+    function updateTickLower(uint256 self, int24 _tickLower) internal pure returns (uint256) {
+        self -= uint256(0).addTickLower(self.tickLower());
+        unchecked {
+            return self + (uint256(int256(_tickLower)) << 232);
+        }
+    }
+
+    /// @notice Overwrites the upper tick to this chunk.
+    /// @param self the LiquidityChunk
+    /// @param _tickUpper the upper tick to add
+    /// @return the chunk with added upper tick
+    function updateTickUpper(uint256 self, int24 _tickUpper) internal pure returns (uint256) {
+        self -= uint256(0).addTickUpper(self.tickUpper());
+        unchecked {
+            // convert tick upper to uint24 as explicit conversion from int24 to uint256 is not allowed
+            return self + ((uint256(uint24(_tickUpper))) << 208);
+        }
+    }
+
+
     /// @notice Copy the tick range (upper and lower ticks) of a chunk `from` to `self`.
     /// @notice This is helpful if you have a pre-existing liquidity amount, say "100" as a uint128. Simply cast to a uint256 and then we want
     ///  to pack in the tick range as well so we add that to the front (towards the MSB) of the bit pattern keeping the liquidity amount the same.

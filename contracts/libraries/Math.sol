@@ -4,9 +4,15 @@ pragma solidity ^0.8.0;
 // Libraries
 import {Errors} from "@libraries/Errors.sol";
 
+// Custom types
+import {LiquidityChunk} from "@types/LiquidityChunk.sol";
+
 /// @title Core math library.
 /// @author Axicon Labs Limited
 library Math {
+    
+    using LiquidityChunk for uint256; // a leg within an option position `tokenId`
+    
     // equivalent to type(uint256).max - used in assembly blocks as a replacement
     uint256 internal constant MAX_UINT256 = 2 ** 256 - 1;
 
@@ -256,6 +262,59 @@ library Math {
             }
         }
     }
+
+    /*//////////////////////////////////////////////////////////////
+                            LIQUIDITY AMOUNTS (STRIKE+WIDTH)
+    //////////////////////////////////////////////////////////////*/
+
+    function getAmount0ForLiquidity(uint256 liquidityChunk) internal pure returns (uint256 amount0) {
+
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
+
+        return mulDiv(uint256(liquidityChunk.liquidity()) << 96, highPriceX96 - lowPriceX96, highPriceX96) / lowPriceX96;
+        
+        //return (uint256(liquidityChunk.liquidity()) << 96) / lowPriceX96 -  (uint256(liquidityChunk.liquidity()) << 96) / highPriceX96;
+
+
+    }
+
+    function getAmount1ForLiquidity(uint256 liquidityChunk) internal pure returns (uint256 amount1) {
+        
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
+
+        return mulDiv96(liquidityChunk.liquidity(), highPriceX96 - lowPriceX96);
+
+    }
+
+    function getAmountsForLiquidity(int24 currentTick, uint256 liquidityChunk) internal pure returns (uint256 amount0, uint256 amount1) {
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
+
+        uint160 currentPriceX96 = getSqrtRatioAtTick(currentTick);
+
+        if (currentPriceX96 <= lowPriceX96) {
+            amount0 = getAmount0ForLiquidity(liquidityChunk);
+        } else if (currentPriceX96  > highPriceX96) {
+            amount1 = getAmount1ForLiquidity(liquidityChunk);
+        } else {
+            amount0 = getAmount0ForLiquidity(liquidityChunk.updateTickLower(currentTick));
+            amount1 = getAmount1ForLiquidity(liquidityChunk.updateTickUpper(currentTick));
+        }
+
+
+    }
+
+    /*
+    function getLiquidityForAmount0(uint256 chunk, uint256 amount) internal pure returns (uint128 liquidity) {
+
+    }
+
+    function getLiquidityForAmount1(uint256 chunk, uint256 amount) internal pure returns (uint128 liquidity) {
+
+    }
+    */
 
     /*//////////////////////////////////////////////////////////////
                                 CASTING
