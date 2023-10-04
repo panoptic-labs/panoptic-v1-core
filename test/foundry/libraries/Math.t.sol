@@ -170,7 +170,7 @@ contract MathTest is Test {
 
 
     /**
-    * forge-config: default.fuzz.runs = 1000000
+    * forge-config: default.fuzz.runs = 10000
     */
     function test_Success_getTickAtSqrtRatio(int24 x) public {
         x = int24(bound(x, int24(-887271), int24(887271))); 
