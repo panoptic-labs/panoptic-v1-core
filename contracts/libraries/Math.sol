@@ -306,15 +306,20 @@ library Math {
 
     }
 
-    /*
-    function getLiquidityForAmount0(uint256 chunk, uint256 amount) internal pure returns (uint128 liquidity) {
+    function getLiquidityForAmount0(uint256 liquidityChunk, uint256 amount0) internal pure returns (uint128 liquidity) {
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
+
+        return toUint128(mulDiv(amount0, mulDiv96(highPriceX96, lowPriceX96), highPriceX96 - lowPriceX96));
 
     }
 
-    function getLiquidityForAmount1(uint256 chunk, uint256 amount) internal pure returns (uint128 liquidity) {
+    function getLiquidityForAmount1(uint256 liquidityChunk, uint256 amount1) internal pure returns (uint128 liquidity) {
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
 
+        return toUint128(mulDiv(amount1, 2**96, highPriceX96 - lowPriceX96));
     }
-    */
 
     /*//////////////////////////////////////////////////////////////
                                 CASTING
