@@ -249,7 +249,7 @@ library Math {
 
             // compute expression for  log[m] + (msg-96)*Log[2] * 2**128
             int256 numerator = log_mX128 +
-                int256(msb - 96) *  
+                int256(msb - 96) *
                 int256(235865763225513294137944142764154484399);
 
             int256 tick;
