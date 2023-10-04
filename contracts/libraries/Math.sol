@@ -223,6 +223,7 @@ library Math {
             /// @dev Log[x] = Log[3/2] + 2/3*(x-3/2) - 2/9*(x-3/2)**2 + 8/81*(x-3/2)**3 - 4/81*(x-3/2)**4 + 32/1215*(x-3/2)**5 - 32/2187*(x-3/2)**6 +
             ///                  128/15309*(x-3/2)**7 - 32/6561*(x-3/2)**8 + 512/177147*(x-3/2)**9
 
+            // compute the value of (x-3/2) as a X128
             int256 x3_2 = int256((m - (3 << 128) / 2));
 
             int256 log_mX128 = 0;
@@ -244,13 +245,16 @@ library Math {
             log_mX128 =
                 (log_mX128 * x3_2) /
                 2 ** 128 +
-                int256(137972626690900373465550041896316339718);
+                int256(137972626690900373465550041896316339718); // Log[3/2]*2**128
 
+            // compute expression for  log[m] + (msg-96)*Log[2] * 2**128
             int256 numerator = log_mX128 +
-                int256(msb - 96) *
+                int256(msb - 96) *  
                 int256(235865763225513294137944142764154484399);
+
             int256 tick;
             int256 tickDown;
+            // round up if tick is negative
             if (msb < 96) {
                 tick =
                     (numerator +
