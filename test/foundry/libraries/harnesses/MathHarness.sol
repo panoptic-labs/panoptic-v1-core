@@ -98,4 +98,14 @@ contract MathHarness {
         uint256 result = Math.mulDiv192(a, b);
         return result;
     }
+    
+    function getSqrtRatioAtTick(int24 a) public pure returns (uint160) {
+        uint160 result = Math.getSqrtRatioAtTick(a);
+        return result;
+    }
+
+    function getTickAtSqrtRatio(uint160 a) public pure returns (int24) {
+        int24 result = Math.getTickAtSqrtRatio(a);
+        return result;
+    }
 }

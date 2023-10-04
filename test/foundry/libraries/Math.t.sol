@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {MathHarness} from "./harnesses/MathHarness.sol";
 import {Errors} from "@libraries/Errors.sol";
+import {TickMath} from "v3-core/libraries/TickMath.sol";
 import {FullMath} from "v3-core/libraries/FullMath.sol";
 import "forge-std/Test.sol";
 
@@ -157,4 +158,54 @@ contract MathTest is Test {
         vm.expectRevert();
         harness.mulDiv192(input, input);
     }
+
+    function test_Fail_getTickAtSqrtRatio_Down() public {
+        uint160 r = uint160(4295128739 - 1);
+        vm.expectRevert();
+        harness.getTickAtSqrtRatio(r);
+        r = uint160(1461446703485210103287273052203988822378723970342 + 1);
+        vm.expectRevert();
+        harness.getTickAtSqrtRatio(r);
+    }
+
+
+    /**
+    * forge-config: default.fuzz.runs = 1000000
+    */
+    function test_Success_getTickAtSqrtRatio(int24 x) public {
+        x = int24(bound(x, int24(-887271), int24(887271))); 
+        uint160 inputPrice = harness.getSqrtRatioAtTick(x);
+
+        int24 uniV3Result = TickMath.getTickAtSqrtRatio(inputPrice);
+        int24 returnedResult = harness.getTickAtSqrtRatio(inputPrice);
+        assertEq(uniV3Result, returnedResult);
+
+        uniV3Result = TickMath.getTickAtSqrtRatio(inputPrice-1);
+        returnedResult = harness.getTickAtSqrtRatio(inputPrice-1);
+        assertEq(uniV3Result, returnedResult);
+        
+        uniV3Result = TickMath.getTickAtSqrtRatio(inputPrice+1);
+        returnedResult = harness.getTickAtSqrtRatio(inputPrice+1);
+        assertEq(uniV3Result, returnedResult);
+    }
+
+    function test_Fail_getSqrtRatioAtTick() public {
+        int24 x = int24(887273);
+        vm.expectRevert();
+        harness.getSqrtRatioAtTick(x);
+        vm.expectRevert();
+        harness.getSqrtRatioAtTick(-x);
+    }
+
+    /**
+    * forge-config: default.fuzz.runs = 10000
+    */
+    function test_Success_getSqrtRatioAtTick(int24 x) public {
+        x = int24(bound(x, int24(-887271), int24(887271))); 
+        uint160 uniV3Result = TickMath.getSqrtRatioAtTick(x);
+        uint160 returnedResult = harness.getSqrtRatioAtTick(x);
+        assertEq(uniV3Result, returnedResult);
+    }
+
+
 }
