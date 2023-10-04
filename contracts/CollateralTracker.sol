@@ -896,17 +896,15 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     s_tickSpacing
                 );
 
-                (uint256 currentValue0, uint256 currentValue1) = Math
-                    .getAmountsForLiquidity(
-                        _currentTick,
-                        liquidityChunk
-                    );
+                (uint256 currentValue0, uint256 currentValue1) = Math.getAmountsForLiquidity(
+                    _currentTick,
+                    liquidityChunk
+                );
 
-                (uint256 medianValue0, uint256 medianValue1) = Math
-                    .getAmountsForLiquidity(
-                        _medianTick,
-                        liquidityChunk
-                    );
+                (uint256 medianValue0, uint256 medianValue1) = Math.getAmountsForLiquidity(
+                    _medianTick,
+                    liquidityChunk
+                );
 
                 // compensate user for loss in value if chunk has lost money between current and median tick
                 // note: the delta for one token will be positive and the other will be negative. This cancels out any moves in their positions

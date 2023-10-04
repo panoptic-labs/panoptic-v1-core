@@ -1019,15 +1019,10 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
                 );
 
                 unchecked {
-
                     // increment accumulators of the upper bound on tokens contained across all legs of the position at any given tick
-                    amount0 += Math.getAmount0ForLiquidity(
-                        liquidityChunk
-                    );
+                    amount0 += Math.getAmount0ForLiquidity(liquidityChunk);
 
-                    amount1 += Math.getAmount1ForLiquidity(
-                        liquidityChunk
-                    );
+                    amount1 += Math.getAmount1ForLiquidity(liquidityChunk);
                 }
             }
 
