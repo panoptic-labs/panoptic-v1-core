@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 import {MathHarness} from "./harnesses/MathHarness.sol";
 import {Errors} from "@libraries/Errors.sol";
+import {LiquidityChunk} from "@types/LiquidityChunk.sol";
+import {LiquidityAmounts} from "v3-periphery/libraries/LiquidityAmounts.sol";
 import {TickMath} from "v3-core/libraries/TickMath.sol";
 import {FullMath} from "v3-core/libraries/FullMath.sol";
 import "forge-std/Test.sol";
@@ -208,4 +210,67 @@ contract MathTest is Test {
     }
 
 
+    /**
+    * forge-config: default.fuzz.runs = 10000
+    */
+    function test_Success_getAmount0ForLiquidity(uint128 a) public {
+
+        a = uint128(bound(a, uint128(1), uint128(2**128-1)));
+        uint256 uniV3Result = LiquidityAmounts.getAmount0ForLiquidity(
+            TickMath.getSqrtRatioAtTick(int24(-10)), 
+            TickMath.getSqrtRatioAtTick(int24(10)), 
+            a
+        );
+        
+        uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
+        chunk = LiquidityChunk.addTickLower(chunk, int24(-10));
+        chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
+
+        uint256 returnedResult = harness.getAmount0ForLiquidity(chunk);
+        
+        assertEq(uniV3Result, returnedResult);
+    }
+
+    /**
+    * forge-config: default.fuzz.runs = 10000
+    */
+    function test_Success_getAmount1ForLiquidity(uint128 a) public {
+
+        uint256 uniV3Result = LiquidityAmounts.getAmount1ForLiquidity(
+            TickMath.getSqrtRatioAtTick(int24(-10)), 
+            TickMath.getSqrtRatioAtTick(int24(10)), 
+            a
+        );
+        
+        uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
+        chunk = LiquidityChunk.addTickLower(chunk, int24(-10));
+        chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
+
+        uint256 returnedResult = harness.getAmount1ForLiquidity(chunk);
+        
+        assertEq(uniV3Result, returnedResult);
+    }
+
+    /**
+    * forge-config: default.fuzz.runs = 10000
+    */
+    function test_Success_getAmountsForLiquidity(uint128 a) public {
+
+        (uint256 uniV3Result0, uint256 uniV3Result1) = LiquidityAmounts.getAmountsForLiquidity(
+            TickMath.getSqrtRatioAtTick(int24(2)), 
+            TickMath.getSqrtRatioAtTick(int24(-10)), 
+            TickMath.getSqrtRatioAtTick(int24(10)), 
+            a
+        );
+        
+        uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
+        chunk = LiquidityChunk.addTickLower(chunk, int24(-10));
+        chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
+
+        (uint256 returnedResult0, uint256 returnedResult1) = harness.getAmountsForLiquidity(int24(2), chunk);
+        
+        assertEq(uniV3Result0, returnedResult0);
+        assertEq(uniV3Result1, returnedResult1);
+    }
+        
 }
