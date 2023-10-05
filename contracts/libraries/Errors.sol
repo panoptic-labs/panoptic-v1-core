@@ -33,9 +33,6 @@ library Errors {
     /// @notice Emitted during a force exercise if the positions a user with open positions burns do not fully offset the decrease in collateral due to exercise fees
     error InsufficientCollateralDecrease();
 
-    /// @notice Ratio corresponds to a price outside MIN_TICK and MAX_TICK
-    error InvalidSqrtRatio();
-
     /// @notice Tick is not between MIN_TICK and MAX_TICK
     error InvalidTick();
 
