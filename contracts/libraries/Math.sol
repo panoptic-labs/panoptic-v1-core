@@ -86,7 +86,7 @@ library Math {
     }
 
     /*//////////////////////////////////////////////////////////////
-                                TICK MATHS
+                               TICK MATH
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Calculates 1.0001^(tick/2) as an X96 number
@@ -150,7 +150,7 @@ library Math {
     }
 
     /*//////////////////////////////////////////////////////////////
-                            LIQUIDITY AMOUNTS (STRIKE+WIDTH)
+                    LIQUIDITY AMOUNTS (STRIKE+WIDTH)
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Calculates the amount of token0 received for a given liquidityChunk
