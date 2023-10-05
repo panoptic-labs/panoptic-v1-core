@@ -73,4 +73,31 @@ contract LiquidityChunkTest is Test {
         assertEq(harness.tickUpper(xx), z);
         assertEq(harness.liquidity(xx), 0); // does not get copied
     }
+
+    function test_Success_updateTickLower(int24 y1, int24 y2) public {
+        uint256 x;
+        
+        x = harness.updateTickLower(x, y1);
+        int24 z = harness.tickLower(x);
+        assertEq(y1, z);
+        
+        x = harness.updateTickLower(x, y2);
+        z = harness.tickLower(x);
+        assertEq(y2, z);
+    }
+
+    function test_Success_updateTickUpper(int24 y1, int24 y2) public {
+        uint256 x;
+
+        x = harness.updateTickUpper(x, y1);
+        int24 z = harness.tickUpper(x);
+        assertEq(y1, z);
+
+        x = harness.updateTickUpper(x, y2);
+        z = harness.tickUpper(x);
+        assertEq(y2, z);
+
+
+    }
+
 }

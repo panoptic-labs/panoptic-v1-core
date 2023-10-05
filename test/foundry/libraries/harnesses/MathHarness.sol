@@ -104,11 +104,6 @@ contract MathHarness {
         return result;
     }
 
-    function getTickAtSqrtRatio(uint160 a) public pure returns (int24) {
-        int24 result = Math.getTickAtSqrtRatio(a);
-        return result;
-    }
-
     function getAmount0ForLiquidity(uint256 a) public pure returns (uint256) {
         uint256 result = Math.getAmount0ForLiquidity(a);
         return result;
