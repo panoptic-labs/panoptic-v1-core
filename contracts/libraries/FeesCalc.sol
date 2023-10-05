@@ -3,10 +3,7 @@ pragma solidity ^0.8.0;
 
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
-// Panoptic's modified Uniswap libraries
-import {LiquidityAmounts} from "@univ3-libraries/LiquidityAmounts.sol";
-import {TickMath} from "@univ3-libraries/TickMath.sol";
-//Libraries
+// Libraries
 import {Math} from "@libraries/Math.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
 // Custom types
@@ -61,7 +58,6 @@ library FeesCalc {
         mapping(uint256 tokenId => uint256 balance) storage userBalance,
         uint256[] calldata positionIdList
     ) external view returns (int256 value0, int256 value1) {
-        uint160 sqrtPriceAtTick = TickMath.getSqrtRatioAtTick(atTick);
         int24 ts = univ3pool.tickSpacing();
         for (uint256 k = 0; k < positionIdList.length; ) {
             uint256 tokenId = positionIdList[k];
@@ -75,11 +71,9 @@ library FeesCalc {
                     ts
                 );
 
-                (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
-                    sqrtPriceAtTick,
-                    TickMath.getSqrtRatioAtTick(liquidityChunk.tickLower()),
-                    TickMath.getSqrtRatioAtTick(liquidityChunk.tickUpper()),
-                    liquidityChunk.liquidity()
+                (uint256 amount0, uint256 amount1) = Math.getAmountsForLiquidity(
+                    atTick,
+                    liquidityChunk
                 );
 
                 if (tokenId.isLong(leg) == 0) {

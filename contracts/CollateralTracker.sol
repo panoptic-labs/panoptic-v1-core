@@ -8,9 +8,6 @@ import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Inherited implementations
 import {ERC20Minimal} from "@tokens/ERC20Minimal.sol";
 import {Multicall} from "@multicall/Multicall.sol";
-// Panoptic' modified Uniswap libraries
-import {LiquidityAmounts} from "@univ3-libraries/LiquidityAmounts.sol";
-import {TickMath} from "@univ3-libraries/TickMath.sol";
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
 import {Errors} from "@libraries/Errors.sol";
@@ -847,8 +844,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // we don't need the leg information itself, really just "the number of half ranges" from the strike price:
         uint256 maxNumRangesFromStrike; // technically "maxNum(Half)RangesFromStrike" but the name is long
 
-        uint160 currentSqrtPriceX96 = TickMath.getSqrtRatioAtTick(currentTick);
-        uint160 medianSqrtPriceX96 = TickMath.getSqrtRatioAtTick(medianTick);
+        int24 _currentTick = currentTick;
+        int24 _medianTick = medianTick;
+
         unchecked {
             for (uint256 leg = 0; leg < TokenId.countLegs(positionId); ++leg) {
                 // short legs are not counted - exercise is intended to be based on long legs
@@ -860,7 +858,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
                 uint256 currNumRangesFromStrike;
 
-                if (currentTick < (strike - range)) {
+                if (_currentTick < (strike - range)) {
                     /**
                          current      strike
                            tick          │
@@ -870,9 +868,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                                 range=width/2
                     */
                     currNumRangesFromStrike = uint256(
-                        (2 * int256(strike - range - currentTick)) / range
-                    ); // = (strike - range - currentTick) / (range / 2); the "range/2" are the "half ranges"
-                } else if (currentTick > (strike + range)) {
+                        (2 * int256(strike - range - _currentTick)) / range
+                    ); // = (strike - range - _currentTick) / (range / 2); the "range/2" are the "half ranges"
+                } else if (_currentTick > (strike + range)) {
                     /**
                            strike      current
                               │         tick
@@ -882,7 +880,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                             range
                     */
                     currNumRangesFromStrike = uint256(
-                        (2 * int256(currentTick - strike - range)) / range
+                        (2 * int256(_currentTick - strike - range)) / range
                     );
                 }
                 maxNumRangesFromStrike = currNumRangesFromStrike > maxNumRangesFromStrike
@@ -898,21 +896,15 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     s_tickSpacing
                 );
 
-                (uint256 currentValue0, uint256 currentValue1) = LiquidityAmounts
-                    .getAmountsForLiquidity(
-                        currentSqrtPriceX96,
-                        TickMath.getSqrtRatioAtTick(liquidityChunk.tickLower()),
-                        TickMath.getSqrtRatioAtTick(liquidityChunk.tickUpper()),
-                        liquidityChunk.liquidity()
-                    );
+                (uint256 currentValue0, uint256 currentValue1) = Math.getAmountsForLiquidity(
+                    _currentTick,
+                    liquidityChunk
+                );
 
-                (uint256 medianValue0, uint256 medianValue1) = LiquidityAmounts
-                    .getAmountsForLiquidity(
-                        medianSqrtPriceX96,
-                        TickMath.getSqrtRatioAtTick(liquidityChunk.tickLower()),
-                        TickMath.getSqrtRatioAtTick(liquidityChunk.tickUpper()),
-                        liquidityChunk.liquidity()
-                    );
+                (uint256 medianValue0, uint256 medianValue1) = Math.getAmountsForLiquidity(
+                    _medianTick,
+                    liquidityChunk
+                );
 
                 // compensate user for loss in value if chunk has lost money between current and median tick
                 // note: the delta for one token will be positive and the other will be negative. This cancels out any moves in their positions
@@ -956,7 +948,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int24 atTick,
         CollateralTracker collateralToken1
     ) public view returns (int256 refundAmounts) {
-        uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(atTick);
+        uint160 sqrtPriceX96 = Math.getSqrtRatioAtTick(atTick);
 
         unchecked {
             // if the refunder lacks sufficient token0 to pay back the refundee, have them pay back the equivalent value in token1
@@ -1661,10 +1653,10 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     // so instead we cap it at the minimum price, which is acceptable because
                     // a higher ratio will result in an increased slope for the collateral requirement
                     uint160 ratio = tokenType == 1 // tokenType
-                        ? TickMath.getSqrtRatioAtTick(
+                        ? Math.getSqrtRatioAtTick(
                             Math.max24(2 * (atTick - strike), Constants.MIN_V3POOL_TICK)
                         ) // puts ->  price/strike
-                        : TickMath.getSqrtRatioAtTick(
+                        : Math.getSqrtRatioAtTick(
                             Math.max24(2 * (strike - atTick), Constants.MIN_V3POOL_TICK)
                         ); // calls -> strike/price
 
@@ -1705,7 +1697,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                         // the collateral requirement when in-range, which always over-estimates the amount of token required
                         // Specifically:
                         //  required = (1-sellCollateral) * (scaleFactor - ratio) / (scaleFactor + 1) + sellCollateral
-                        uint160 scaleFactor = TickMath.getSqrtRatioAtTick(2 * oneSidedRange);
+                        uint160 scaleFactor = Math.getSqrtRatioAtTick(2 * oneSidedRange);
                         uint256 c3 = Math.mulDiv(
                             c2,
                             scaleFactor - ratio,

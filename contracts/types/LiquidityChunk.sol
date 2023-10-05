@@ -49,7 +49,10 @@ import {TokenId} from "@types/TokenId.sol";
 ///
 library LiquidityChunk {
     using LiquidityChunk for uint256;
-    int256 internal constant BITMASK_INT24 = 0xFFFFFF;
+    uint256 internal constant CLEAR_TL_MASK =
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    uint256 internal constant CLEAR_TU_MASK =
+        0xFFFFFF000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
     /*//////////////////////////////////////////////////////////////
                                 ENCODING
@@ -88,7 +91,7 @@ library LiquidityChunk {
     /// @return the chunk with added lower tick
     function addTickLower(uint256 self, int24 _tickLower) internal pure returns (uint256) {
         unchecked {
-            return self + (uint256(int256(_tickLower)) << 232);
+            return self + (uint256(uint24(_tickLower)) << 232);
         }
     }
 
@@ -100,6 +103,27 @@ library LiquidityChunk {
         unchecked {
             // convert tick upper to uint24 as explicit conversion from int24 to uint256 is not allowed
             return self + ((uint256(uint24(_tickUpper))) << 208);
+        }
+    }
+
+    /// @notice Overwrites the lower tick to this chunk.
+    /// @param self the LiquidityChunk
+    /// @param _tickLower the lower tick to add
+    /// @return the chunk with added lower tick
+    function updateTickLower(uint256 self, int24 _tickLower) internal pure returns (uint256) {
+        unchecked {
+            return (self & CLEAR_TL_MASK).addTickLower(_tickLower);
+        }
+    }
+
+    /// @notice Overwrites the upper tick to this chunk.
+    /// @param self the LiquidityChunk
+    /// @param _tickUpper the upper tick to add
+    /// @return the chunk with added upper tick
+    function updateTickUpper(uint256 self, int24 _tickUpper) internal pure returns (uint256) {
+        unchecked {
+            // convert tick upper to uint24 as explicit conversion from int24 to uint256 is not allowed
+            return (self & CLEAR_TU_MASK).addTickUpper(_tickUpper);
         }
     }
 

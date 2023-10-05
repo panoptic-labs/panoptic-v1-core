@@ -33,6 +33,9 @@ library Errors {
     /// @notice Emitted during a force exercise if the positions a user with open positions burns do not fully offset the decrease in collateral due to exercise fees
     error InsufficientCollateralDecrease();
 
+    /// @notice Tick is not between MIN_TICK and MAX_TICK
+    error InvalidTick();
+
     /// @notice A mint or swap callback was attempted from an address that did not match the canonical Uniswap V3 pool with the claimed features
     error InvalidUniswapCallback();
 

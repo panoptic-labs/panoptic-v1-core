@@ -93,6 +93,24 @@ contract LiquidityChunkHarness {
         return r;
     }
 
+    /// @notice Overwrites the lower tick to this chunk.
+    /// @param self the LiquidityChunk
+    /// @param tickLower the lower tick to add
+    /// @return the chunk with added lower tick
+    function updateTickLower(uint256 self, int24 tickLower) public pure returns (uint256) {
+        uint256 r = LiquidityChunk.updateTickLower(self, tickLower);
+        return r;
+    }
+
+    /// @notice Overwrites the upper tick to this chunk.
+    /// @param self the LiquidityChunk
+    /// @param tickUpper the upper tick to add
+    /// @return the chunk with added upper tick
+    function updateTickUpper(uint256 self, int24 tickUpper) public pure returns (uint256) {
+        uint256 r = LiquidityChunk.updateTickUpper(self, tickUpper);
+        return r;
+    }
+
     /**
      * @notice Copy the tick range (upper and lower ticks) of a chunk `from` to `self`.
      * @notice This is helpful if you have a pre-existing liquidity amount, say "100" as a uint128. Simply cast to a uint256 and then we want
