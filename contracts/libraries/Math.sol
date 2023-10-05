@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 // Libraries
 import {Errors} from "@libraries/Errors.sol";
-
+import {Constants} from "@libraries/Constants.sol";
 // Custom types
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 
@@ -14,18 +14,6 @@ library Math {
 
     // equivalent to type(uint256).max - used in assembly blocks as a replacement
     uint256 internal constant MAX_UINT256 = 2 ** 256 - 1;
-
-    /// @dev Last value for which 1.0001^MIN_TICK is greater than 2**-128
-    int24 internal constant MIN_TICK = -887272;
-
-    /// @dev Last value for which 1.0001^MAX_TICK is less than 2**128
-    int24 internal constant MAX_TICK = -MIN_TICK;
-
-    /// @dev Value of getSqrtRatioAtTick(MIN_TICK)
-    uint160 internal constant MIN_SQRT_RATIO = 4295128739;
-
-    /// @dev Value of getSqrtRatioAtTick(MAX_TICK)
-    uint160 internal constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342;
 
     /*//////////////////////////////////////////////////////////////
                           GENERAL MATH HELPERS
@@ -97,46 +85,6 @@ library Math {
         }
     }
 
-    /// @notice Returns the index of the most significant bit of the number,
-    ///     where the least significant bit is at index 0 and the most significant bit is at index 255
-    /// @dev The function satisfies the property:
-    ///     x >= 2**mostSignificantBit(x) and x < 2**(mostSignificantBit(x)+1)
-    /// @param x the value for which to compute the most significant bit, must be greater than 0
-    /// @return r the index of the most significant bit
-    function mostSignificantBit(uint256 x) internal pure returns (uint8 r) {
-        require(x > 0);
-
-        if (x >= 0x100000000000000000000000000000000) {
-            x >>= 128;
-            r += 128;
-        }
-        if (x >= 0x10000000000000000) {
-            x >>= 64;
-            r += 64;
-        }
-        if (x >= 0x100000000) {
-            x >>= 32;
-            r += 32;
-        }
-        if (x >= 0x10000) {
-            x >>= 16;
-            r += 16;
-        }
-        if (x >= 0x100) {
-            x >>= 8;
-            r += 8;
-        }
-        if (x >= 0x10) {
-            x >>= 4;
-            r += 4;
-        }
-        if (x >= 0x4) {
-            x >>= 2;
-            r += 2;
-        }
-        if (x >= 0x2) r += 1;
-    }
-
     /*//////////////////////////////////////////////////////////////
                                 TICK MATHS
     //////////////////////////////////////////////////////////////*/
@@ -149,7 +97,7 @@ library Math {
     function getSqrtRatioAtTick(int24 tick) internal pure returns (uint160 sqrtPriceX96) {
         unchecked {
             uint256 absTick = tick < 0 ? uint256(-int256(tick)) : uint256(int256(tick));
-            if (absTick > uint256(int256(MAX_TICK))) revert Errors.InvalidTick();
+            if (absTick > uint256(int256(Constants.MAX_V3POOL_TICK))) revert Errors.InvalidTick();
 
             uint256 sqrtR = absTick & 0x1 != 0
                 ? 0xfffcb933bd6fad37aa2d162d1a594001
@@ -201,92 +149,6 @@ library Math {
         }
     }
 
-    /// @notice Calculates the greatest tick value such that getRatioAtTick(tick) <= ratio
-    /// @dev Revets if sqrtPriceX96 < MIN_SQRT_RATIO or sqrtPrice > MAX_SQRT_RATIO
-    /// @param sqrtPriceX96 The sqrt ratio for which to compute the tick as a Q64.96
-    /// @return tick The greatest tick for which the ratio is less than or equal to the input ratio
-    function getTickAtSqrtRatio(uint160 sqrtPriceX96) internal pure returns (int24) {
-        unchecked {
-            // second inequality must be < because the price can never reach the price at the max tick
-            if (sqrtPriceX96 < MIN_SQRT_RATIO || sqrtPriceX96 > MAX_SQRT_RATIO)
-                revert Errors.InvalidSqrtRatio();
-
-            // Find the expression for sqrtPriceX96 = m * 2**msb, where m is a X32 number
-            uint256 msb = mostSignificantBit(sqrtPriceX96);
-
-            // find the mantissa
-            uint256 m = msb > 128
-                ? uint256(sqrtPriceX96) >> (msb - 128)
-                : uint256(sqrtPriceX96) << (128 - msb);
-
-            /// @dev Do a Taylor expansion of Ln[x] around x=1.5, x is always betweeen (1, 2):
-            /// @dev Log[x] = Log[3/2] + 2/3*(x-3/2) - 2/9*(x-3/2)**2 + 8/81*(x-3/2)**3 - 4/81*(x-3/2)**4 + 32/1215*(x-3/2)**5 - 32/2187*(x-3/2)**6 +
-            ///                  128/15309*(x-3/2)**7 - 32/6561*(x-3/2)**8 + 512/177147*(x-3/2)**9
-
-            // compute the value of (x-3/2) as a X128
-            int256 x3_2 = int256((m - (3 << 128) / 2));
-
-            int256 log_mX128 = 0;
-            //log_mX128 = (log_mX128 * x3_2) / 2**128 + 51805909208579726993690688479265032; //int256(32768 << 128) /int256(215233605);
-            //log_mX128 = (log_mX128 * x3_2) / 2**128 - 83259496942360275525574320770247374; //int256(8192 << 128) / int256(33480783);
-            //log_mX128 = (log_mX128 * x3_2) / 2**128 + 134496110445351214310543133551938065; //int256(8192 << 128) /int256(20726199);
-            //log_mX128 = (log_mX128 * x3_2) / 2**128 - 218556179473695723254632592021899356; //int256(1024 << 128) / int256(1594323);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 + 357637384593320274416671514217653493; //int256(2048 << 128) / int256(1948617);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 - 590101684578978452787507998459128263; //int256(512 << 128) / int256(295245);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 + 983502807631630754645846664098547106; //int256(512 << 128) / int256(177147);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 - 1659660987878376898464866245666298242; //int256(32 << 128) / int256(6561);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 + 2845133122077217540225484992570796986; //int256(128 << 128) / int256(15309);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 - 4978982963635130695394598736998894726; //int256(32 << 128) / int256(2187);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 + 8962169334543235251710277726598010507; //int256(32 << 128) / int256(1215);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 - 16804067502268566096956770737371269701; //int256(4 << 128) / int256(81);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 + 33608135004537132193913541474742539403; //int256(8 << 128) / int256(81);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 - 75618303760208547436305468318170713656; //int256(2 << 128) / int256(9);
-            log_mX128 = (log_mX128 * x3_2) / 2 ** 128 + 226854911280625642308916404954512140970; //int256(2 << 128) / int256(3);
-            log_mX128 =
-                (log_mX128 * x3_2) /
-                2 ** 128 +
-                int256(137972626690900373465550041896316339718); // Log[3/2]*2**128
-
-            // compute expression for  log[m] + (msg-96)*Log[2] * 2**128
-            int256 numerator = log_mX128 +
-                int256(msb - 96) *  
-                int256(235865763225513294137944142764154484399);
-
-            int256 tick;
-            int256 tickDown;
-            // round up if tick is negative
-            if (msb < 96) {
-                tick =
-                    (numerator +
-                        8506633848419547728916991634454851 +
-                        1701326769683909545783398326890970) /
-                    17013267696839095457833983268909703 -
-                    1;
-                tickDown =
-                    (numerator +
-                        8506633848419547728916991634454851 -
-                        1701326769683909545783398326890970) /
-                    17013267696839095457833983268909703;
-            } else {
-                tick =
-                    (numerator + 1701326769683909545783398326890970) /
-                    17013267696839095457833983268909703;
-                tickDown =
-                    (numerator - 1701326769683909545783398326890970) /
-                    17013267696839095457833983268909703;
-            }
-
-            if (tick == tickDown) {
-                return int24(tick);
-            } else {
-                if (sqrtPriceX96 < getSqrtRatioAtTick(int24(tick))) {
-                    tick -= 1;
-                }
-                return int24(tick);
-            }
-        }
-    }
-
     /*//////////////////////////////////////////////////////////////
                             LIQUIDITY AMOUNTS (STRIKE+WIDTH)
     //////////////////////////////////////////////////////////////*/
@@ -300,15 +162,14 @@ library Math {
     ) internal pure returns (uint256 amount0) {
         uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
         uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
-
+        unchecked {
         return
-            mulDiv(
-                uint256(liquidityChunk.liquidity()) << 96,
-                highPriceX96 - lowPriceX96,
-                highPriceX96
-            ) / lowPriceX96;
-
-        //return (uint256(liquidityChunk.liquidity()) << 96) / lowPriceX96 -  (uint256(liquidityChunk.liquidity()) << 96) / highPriceX96;
+                mulDiv(
+                    uint256(liquidityChunk.liquidity()) << 96,
+                    highPriceX96 - lowPriceX96,
+                    highPriceX96
+                ) / lowPriceX96;
+        }
     }
 
     /// @notice Calculates the amount of token1 received for a given liquidityChunk
@@ -320,7 +181,9 @@ library Math {
         uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
         uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
 
-        return mulDiv96(liquidityChunk.liquidity(), highPriceX96 - lowPriceX96);
+        unchecked {
+            return mulDiv96(liquidityChunk.liquidity(), highPriceX96 - lowPriceX96);
+        }
     }
 
     /// @notice Calculates the amount of token0 and token1 received for a given liquidityChunk at the provided currentTick
@@ -332,14 +195,10 @@ library Math {
         int24 currentTick,
         uint256 liquidityChunk
     ) internal pure returns (uint256 amount0, uint256 amount1) {
-        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
-        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
 
-        uint160 currentPriceX96 = getSqrtRatioAtTick(currentTick);
-
-        if (currentPriceX96 <= lowPriceX96) {
+        if (currentTick <= liquidityChunk.tickLower()) {
             amount0 = getAmount0ForLiquidity(liquidityChunk);
-        } else if (currentPriceX96 > highPriceX96) {
+        } else if (currentTick >= liquidityChunk.tickUpper()) {
             amount1 = getAmount1ForLiquidity(liquidityChunk);
         } else {
             amount0 = getAmount0ForLiquidity(liquidityChunk.updateTickLower(currentTick));
@@ -350,7 +209,7 @@ library Math {
     /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk
     /// @dev Had to use a less optimal calculation to match Uniswap's implementation
     /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
-    /// @param amount0 The amoint of token0
+    /// @param amount0 The amount of token0
     /// @return liquidity The calculated amount of liquidity
     function getLiquidityForAmount0(
         uint256 liquidityChunk,
@@ -359,15 +218,17 @@ library Math {
         uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
         uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
 
-        return
-            toUint128(
-                mulDiv(amount0, mulDiv96(highPriceX96, lowPriceX96), highPriceX96 - lowPriceX96)
-            );
+        unchecked {
+            return
+                toUint128(
+                    mulDiv(amount0, mulDiv96(highPriceX96, lowPriceX96), highPriceX96 - lowPriceX96)
+                );
+        }
     }
 
     /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk
     /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
-    /// @param amount1 The amoint of token1
+    /// @param amount1 The amount of token1
     /// @return liquidity The calculated amount of liquidity
     function getLiquidityForAmount1(
         uint256 liquidityChunk,
@@ -375,8 +236,9 @@ library Math {
     ) internal pure returns (uint128 liquidity) {
         uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
         uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
-
-        return toUint128(mulDiv(amount1, 2 ** 96, highPriceX96 - lowPriceX96));
+        unchecked {
+            return toUint128(mulDiv(amount1, Constants.FP96, highPriceX96 - lowPriceX96));
+        }
     }
 
     /*//////////////////////////////////////////////////////////////

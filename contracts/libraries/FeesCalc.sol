@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
-//Libraries
+// Libraries
 import {Math} from "@libraries/Math.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
 // Custom types
