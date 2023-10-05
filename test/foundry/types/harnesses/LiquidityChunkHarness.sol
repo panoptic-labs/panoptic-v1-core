@@ -92,7 +92,7 @@ contract LiquidityChunkHarness {
         uint256 r = LiquidityChunk.addTickUpper(self, tickUpper);
         return r;
     }
-    
+
     /// @notice Overwrites the lower tick to this chunk.
     /// @param self the LiquidityChunk
     /// @param tickLower the lower tick to add

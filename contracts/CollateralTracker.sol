@@ -843,10 +843,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // find the leg furthest to the strike price 'currentTick'; this will have the lowest exercise cost
         // we don't need the leg information itself, really just "the number of half ranges" from the strike price:
         uint256 maxNumRangesFromStrike; // technically "maxNum(Half)RangesFromStrike" but the name is long
-        
+
         int24 _currentTick = currentTick;
         int24 _medianTick = medianTick;
-
 
         unchecked {
             for (uint256 leg = 0; leg < TokenId.countLegs(positionId); ++leg) {

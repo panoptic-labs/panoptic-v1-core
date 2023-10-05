@@ -149,7 +149,6 @@ library Math {
         }
     }
 
-
     /*//////////////////////////////////////////////////////////////
                             LIQUIDITY AMOUNTS (STRIKE+WIDTH)
     //////////////////////////////////////////////////////////////*/
@@ -164,7 +163,7 @@ library Math {
         uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
         uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
         unchecked {
-        return
+            return
                 mulDiv(
                     uint256(liquidityChunk.liquidity()) << 96,
                     highPriceX96 - lowPriceX96,
@@ -196,7 +195,6 @@ library Math {
         int24 currentTick,
         uint256 liquidityChunk
     ) internal pure returns (uint256 amount0, uint256 amount1) {
-
         if (currentTick <= liquidityChunk.tickLower()) {
             amount0 = getAmount0ForLiquidity(liquidityChunk);
         } else if (currentTick >= liquidityChunk.tickUpper()) {

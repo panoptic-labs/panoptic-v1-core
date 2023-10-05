@@ -76,11 +76,11 @@ contract LiquidityChunkTest is Test {
 
     function test_Success_updateTickLower(int24 y1, int24 y2) public {
         uint256 x;
-        
+
         x = harness.updateTickLower(x, y1);
         int24 z = harness.tickLower(x);
         assertEq(y1, z);
-        
+
         x = harness.updateTickLower(x, y2);
         z = harness.tickLower(x);
         assertEq(y2, z);
@@ -96,8 +96,5 @@ contract LiquidityChunkTest is Test {
         x = harness.updateTickUpper(x, y2);
         z = harness.tickUpper(x);
         assertEq(y2, z);
-
-
     }
-
 }

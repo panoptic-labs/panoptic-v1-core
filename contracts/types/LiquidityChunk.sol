@@ -49,8 +49,11 @@ import {TokenId} from "@types/TokenId.sol";
 ///
 library LiquidityChunk {
     using LiquidityChunk for uint256;
-    uint256 internal constant CLEAR_TL_MASK = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
-    uint256 internal constant CLEAR_TU_MASK = 0xFFFFFF000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    uint256 internal constant CLEAR_TL_MASK =
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    uint256 internal constant CLEAR_TU_MASK =
+        0xFFFFFF000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+
     /*//////////////////////////////////////////////////////////////
                                 ENCODING
     //////////////////////////////////////////////////////////////*/
