@@ -26,7 +26,7 @@ import {TransferHelper} from "v3-periphery/libraries/TransferHelper.sol";
 import {FixedPoint96} from "v3-core/libraries/FixedPoint96.sol";
 import {PoolAddress} from "v3-periphery/libraries/PoolAddress.sol";
 import {TickMath} from "v3-core/libraries/TickMath.sol";
-import {LiquidityAmounts} from "@univ3-libraries/LiquidityAmounts.sol";
+import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 // Uniswap Interfaces
 import {IUniswapV3Pool} from "v3-core/interfaces/IUniswapV3Pool.sol";
 import {IUniswapV3Factory} from "v3-core/interfaces/IUniswapV3Factory.sol";

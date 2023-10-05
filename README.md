@@ -115,11 +115,8 @@ contracts/
 │   ├── FeesCalc — "Utility to calculate up-to-date swap fees for liquidity chunks"
 │   ├── InteractionHelper — "Helpers to perform bytecode-size-heavy interactions with external contracts like batch approvals and metadata queries"
 │   ├── Math — "Library of generic math functions like abs(), mulDiv, etc"
-│   └── PanopticMath — "Library containing advanced Panoptic/Uniswap-specific functionality such as our TWAP, price conversions, and position sizing math"
+│   ├── PanopticMath — "Library containing advanced Panoptic/Uniswap-specific functionality such as our TWAP, price conversions, and position sizing math"
 │   └── SafeTransferLib — "Safe ERC20 transfer library that gracefully handles missing return values"
-├── univ3-libraries
-│   ├── TickMath — "Math library for computing sqrt prices from ticks and vice versa"
-│   └── LiquidityAmounts — "Provides functions for computing liquidity amounts from token amounts and prices"
 ├── multicall
 │   └── Multicall — "Adds a function to inheriting contracts that allows for multiple calls to be executed in a single transaction"
 └── periphery
@@ -173,7 +170,6 @@ The primary license for Panoptic V1 is the Business Source License 1.1 (`BUSL-1.
 
 - [Interfaces](./contracts/interfaces), [tokens](./contracts/tokens), and [Multicall.sol](./contracts/multicall/Multicall.sol) have a General Public License
 - Some [libraries](./contracts/libraries) and [types](./contracts/types/) have a General Public License
-- [Libraries modified from Uniswap V3](./contracts/univ3-libraries) have a General Public License
 - [Tests](./test/) and some [scripts](./scripts) are unlicensed
 
 Each of these files states their license type.

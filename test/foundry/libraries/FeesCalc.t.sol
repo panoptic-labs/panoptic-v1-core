@@ -11,7 +11,7 @@ import {Errors} from "@libraries/Errors.sol";
 import {FeesCalcHarness} from "./harnesses/FeesCalcHarness.sol";
 import {TokenId} from "@types/TokenId.sol";
 import {LeftRight} from "@types/LeftRight.sol";
-import {LiquidityAmounts} from "@univ3-libraries/LiquidityAmounts.sol";
+import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 // Uniswap
 import {IUniswapV3Pool} from "v3-core/interfaces/IUniswapV3Pool.sol";

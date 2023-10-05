@@ -8,7 +8,7 @@ import {FullMath} from "v3-core/libraries/FullMath.sol";
 import {IUniswapV3Pool} from "v3-core/interfaces/IUniswapV3Pool.sol";
 import {ISwapRouter} from "v3-periphery/interfaces/ISwapRouter.sol";
 import {PoolAddress} from "v3-periphery/libraries/PoolAddress.sol";
-import {LiquidityAmounts} from "@univ3-libraries/LiquidityAmounts.sol";
+import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 import {TransferHelper} from "v3-periphery/libraries/TransferHelper.sol";
 
 contract MiniPositionManager {
