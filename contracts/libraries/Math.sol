@@ -35,6 +35,13 @@ library Math {
         return a > b ? a : b;
     }
 
+    /// @notice Compute the maximum of (x, 0)
+    /// @param x the incoming *signed* integer
+    /// @return the maximum of (x, 0), e.g.: rectified(4) = 4, rectified(-4) = 0
+    function rectified(int256 x) internal pure returns (uint256) {
+        return x > int256(0) ? uint256(x) : uint256(0);
+    }
+
     /// @notice Compute the absolute value of an integer (int256).
     /// @param x the incoming *signed* integer to take the absolute value of
     /// @dev Does not support `type(int256).min` and will revert (type(int256).max is one less).

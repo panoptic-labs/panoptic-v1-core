@@ -83,7 +83,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @notice Mutable parameters that can be used to adjust various protocol mechanisms and behaviors.
     /// These parameters are stored in CollateralTracker and are used in various calculations.
     /// They can be updated with the 'updateParameters' function in this contract.
-    /// @dev maintenaceMarginRatio minimum ratio of actual to required collateral that must be maintained to mint a new position (decimals=10000).
+    /// @dev maintenanceMarginRatio minimum ratio of actual to required collateral that must be maintained to mint a new position (decimals=10000).
     /// @dev commissionFee the commission fee (basis points).
     /// @dev ITMSpreadFee additional risk premium charged on intrinsic value of ITM positions defined in basis points as a multiple of the pool fee / 10000.
     /// @dev sellCollateralRatio minimum collateral ratio for selling options when pool utilization < targetPoolUtilization (basis points).
@@ -719,100 +719,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                         ACCOUNTING LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Compute a liquidator's potential bonus during liquidation of an account. The bonus depends on degree of distress (0% bonus at 100% collateral).
-    /// @param account The account to be liquidated.
-    /// @param positionBalanceArray The list of all historical positions held by the 'optionOwner', stored as [[tokenId, balance/poolUtilizationAtMint], ...].
-    /// @param otherTokenData The token data of the other collateral token in the Panoptic Pool (with tokenBalance in right slot and required collateral in the left slot).
-    /// @param twapTick Tick at which the collateral requirement will be evaluated at(Uniswap TWAP tick at time of call).
-    /// @param sqrtPriceX96 The sqrt price to 96 bit precision.
-    /// @param premium The premium of the open positions.
-    /// @return bonusAmounts LeftRight encoding for the bonus paid in each token in the Panoptic Pool to the liquidator.
-    /// @return tokenData LeftRight encoding with tokenbalance, ie assets, (in the right slot) and amount required in collateral (left slot).
-    function computeBonus(
-        address account,
-        uint256[2][] memory positionBalanceArray,
-        uint256 otherTokenData,
-        int24 twapTick,
-        uint160 sqrtPriceX96,
-        int128 premium
-    ) external view returns (int256 bonusAmounts, uint256 tokenData) {
-        // Check status for each token, returns tokenData variable that contains userBalance (right Slot) and
-        // tokens required (left slot) for the account to be healthy (have enough collateral/margin)
-        tokenData = _getAccountMargin(account, twapTick, positionBalanceArray, premium);
-
-        // Need a valid price to compute the bonus
-        if (sqrtPriceX96 == 0) return (bonusAmounts, tokenData);
-
-        // value of the token balance for both tokens 0 and 1:
-        // otherTokenData is token0, which is provided as an input and used to compute the tokenValue when a nonzero sqrtPriceX96 value is provided
-        // computes value as "realValue"/sqrtPrice -> token1.balance/sqrtPrice + token0.balance*sqrtPrice
-        // this avoids squaring sqrtPrice
-        uint256 token1TotalValue;
-        uint256 tokenValue;
-        unchecked {
-            token1TotalValue = (tokenData.rightSlot() * Constants.FP96) / sqrtPriceX96;
-        }
-        unchecked {
-            tokenValue =
-                // token1.balance/sqrtPrice + token0.balance*sqrtPrice
-                token1TotalValue +
-                Math.mulDiv96(otherTokenData.rightSlot(), sqrtPriceX96);
-        }
-
-        // value of the required collateral
-        // otherTokenData is token0, which is provided as an input and used to compute the tokenValue when a nonzero sqrtPriceX96 value is provided
-        // computes value as "realValue"/sqrtPrice -> token1.required/sqrtPrice + token0.required*sqrtPrice
-        uint256 requiredValue;
-        unchecked {
-            requiredValue =
-                (tokenData.leftSlot() * Constants.FP96) /
-                sqrtPriceX96 +
-                Math.mulDiv96(otherTokenData.leftSlot(), sqrtPriceX96);
-        }
-
-        // What fraction of the collateral value is in token1
-        // computes (token1.balance/sqrtPrice) / (token1.balance/sqrtPrice + token0.balance*sqrtPrice)
-        uint256 valueRatio1;
-        unchecked {
-            valueRatio1 =
-                (tokenData.rightSlot() * Constants.FP96 * DECIMALS) /
-                tokenValue /
-                sqrtPriceX96;
-        }
-
-        // Position must be margin called (token value is less than required collateral)
-        if (tokenValue >= requiredValue) revert Errors.NotMarginCalled();
-
-        int128 bonus0;
-        int128 bonus1;
-        unchecked {
-            bonus0 = int128(
-                int256(
-                    otherTokenData.leftSlot() < otherTokenData.rightSlot() // If required is less than balance of that specific token (ie. user uses cross-collateralization), then seize all that collateral and use that as the bonus
-                        ? ((tokenValue) * (DECIMALS - valueRatio1) * Constants.FP96) / sqrtPriceX96 // else, the bonus is just (requiredValue - tokenValue)
-                        : ((requiredValue - tokenValue) *
-                            (DECIMALS - valueRatio1) *
-                            Constants.FP96) / sqrtPriceX96
-                )
-            );
-
-            bonus1 = int128(
-                int256(
-                    tokenData.leftSlot() < tokenData.rightSlot() // If required is less than balance of that specific token (ie. user uses cross-collateralization), then seize all that collateral and use that as the bonus
-                        ? Math.mulDiv96((tokenValue) * (valueRatio1), sqrtPriceX96) // else, the bonus is just (requiredValue - tokenValue)
-                        : Math.mulDiv96((requiredValue - tokenValue) * (valueRatio1), sqrtPriceX96)
-                )
-            );
-
-            // store bonus amounts as actual amounts by dividing by DECIMALS_128
-            bonusAmounts = bonusAmounts.toRightSlot(bonus0 / DECIMALS_128).toLeftSlot(
-                bonus1 / DECIMALS_128
-            );
-        }
-
-        return (bonusAmounts, tokenData);
-    }
-
     /// @notice Get the cost of exercising an option. Used during a forced exercise.
     /// @dev This one computes the cost of calling the forceExercise function on a position:
     /// - The forceExercisor will have to *pay* the exercisee because their position will be closed "against their will"
@@ -825,7 +731,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// - 10% if the position is liquidated when the price is between 950 and 1000, or if it is between 1050 and 1100
     /// - 5% if the price is between 900 and 950 or (1100, 1150)
     /// - 2.5% if between (850, 900) or (1150, 1200)
-    /// @param account Address of the exercised account.
     /// @param currentTick The current price tick.
     /// @param medianTick The median price tick.
     /// @param positionId The position to be exercised
@@ -833,7 +738,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param longAmounts The amount of longs in the position.
     /// @return exerciseFees The fees for exercising the option position.
     function exerciseCost(
-        address account,
         int24 currentTick,
         int24 medianTick,
         uint256 positionId,
@@ -932,6 +836,91 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             exerciseFees = exerciseFees
                 .toRightSlot(int128((int256(longAmounts.rightSlot()) * int256(fee)) / DECIMALS_128))
                 .toLeftSlot(int128((int256(longAmounts.leftSlot()) * int256(fee)) / DECIMALS_128));
+        }
+    }
+
+    /// @notice Returns the original delegated value to a user at a certain tick based on the available collateral from the exercised user.
+    /// @dev Only called on collateralTracker0, so we must query balances from collateralTracker1.
+    /// @param refunder Address of the user the refund is coming from (the force exercisee).
+    /// @param delegation0 Token values to refund at the given tick(atTick) rightSlot = token0 left = token1.
+    /// @param delegation1 u
+    /// @param atTick Tick to convert values at. This can be the current tick or some TWAP/median tick.
+    /// @param collateralToken1 The address of the collateralTracker for token 1.
+    /// @return bonusValues The amount of tokens to refund to the user.
+    function getBonusAmounts(
+        address refunder,
+        uint256 delegation0,
+        uint256 delegation1,
+        int24 atTick,
+        CollateralTracker collateralToken1
+    ) public view returns (int256 bonusValues) {
+        uint160 sqrtPriceX96 = Math.getSqrtRatioAtTick(atTick);
+
+        unchecked {
+            uint256 balance0 = convertToAssets(balanceOf[refunder]);
+            uint256 balance1 = collateralToken1.convertToAssets(
+                collateralToken1.balanceOf(refunder)
+            );
+
+            int256 balanceShortage0 = int256(delegation0) - int256(balance1);
+            int256 balanceShortage1 = int256(delegation1) - int256(balance1);
+
+            // Case 1: The user has enough collateral left to fully cover the liquidator's donation in its original tokens. No bonus is needed.
+            if (balanceShortage0 <= 0 && balanceShortage1 <= 0) {
+                return bonusValues.toRightSlot(int128(delegation0)).toLeftSlot(int128(delegation1));
+            }
+
+            // Case 2: The user has insufficient collateral for both the token0 and token1 donations. We send the liquidator whatever tokens the user has left,
+            // and divide the loss resulting from the remaining shortage equally among the collateral vaults, giving the liquidator a bonus on tokens that had to be returned in alternate forms.
+            // This situation results in protocol loss.
+            if (balanceShortage0 >= 0 && balanceShortage1 >= 0) {
+                (balanceShortage0, balanceShortage1) = PanopticMath.evenSplit(
+                    uint256(balanceShortage0),
+                    uint256(balanceShortage1),
+                    sqrtPriceX96
+                );
+
+                int256 paid0 = uint256(balance0 + balanceShortage0);
+                int256 paid1 = uint256(balance1 + balanceShortage0);
+
+                (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit(
+                    Math.rectified(int256(delegation0) - paid0) / 10,
+                    Math.rectified(int256(delegation1) - paid1) / 10,
+                    sqrtPriceX96
+                );
+
+                return bonusValues.toRightSlot(paid0 + bonus0).toLeftSlot(int128(paid1 + bonus1));
+            }
+
+            // Case 3: The user has enough collateral to fully cover the token1 donation, but not the token0 donation.
+            // May cause protocol loss depending on the exact surplus of token1 and shortage of token0 in the liquidatee account
+            if (balanceShortage0 > 0 && balanceShortage1 < 0) {
+                int256 converted1 = PanopticMath.convert0to1(balanceShortage0, sqrtPriceX96);
+
+                // keeps track of the surplus, in this case it's whatever original surplus we had minus however much we had to convert and the commission fee
+                int256 balanceShortage1Final = int256(balanceShortage1) + (converted1 * 110) / 100;
+
+                // Case 3a: The user has enough value in surplus token1 to cover the shortage of token0 including a 10% conversion bonus.
+                // No protocol loss.
+                if (balanceShortage1Final <= 0) {
+                    return
+                        bonusValues.toRightSlot(int128(balance0)).toLeftSlot(
+                            int128(balance1 + balanceShortage1Final)
+                        );
+                }
+
+                balanceShortage1Final = int256(balanceShortage1) + converted1; // remove the bonus for now, we will add it back later
+
+                // Case 3b: The liquidatee does not have enough surplus token1 to cover the token0 shortage, so the remaining loss must be divided among the collateral vaults.
+                // Results in protocol loss.
+                (uint256 surplus0, uint256 surplus1) = PanopticMath.evenSplit(
+                    uint256(balanceShortage0),
+                    uint256(balanceShortage1Final),
+                    sqrtPriceX96
+                );
+            }
+
+            // Cases 4a and 4b: 3a and 3b with token numbers reversed
         }
     }
 

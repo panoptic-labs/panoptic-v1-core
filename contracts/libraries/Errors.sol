@@ -49,6 +49,9 @@ library Errors {
     /// @notice Invalid input in LeftRight library.
     error LeftRightInputError();
 
+    /// @notice A liquidation was initiated from an account that had one or more positions open
+    error LiquidatorHasOpenPositions();
+
     /// @notice None of the forced exercised legs are exerciseable (they are all in-the-money)
     error NoLegsExercisable();
 
@@ -57,9 +60,6 @@ library Errors {
 
     /// @notice PanopticPool: Position does not have enough collateral
     error NotEnoughCollateral();
-
-    /// @notice User does not have enough funds
-    error NotEnoughFunds();
 
     /// @notice max token amounts for position exceed 128 bits.
     error PositionTooLarge();

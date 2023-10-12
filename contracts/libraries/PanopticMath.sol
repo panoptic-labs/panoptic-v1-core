@@ -261,6 +261,56 @@ library PanopticMath {
         }
     }
 
+    /// @notice Takes arbitrary amounts of token0 and token1 and returns an equivalent value at `sqrtPriceX96` in equal proportions of token0 and token1.
+    /// @dev This is useful when dividing liquidation losses between collateral vaults
+    /// @param amount0 the amount of token0
+    /// @param amount1 the amount of token1
+    /// @param sqrtPriceX96 the sqrt price at which to convert between token0/token1
+    /// @return amount0Out an amount of token0 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
+    /// @return amount1Out an amount of token1 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
+    function evenSplit(
+        uint256 amount0,
+        uint256 amount1,
+        uint160 sqrtPriceX96
+    ) internal pure returns (uint256, uint256) {
+        unchecked {
+            return (
+                amount0 / 2 + convert1to0(amount1, sqrtPriceX96) / 2,
+                amount1 / 2 + convert0to1(amount0, sqrtPriceX96) / 2
+            );
+        }
+    }
+
+    /// @notice Takes an arbitrary amount of token0 and returns an equivalent value at `sqrtPriceX96` in equal proportions of token0 and token1.
+    /// @dev This is useful when dividing liquidation losses between collateral vaults
+    /// @param amount0 the amount of token0
+    /// @param sqrtPriceX96 the sqrt price at which to convert between token0/token1
+    /// @return amount0Out an amount of token0 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
+    /// @return amount1Out an amount of token1 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
+    function evenSplit0(
+        uint256 amount0,
+        uint160 sqrtPriceX96
+    ) internal pure returns (uint256, uint256) {
+        unchecked {
+            return (amount0 / 2, convert0to1(amount0 / 2, sqrtPriceX96));
+        }
+    }
+
+    /// @notice Takes an arbitrary amount of token1 and returns an equivalent value at `sqrtPriceX96` in equal proportions of token0 and token1.
+    /// @dev This is useful when dividing liquidation losses between collateral vaults
+    /// @param amount1 the amount of token1
+    /// @param sqrtPriceX96 the sqrt price at which to convert between token0/token1
+    /// @return amount0Out an amount of token0 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
+    /// @return amount1Out an amount of token1 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
+    function evenSplit1(
+        uint256 amount1,
+        uint160 sqrtPriceX96
+    ) internal pure returns (uint256, uint256) {
+        unchecked {
+            return (convert1to0(amount1 / 2, sqrtPriceX96), amount1 / 2);
+        }
+    }
+
     /// @notice Adds required collateral and collateral balance from collateralTracker0 and collateralTracker1 and converts to single values in terms of `tokenType`.
     /// @param tokenData0 LeftRight type container holding the collateralBalance (right slot) and requiredCollateral (left slot) for a user in CollateralTracker0 (expressed in terms of token0)
     /// @param tokenData1 LeftRight type container holding the collateralBalance (right slot) and requiredCollateral (left slot) for a user in CollateralTracker0 (expressed in terms of token1)

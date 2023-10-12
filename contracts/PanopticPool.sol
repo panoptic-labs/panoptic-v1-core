@@ -408,7 +408,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int24 atTick
     ) internal view returns (int256 portfolioPremium, uint256[2][] memory balances) {
         uint256 pLength = positionIdList.length;
-        uint256[2][] memory balances = new uint256[2][](pLength);
+        balances = new uint256[2][](pLength);
 
         address c_user = user;
         // loop through each option position/tokenId
@@ -1244,95 +1244,88 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
     /// @notice Liquidates a distressed account. Will burn all positions and will issue a bonus to the liquidator.
     /// @dev Will revert if: account is not margin called or if the user liquidates themselves.
-    /// @param account Address of the distressed account.
-    /// @param tickLimitLow The lower tick slippagelimit.
-    /// @param tickLimitHigh The upper tick slippagelimit.
+    /// @param liquidatee Address of the distressed account.
     /// @param positionIdList List of positions owned by the user. Written as [tokenId1, tokenId2, ...].
-    function liquidateAccount(
-        address account,
-        int24 tickLimitLow,
-        int24 tickLimitHigh,
-        uint256[] calldata positionIdList
+    function liquidate(
+        address liquidatee,
+        uint256[] calldata positionIdList,
+        uint256 delegation0,
+        uint256 delegation1
     ) external {
-        // validate positionIdList (list of all tokenIds of the account)
-        _validatePositionList(account, positionIdList, 0);
+        _validatePositionList(liquidatee, positionIdList, 0);
 
-        // check slippage limits, read current price + tick
-        int24 currentTick;
-        (currentTick, , tickLimitLow, tickLimitHigh) = _getPriceAndCheckSlippageViolation(
-            tickLimitLow,
-            tickLimitHigh
-        );
+        if (numberOfPositions(msg.sender) > 0) revert Errors.LiquidatorHasOpenPositions();
 
-        // bonusAmounts the amount of liquidation bonuses going to the liquidator
-        // delegatedAmounts delegate amount that is required to cover the collateral requirements for the entirety of the portfolio (do not consider the existing balance)
-        int256 bonusAmounts;
-        uint256 delegatedAmounts;
+        // Assert the account we are liquidating is actually insolvent
+        int24 twapTick = getUniV3TWAP();
 
+        // TWAP-current tick price % limit
+
+        // While the liquidation bonus is based on the amount of tokens the liquidator was forced to convert,
+        // they also receive a basal bonus (1% of col. req. for liquidated positions)
+        // in exchange for completing a valid liquidation, even if they did not have to convert any tokens
+        // and their variable bonus is 0
+        uint256 basalBonus0; // 1% of collateral requirement
+        uint256 basalBonus1; // 1% of collateral requirement
         {
-            // Compute all premia (long and short)
+            (, int24 currentTick, , , , , ) = s_univ3pool.slot0();
+
             (int256 premia, uint256[2][] memory positionBalanceArray) = _calculateAccumulatedPremia(
-                account,
+                msg.sender,
                 positionIdList,
                 COMPUTE_ALL_PREMIA,
                 currentTick
             );
-
-            // Compute the TWAP
-            int24 twapTick = getUniV3TWAP();
-            uint160 twapSqrtPrice = Math.getSqrtRatioAtTick(twapTick);
-
-            // this computes the token balance (right slot) and the tokens required (left slot) for token0
-            (, uint256 tokenData0) = s_collateralToken0.computeBonus(
-                account,
-                positionBalanceArray,
-                0,
+            uint256 tokenData0 = s_collateralToken0.getAccountMarginDetails(
+                liquidatee,
                 twapTick,
-                0,
+                positionBalanceArray,
                 premia.rightSlot()
             );
 
-            // this computes the bonus ratio and computes the tokens required for token1
-            uint256 tokenData1;
-            (bonusAmounts, tokenData1) = s_collateralToken1.computeBonus(
-                account,
-                positionBalanceArray,
-                tokenData0,
+            uint256 tokenData1 = s_collateralToken1.getAccountMarginDetails(
+                liquidatee,
                 twapTick,
-                twapSqrtPrice,
+                positionBalanceArray,
                 premia.leftSlot()
             );
 
-            //Add short premia to bonus
-            bonusAmounts = bonusAmounts
-                .toRightSlot(premia.rightSlot() > 0 ? premia.rightSlot() : int128(0))
-                .toLeftSlot(premia.leftSlot() > 0 ? premia.leftSlot() : int128(0));
-
-            // delegate amount that is required to cover the collateral requirements for the entirety of the portfolio (do not consider the existing balance)
-            delegatedAmounts = delegatedAmounts.toRightSlot(tokenData0.leftSlot()).toLeftSlot(
-                tokenData1.leftSlot()
+            (uint256 balanceCross, uint256 thresholdCross) = _getSolvencyBalances(
+                tokenData0,
+                tokenData1,
+                TickMath.getSqrtRatioAtTick(twapTick)
             );
+
+            if (balanceCross >= thresholdCross) revert Errors.NotMarginCalled();
+
+            basalBonus0 = tokenData0.leftSlot() / 100;
+            basalBonus1 = tokenData1.leftSlot() / 100;
         }
 
-        CollateralTracker collateralToken0 = s_collateralToken0;
-        CollateralTracker collateralToken1 = s_collateralToken1;
+        // Perform the specified delegation from `msg.sender` to `liquidatee`
+        // Works like a transfer, so the liquidator must possess all the tokens they are delegating, resulting in no net supply change
+        // If not enough tokens are delegated for the positions of `liquidatee` to be closed, the liquidation will fail
+        s_collateralToken0.delegate(msg.sender, liquidatee, delegation0);
+        s_collateralToken1.delegate(msg.sender, liquidatee, delegation1);
 
-        // Liquidator must delegate the notional amount of tokens needed for exercising.
-        collateralToken0.delegate(msg.sender, account, delegatedAmounts.rightSlot());
-        collateralToken1.delegate(msg.sender, account, delegatedAmounts.leftSlot());
+        // burn all options from the liquidatee
+        _burnAllOptionsFrom(
+            liquidatee,
+            Constants.MIN_V3POOL_TICK,
+            Constants.MAX_V3POOL_TICK,
+            positionIdList
+        );
 
-        // Rescue and liquidate positions
-        _burnAllOptionsFrom(account, tickLimitLow, tickLimitHigh, positionIdList);
+        (refund0) = s_collateralToken0.getBonusAmounts(
+            liquidatee,
+            delegation0 + basalBonus0,
+            delegation1 + basalBonus1,
+            twapTick,
+            s_collateralToken1
+        );
 
-        // compute the amount of tokens that need to be revoked: delegated + bonus.
-        // net gain is bonus amount
-        int256 revokedAmounts = delegatedAmounts.add(bonusAmounts);
-
-        // revoke the funds
-        collateralToken0.revoke(msg.sender, account, uint128(revokedAmounts.rightSlot()));
-        collateralToken1.revoke(msg.sender, account, uint128(revokedAmounts.leftSlot()));
-
-        emit AccountLiquidated(msg.sender, account, bonusAmounts, currentTick);
+        s_collateralToken0.revoke(msg.sender, liquidatee, refundAmounts.rightSlot());
+        s_collateralToken1.revoke(msg.sender, liquidatee, refundAmounts.leftSlot());
     }
 
     /// @notice Force the exercise of a single position. Exercisor will have to pay a small fee do force exercise.
@@ -1390,7 +1383,6 @@ contract PanopticPool is ERC1155Holder, Multicall {
             // Compute the exerciseFee, this will decrease the further away the price is from the forcedExercised position
             /// @dev use the medianTick to prevent price manipulations based on swaps.
             exerciseFees = s_collateralToken0.exerciseCost(
-                account,
                 currentTick,
                 getMedian(),
                 touchedId[0],
