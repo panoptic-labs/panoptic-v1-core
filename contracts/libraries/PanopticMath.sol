@@ -335,7 +335,7 @@ library PanopticMath {
                     uint256 ratio = Math.getSqrtRatioAtTick(
                         Math.max24(2 * (strike - atTick), Constants.MIN_V3POOL_TICK)
                     );
-                    int256 itmAmount = int256(Math.mulDiv96(amount0, ratio));
+                    int256 itmAmount = int256(Math.mulDiv96(amount1, ratio));
                     itmAmount1 += isLong == 1 ? -itmAmount : itmAmount;
                 }
             }
