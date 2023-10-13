@@ -1415,6 +1415,85 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                      HEALTH AND COLLATERAL TRACKING
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Get the collateral status/margin details for a single position, not taking ITM amounts into account.
+    /// @dev This can be used to check the amount of tokens required for that specific collateral type.
+    /// @param tokenId The option position.
+    /// @param positionSize The size of the option position.
+    /// @param atTick Tick to convert values at.
+    /// @return tokensRequired Required tokens for that new position
+    function getPositionCollateralRequirement(
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 atTick
+    ) public view returns (uint256 tokensRequired) {
+        // update pool utilization, taking new inAMM amounts into account
+        uint128 newPoolUtilization;
+        unchecked {
+            int128 currentPoolUtilization = _poolUtilization();
+
+            (int256 longAmounts, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
+                tokenId,
+                0,
+                positionSize,
+                s_tickSpacing
+            );
+
+            (int256 longAmount, int256 shortAmount) = s_underlyingIsToken0
+                ? (longAmounts.rightSlot(), shortAmounts.rightSlot())
+                : (longAmounts.leftSlot(), shortAmounts.leftSlot());
+
+            int256 deltaBalance = shortAmount - longAmount;
+
+            newPoolUtilization = uint128(
+                uint256(
+                    currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
+                )
+            );
+        }
+
+        // Compute the tolems required using new pool utilization
+        tokensRequired = _getRequiredCollateralAtTickSinglePosition(
+            tokenId,
+            positionSize,
+            atTick,
+            newPoolUtilization
+        );
+    }
+
+    /// @notice Get the collateral status/margin details for a single position, includes offsetting effect of ITM positions.
+    /// @dev This can be used to check the amount of tokens required for that specific collateral type, with the ITM amounts being
+    /// @dev credited or deducted from the tokenRequired.
+    /// @param tokenId The option position.
+    /// @param positionSize The size of the option position.
+    /// @param atTick Tick to convert values at. This can be the current tick or the Uniswap pool TWAP tick.
+    /// @return tokensRequired Required tokens for that new position
+    /// @return itmAmount Amount of tokens that are ITM
+    function getITMPositionCollateralRequirement(
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 atTick
+    ) public view returns (uint256 tokensRequired, int256 itmAmount) {
+        // get tokens required for the current tokenId position
+        uint256 tokensRequired = getPositionCollateralRequirement(tokenId, positionSize, atTick);
+
+        // compute ITM amounts
+        (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getITMAmountsForPosition(
+            tokenId,
+            positionSize,
+            s_tickSpacing,
+            atTick
+        );
+
+        // use the ITM amount for the current collateral token
+        itmAmount = s_underlyingIsToken0 ? int256(itmAmount0) : int256(itmAmount1);
+
+        unchecked {
+            // deduct ITM amounts from tokens required, make strictly positive (is it ever necessary?)
+            int256 _tokenRequired = int256(tokensRequired) - itmAmount;
+            tokensRequired = _tokenRequired < int256(0) ? uint256(0) : uint256(_tokenRequired);
+        }
+    }
+
     /// @notice Get the collateral status/margin details of an account/user.
     /// NOTE: It's up to the caller to confirm from the returned result that the account has enough collateral.
     /// @dev This can be used to check the health: how many tokens a user has compared to the margin threshold.

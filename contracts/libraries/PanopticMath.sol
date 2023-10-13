@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Libraries
+import {Constants} from "@libraries/Constants.sol";
 import {Errors} from "@libraries/Errors.sol";
 import {Math} from "@libraries/Math.sol";
 // Custom types
@@ -224,8 +225,8 @@ library PanopticMath {
     /// @param oldTokenId the position id being burnt if rolling from a position
     /// @param positionSize The number of contracts of this option
     /// @param tickSpacing the tick spacing of the underlying Uniswap v3 pool
-    /// @return longAmounts Left-right packed word where the right conains the total contract size and the left total notional
-    /// @return shortAmounts Left-right packed word where the right conains the total contract size and the left total notional
+    /// @return longAmounts Left-right packed word where the right contains the total contract size and the left total notional
+    /// @return shortAmounts Left-right packed word where the right contains the total contract size and the left total notional
     function computeExercisedAmounts(
         uint256 tokenId,
         uint256 oldTokenId,
@@ -258,6 +259,94 @@ library PanopticMath {
             unchecked {
                 ++leg;
             }
+        }
+    }
+
+    /// @notice Calculates the amount of token0 and token1 received for a given tokenId and positionSize at the provided atTick
+    /// @param tokenId the tokenId of the position
+    /// @param positionSize the size of that position
+    /// @param tickSpacing the pool's tickSpacing
+    /// @param atTick the current tick to be evaluated
+    /// @return netAmount0 The net amount of token0
+    /// @return netAmount1 The net amount of token1
+    function getNetAmountsForPosition(
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 tickSpacing,
+        int24 atTick
+    ) internal pure returns (int256 netAmount0, int256 netAmount1) {
+        unchecked {
+            uint256 numLegs = tokenId.countLegs();
+            for (uint256 leg = 0; leg < numLegs; ++leg) {
+                uint256 liquidityChunk = getLiquidityChunk(tokenId, leg, positionSize, tickSpacing);
+                (uint256 amount0, uint256 amount1) = Math.getAmountsForLiquidity(
+                    atTick,
+                    liquidityChunk
+                );
+                bool isLong = tokenId.isLong(leg) == 1;
+                netAmount0 = isLong ? netAmount0 - int256(amount0) : netAmount0 + int256(amount0);
+                netAmount1 = isLong ? netAmount1 - int256(amount1) : netAmount1 + int256(amount1);
+            }
+        }
+    }
+
+    /// @notice Calculates the ITM amount of token0 and token1 received for a given tokenId and positionSize at the provided atTick
+    /// @param tokenId the tokenId of the position
+    /// @param positionSize the size of that position
+    /// @param tickSpacing the pool's tickSpacing
+    /// @param atTick the current tick to be evaluated
+    /// @return itmAmount0 The net amount of token0
+    /// @return itmAmount1 The net amount of token1
+    /// @dev whether a position is OTM depends on the that leg's asset and tokenType:
+    ///   --if asset=0 and tokenType=0, OTM when price < lowerTick. Composition = positionSize of token0.
+    ///   --if asset=0 and tokenType=1, OTM when price > upperTick. Composition = positionSize*strike of token1.
+    ///   --if asset=1 and tokenType=0, OTM when price < lowerTick. Composition = positionSize/strike of token0.
+    ///   --if asset=1 and tokenType=1, OTM when price > upperTick. Composition = positionSize of token1.
+    /// The ITM amount is reported as any amount of the other token (so an in-range position will have an ITM amount)
+    function getITMAmountsForPosition(
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 tickSpacing,
+        int24 atTick
+    ) internal pure returns (int256 itmAmount0, int256 itmAmount1) {
+        unchecked {
+            uint256 numLegs = tokenId.countLegs();
+            for (uint256 leg = 0; leg < numLegs; ++leg) {
+                uint256 liquidityChunk = getLiquidityChunk(tokenId, leg, positionSize, tickSpacing);
+
+                // extract amount of token inside the position at tick=atTick
+                (uint256 amount0, uint256 amount1) = Math.getAmountsForLiquidity(
+                    atTick,
+                    liquidityChunk
+                );
+
+                uint256 tokenType = tokenId.tokenType(leg);
+                int24 strike = tokenId.strike(leg);
+                uint256 isLong = tokenId.isLong(leg);
+
+                // ITM amount is the amount of the "other" token in that position compared to what's expected for an OTM position
+                if ((amount0 > 0) && (tokenType == 1)) {
+                    uint256 ratio = Math.getSqrtRatioAtTick(
+                        Math.max24(2 * (atTick - strike), Constants.MIN_V3POOL_TICK)
+                    );
+                    int256 itmAmount = int256(Math.mulDiv96(amount0, ratio));
+                    itmAmount0 += isLong == 1 ? -itmAmount : itmAmount;
+                } else if ((amount1 > 0) && (tokenType == 0)) {
+                    uint256 ratio = Math.getSqrtRatioAtTick(
+                        Math.max24(2 * (strike - atTick), Constants.MIN_V3POOL_TICK)
+                    );
+                    int256 itmAmount = int256(Math.mulDiv96(amount0, ratio));
+                    itmAmount1 += isLong == 1 ? -itmAmount : itmAmount;
+                }
+            }
+            /*
+            {
+                int256 itm0 = tokenType == 0 ? (int256(amountsMoved.rightSlot() - amount0) *int256(2**96 - ratio)) >> 96 : int256(0);
+                int256 itm1 = tokenType == 1 ? (int256(amountsMoved.leftSlot() - amount1) * int256(2**96 - ratio)) >> 96 : int256(0);
+                itmAmount0 += int256(itm0);
+                itmAmount1 += int256(itm1);
+            }
+            */
         }
     }
 
