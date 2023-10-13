@@ -38,8 +38,8 @@ library Math {
     /// @notice Compute the maximum of (x, 0)
     /// @param x the incoming *signed* integer
     /// @return the maximum of (x, 0), e.g.: rectified(4) = 4, rectified(-4) = 0
-    function rectified(int256 x) internal pure returns (uint256) {
-        return x > int256(0) ? uint256(x) : uint256(0);
+    function rectified(int256 x) internal pure returns (int256) {
+        return x > int256(0) ? int256(x) : int256(0);
     }
 
     /// @notice Compute the absolute value of an integer (int256).

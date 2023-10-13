@@ -153,6 +153,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// May be configurable on a pool-by-pool basis in the future, but hardcoded for now
     uint32 internal constant TWAP_WINDOW = 600;
 
+    // The maximum allowed delta between the currentTick and the Uniswap TWAP tick during a liquidation (~5% down, ~5.26% up)
+    // Prevents manipulation of the currentTick to liquidate positions at a less favorable price
+    int256 internal constant MAX_TWAP_DELTA_LIQUIDATION = 513;
+
     // The minimum amount of time, in seconds, permitted between mini/median TWAP updates.
     uint256 internal constant MEDIAN_PERIOD = 60;
 
@@ -1259,8 +1263,6 @@ contract PanopticPool is ERC1155Holder, Multicall {
         // Assert the account we are liquidating is actually insolvent
         int24 twapTick = getUniV3TWAP();
 
-        // TWAP-current tick price % limit
-
         // While the liquidation bonus is based on the amount of tokens the liquidator was forced to convert,
         // they also receive a basal bonus (1% of col. req. for liquidated positions)
         // in exchange for completing a valid liquidation, even if they did not have to convert any tokens
@@ -1269,6 +1271,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
         uint256 basalBonus1; // 1% of collateral requirement
         {
             (, int24 currentTick, , , , , ) = s_univ3pool.slot0();
+
+            // Enforce maximum delta between TWAP and currentTick to prevent extreme price manipulation
+            if (Math.abs(int256(currentTick) - int256(twapTick)) > MAX_TWAP_DELTA_LIQUIDATION)
+                revert Errors.StaleTWAP();
 
             (int256 premia, uint256[2][] memory positionBalanceArray) = _calculateAccumulatedPremia(
                 msg.sender,
@@ -1293,7 +1299,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
             (uint256 balanceCross, uint256 thresholdCross) = _getSolvencyBalances(
                 tokenData0,
                 tokenData1,
-                TickMath.getSqrtRatioAtTick(twapTick)
+                Math.getSqrtRatioAtTick(twapTick)
             );
 
             if (balanceCross >= thresholdCross) revert Errors.NotMarginCalled();
@@ -1316,7 +1322,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
             positionIdList
         );
 
-        (refund0) = s_collateralToken0.getBonusAmounts(
+        (int256 refund0, int256 refund1) = s_collateralToken0.getLiquidationRefund(
             liquidatee,
             delegation0 + basalBonus0,
             delegation1 + basalBonus1,
@@ -1324,8 +1330,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
             s_collateralToken1
         );
 
-        s_collateralToken0.revoke(msg.sender, liquidatee, refundAmounts.rightSlot());
-        s_collateralToken1.revoke(msg.sender, liquidatee, refundAmounts.leftSlot());
+        s_collateralToken0.revoke(msg.sender, liquidatee, uint256(Math.abs(refund0)));
+        s_collateralToken1.revoke(msg.sender, liquidatee, uint256(Math.abs(refund1)));
     }
 
     /// @notice Force the exercise of a single position. Exercisor will have to pay a small fee do force exercise.
@@ -1456,7 +1462,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int256 refundAmounts = delegatedAmounts.add(exerciseFees);
 
         // redistribute token composition of refund amounts if user doesn't have enough of one token to pay
-        refundAmounts = s_collateralToken0.getRefundAmounts(
+        refundAmounts = s_collateralToken0.getExerciseRefund(
             account,
             refundAmounts,
             twapTick,

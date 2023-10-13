@@ -109,6 +109,10 @@ library Errors {
     /// because the upper and lower ticks are not multiples of `tickSpacing`
     error TicksNotInitializable();
 
+    /// @notice The current tick is too far away from the calculated Uniswap TWAP
+    /// This is a safeguard against extreme price manipulation during liquidations
+    error StaleTWAP();
+
     /// @notice Under/Overflow has happened
     error UnderOverFlow();
 

@@ -4849,7 +4849,7 @@ contract PanopticPoolTest is PositionUtils {
         pp.forceExercise(Alice, 0, 0, posIdList, new uint256[](0));
     }
 
-    function test_Success_getRefundAmounts(
+    function test_Success_getExerciseRefund(
         uint256 x,
         uint256 balance0,
         uint256 balance1,
@@ -4884,7 +4884,7 @@ contract PanopticPoolTest is PositionUtils {
         int256 shortage = refund0 - int(ct0.convertToAssets(ct0.balanceOf(Charlie)));
 
         if (shortage > 0) {
-            int256 refundAmounts = ct0.getRefundAmounts(
+            int256 refundAmounts = ct0.getExerciseRefund(
                 Charlie,
                 int256(0).toRightSlot(int128(refund0)).toLeftSlot(int128(refund1)),
                 int24(atTick),
@@ -4905,7 +4905,7 @@ contract PanopticPoolTest is PositionUtils {
         shortage = refund1 - int(ct1.convertToAssets(ct1.balanceOf(Charlie)));
 
         if (shortage > 0) {
-            int256 refundAmounts = ct0.getRefundAmounts(
+            int256 refundAmounts = ct0.getExerciseRefund(
                 Charlie,
                 int256(0).toRightSlot(int128(refund0)).toLeftSlot(int128(refund1)),
                 int24(atTick),
