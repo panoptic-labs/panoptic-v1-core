@@ -860,15 +860,13 @@ contract PanopticPoolTest is PositionUtils {
         int256 swapAmount; // The amount of token0 or token1 to swap
 
         if (($itm0 != 0) && ($itm1 != 0)) {
-            int256 net0 = $itm0 + PanopticMath.convert1to0($itm1, currentSqrtPriceX96);
+            int256 net0 = $itm0 - PanopticMath.convert1to0($itm1, currentSqrtPriceX96);
 
-            int256 net1 = $itm1 + PanopticMath.convert0to1($itm0, currentSqrtPriceX96);
-
-            // if net1 is negative, then the protocol has a surplus of token0
-            zeroForOne = net1 < net0;
+            // if net0 is negative, then the protocol has a net shortage of token0
+            zeroForOne = net0 < 0;
 
             //compute the swap amount, set as positive (exact input)
-            swapAmount = zeroForOne ? net0 : net1;
+            swapAmount = -net0;
         } else if ($itm0 != 0) {
             zeroForOne = $itm0 < 0;
             swapAmount = -$itm0;

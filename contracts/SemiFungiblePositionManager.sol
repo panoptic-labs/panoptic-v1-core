@@ -921,20 +921,13 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
             if ((itm0 != 0) && (itm1 != 0)) {
                 (uint160 sqrtPriceX96, , , , , , ) = _univ3pool.slot0();
 
-                /// we need to compare (deltaX = itm0 - itm1/price) to (deltaY =  itm1 - itm0 * price) to only swap the owed balance
-                /// To reduce the number of computation steps, we do the following:
-                ///    deltaX = (itm0*sqrtPrice - itm1/sqrtPrice)/sqrtPrice
-                ///    deltaY = -(itm0*sqrtPrice - itm1/sqrtPrice)*sqrtPrice
+                int256 net0 = itm0 - PanopticMath.convert1to0(itm1, sqrtPriceX96);
 
-                int256 net0 = itm0 + PanopticMath.convert1to0(itm1, sqrtPriceX96);
-
-                int256 net1 = itm1 + PanopticMath.convert0to1(itm0, sqrtPriceX96);
-
-                // if net1 is negative, then the protocol has a surplus of token0
-                zeroForOne = net1 < net0;
+                // if net0 is negative, then the protocol has a net shortage of token0
+                zeroForOne = net0 < 0;
 
                 //compute the swap amount, set as positive (exact input)
-                swapAmount = zeroForOne ? net0 : net1;
+                swapAmount = -net0;
             } else if (itm0 != 0) {
                 zeroForOne = itm0 < 0;
                 swapAmount = -itm0;
