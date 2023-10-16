@@ -17,6 +17,19 @@ contract PanopticHelper {
 
     SemiFungiblePositionManager immutable SFPM;
 
+    struct Leg {
+        uint64 poolId;
+        uint8 asset;
+        uint8 optionRatio;
+        uint8 tokenType;
+        uint8 isLong;
+        uint8 riskPartner;
+        int24 strike;
+        int24 width;
+        int24 lowerTick;
+        int24 upperTick;
+    }
+
     /// @notice Construct the PanopticHelper contract
     /// @param _SFPM address of the SemiFungiblePositionManager
     /// @dev the SFPM is used to get the pool ID for a given address
@@ -83,6 +96,28 @@ contract PanopticHelper {
         );
 
         return int256(balanceCross) - int256(requiredCross);
+    }
+
+    /// @notice Unwraps the contents of the tokenId into its legs.
+    /// @param tokenId the input tokenId
+    /// @return legs an array of leg structs
+    function unwrapTokenId(uint256 tokenId) public view returns (Leg[] memory) {
+        uint256 numLegs = tokenId.countLegs();
+        Leg[] memory legs = new Leg[](numLegs);
+
+        for (uint256 leg = 0; leg < numLegs; ++leg) {
+            legs[leg].poolId = tokenId.univ3pool();
+            legs[leg].asset = tokenId.asset(leg);
+            legs[leg].optionRatio = tokenId.optionRatio(leg);
+            legs[leg].tokenType = tokenId.tokenType(leg);
+            legs[leg].isLong = tokenId.isLong(leg);
+            legs[leg].riskPartner = tokenId.riskPartner(leg);
+            legs[leg].strike = tokenId.strike(leg);
+            legs[leg].width = tokenId.width(leg);
+            (int24 lowerTick, int24 upperTick) = tokenId.asTicks(leg);
+            legs[leg].lowerTick = lowerTick;
+            legs[leg].upperTick = upperTick;
+        }
     }
 
     /// @notice Returns an estimate of the downside liquidation price for a given account on a given pool.
