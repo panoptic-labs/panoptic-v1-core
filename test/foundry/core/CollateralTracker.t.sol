@@ -344,9 +344,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
     using TickStateCallContext for uint256;
 
     // users who will send/receive deposits, transfers, and withdrawals
-    address alice = makeAddr("alice");
-    address bob = makeAddr("bob");
-    address swapper = makeAddr("swapper");
+    address Alice = makeAddr("Alice");
+    address Bob = makeAddr("Bob");
+    address Swapper = makeAddr("Swapper");
 
     /*//////////////////////////////////////////////////////////////
                            MAINNET CONTRACTS
@@ -382,6 +382,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     // store some data about the pool we are testing
     IUniswapV3Pool pool;
     uint64 poolId;
+    uint256 isWETH;
     address token0;
     address token1;
     uint24 fee;
@@ -458,6 +459,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         poolId = PanopticMath.getPoolId(address(_pool));
         token0 = _pool.token0();
         token1 = _pool.token1();
+        isWETH = token0 == address(WETH) ? 0 : 1;
         fee = _pool.fee();
         tickSpacing = _pool.tickSpacing();
         (currentSqrtPriceX96, currentTick, , , , , ) = _pool.slot0();
@@ -497,6 +499,51 @@ contract CollateralTrackerTest is Test, PositionUtils {
         assertEq(IERC20Partial(token1).balanceOf(recipient), initialMockTokens);
     }
 
+    //@note move this and panopticPool helper into position utils
+    /*//////////////////////////////////////////////////////////////
+                                HELPERS
+    //////////////////////////////////////////////////////////////*/
+
+    // used to accumulate premia for testing
+    function twoWaySwap(uint256 swapSize) public {
+        changePrank(Swapper);
+
+        // give Swapper the max amount of tokens
+        _grantTokens(Swapper);
+
+        IERC20Partial(token0).approve(address(router), type(uint256).max);
+        IERC20Partial(token1).approve(address(router), type(uint256).max);
+
+        swapSize = bound(swapSize, 10 ** 18, 10 ** 22);
+        router.exactInputSingle(
+            ISwapRouter.ExactInputSingleParams(
+                isWETH == 0 ? token0 : token1,
+                isWETH == 1 ? token0 : token1,
+                fee,
+                address(0x23),
+                block.timestamp,
+                swapSize,
+                0,
+                0
+            )
+        );
+
+        router.exactOutputSingle(
+            ISwapRouter.ExactOutputSingleParams(
+                isWETH == 1 ? token0 : token1,
+                isWETH == 0 ? token0 : token1,
+                fee,
+                address(0x23),
+                block.timestamp,
+                (swapSize * (1_000_000 - fee)) / 1_000_000,
+                type(uint256).max,
+                0
+            )
+        );
+
+        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+    }
+
     function setUp() public {}
 
     /*//////////////////////////////////////////////////////////////
@@ -524,11 +571,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // initalize world state
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         // approve collateral tracker to move tokens on the msg.senders behalf
         IERC20Partial(token0).approve(address(collateralToken0), assets);
@@ -544,16 +591,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        uint256 returnedShares0 = collateralToken0.deposit(assets, bob);
-        uint256 returnedShares1 = collateralToken1.deposit(assets, bob);
+        uint256 returnedShares0 = collateralToken0.deposit(assets, Bob);
+        uint256 returnedShares1 = collateralToken1.deposit(assets, Bob);
 
         // check shares were calculated correctly
         assertEq(sharesToken0, returnedShares0);
         assertEq(sharesToken1, returnedShares1);
 
         // check if receiver got the shares
-        assertEq(sharesToken0, collateralToken0.balanceOf(bob));
-        assertEq(sharesToken1, collateralToken1.balanceOf(bob));
+        assertEq(sharesToken0, collateralToken0.balanceOf(Bob));
+        assertEq(sharesToken1, collateralToken1.balanceOf(Bob));
 
         address underlyingToken0 = collateralToken0.asset();
         address underlyingToken1 = collateralToken1.asset();
@@ -567,11 +614,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // initalize world state
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         // approve collateral tracker to move tokens on the msg.senders behalf
         IERC20Partial(token0).approve(address(collateralToken0), assets);
@@ -581,9 +628,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
         assets = bound(assets, uint256(type(uint104).max) + 1, type(uint256).max);
 
         vm.expectRevert(Errors.DepositTooLarge.selector);
-        uint256 returnedShares0 = collateralToken0.deposit(assets, bob);
+        uint256 returnedShares0 = collateralToken0.deposit(assets, Bob);
         vm.expectRevert(Errors.DepositTooLarge.selector);
-        uint256 returnedShares1 = collateralToken1.deposit(assets, bob);
+        uint256 returnedShares1 = collateralToken1.deposit(assets, Bob);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -596,11 +643,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // initalize world state
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         // approve collateral tracker to move tokens on the msg.senders behalf
         IERC20Partial(token0).approve(address(collateralToken0), assets);
@@ -608,28 +655,28 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        uint256 returnedShares0 = collateralToken0.deposit(assets, bob);
-        uint256 returnedShares1 = collateralToken1.deposit(assets, bob);
+        uint256 returnedShares0 = collateralToken0.deposit(assets, Bob);
+        uint256 returnedShares1 = collateralToken1.deposit(assets, Bob);
 
-        // bob's token balance before withdraw
-        uint256 balanceBefore0 = IERC20Partial(token0).balanceOf(bob);
-        uint256 balanceBefore1 = IERC20Partial(token1).balanceOf(bob);
+        // Bob's token balance before withdraw
+        uint256 balanceBefore0 = IERC20Partial(token0).balanceOf(Bob);
+        uint256 balanceBefore1 = IERC20Partial(token1).balanceOf(Bob);
 
         // total amount of shares before withdrawal
         uint256 sharesBefore0 = collateralToken0.totalSupply();
         uint256 sharesBefore1 = collateralToken1.totalSupply();
 
         // withdraw tokens
-        collateralToken0.withdraw(assets, bob, bob);
-        collateralToken1.withdraw(assets, bob, bob);
+        collateralToken0.withdraw(assets, Bob, Bob);
+        collateralToken1.withdraw(assets, Bob, Bob);
 
         // Total amount of shares after withdrawal (after burn)
         uint256 sharesAfter0 = collateralToken0.totalSupply();
         uint256 sharesAfter1 = collateralToken1.totalSupply();
 
-        // bob's token balance after withdraw
-        uint256 balanceAfter0 = IERC20Partial(token0).balanceOf(bob);
-        uint256 balanceAfter1 = IERC20Partial(token1).balanceOf(bob);
+        // Bob's token balance after withdraw
+        uint256 balanceAfter0 = IERC20Partial(token0).balanceOf(Bob);
+        uint256 balanceAfter1 = IERC20Partial(token1).balanceOf(Bob);
 
         // check the correct amount of shares were burned
         // should be back to baseline
@@ -646,67 +693,67 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // initalize world state
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         // maxDeposit
-        uint256 maxDeposit0 = collateralToken0.maxDeposit(bob);
-        uint256 maxDeposit1 = collateralToken1.maxDeposit(bob);
+        uint256 maxDeposit0 = collateralToken0.maxDeposit(Bob);
+        uint256 maxDeposit1 = collateralToken1.maxDeposit(Bob);
 
         // approve collateral tracker to move tokens on the msg.senders behalf
         IERC20Partial(token0).approve(address(collateralToken0), maxDeposit0);
         IERC20Partial(token1).approve(address(collateralToken1), maxDeposit1);
 
         // deposit the max amount
-        collateralToken0.deposit(uint128(maxDeposit0), bob);
-        collateralToken1.deposit(uint128(maxDeposit1), bob);
+        collateralToken0.deposit(uint128(maxDeposit0), Bob);
+        collateralToken1.deposit(uint128(maxDeposit1), Bob);
 
         // max withdrawable amount
-        uint256 maxAssets = collateralToken0.maxWithdraw(bob);
+        uint256 maxAssets = collateralToken0.maxWithdraw(Bob);
 
         // attempt to withdraw
         // fail as assets > maxWithdraw(owner)
         vm.expectRevert(Errors.ExceedsMaximumRedemption.selector);
-        collateralToken0.withdraw(maxAssets + 1, bob, bob);
+        collateralToken0.withdraw(maxAssets + 1, Bob, Bob);
     }
 
     function test_Success_withdraw_OnBehalf(uint256 x, uint104 assets) public {
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve alice to move tokens on bob's behalf
-        collateralToken0.approve(alice, assets);
-        collateralToken1.approve(alice, assets);
+        // approve Alice to move tokens on Bob's behalf
+        collateralToken0.approve(Alice, assets);
+        collateralToken1.approve(Alice, assets);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), assets);
         IERC20Partial(token1).approve(address(collateralToken1), assets);
 
         // deposit fuzzed amount of tokens
-        collateralToken0.deposit(assets, bob);
-        collateralToken1.deposit(assets, bob);
+        collateralToken0.deposit(assets, Bob);
+        collateralToken1.deposit(assets, Bob);
 
-        changePrank(alice);
+        changePrank(Alice);
 
-        // bob's token balance before withdraw
-        uint256 balanceBefore0 = IERC20Partial(token0).balanceOf(alice);
-        uint256 balanceBefore1 = IERC20Partial(token1).balanceOf(alice);
+        // Bob's token balance before withdraw
+        uint256 balanceBefore0 = IERC20Partial(token0).balanceOf(Alice);
+        uint256 balanceBefore1 = IERC20Partial(token1).balanceOf(Alice);
 
         // attempt to withdraw
-        collateralToken0.withdraw(assets, alice, bob);
-        collateralToken1.withdraw(assets, alice, bob);
+        collateralToken0.withdraw(assets, Alice, Bob);
+        collateralToken1.withdraw(assets, Alice, Bob);
 
-        // bob's token balance after withdraw
-        uint256 balanceAfter0 = IERC20Partial(token0).balanceOf(alice);
-        uint256 balanceAfter1 = IERC20Partial(token1).balanceOf(alice);
+        // Bob's token balance after withdraw
+        uint256 balanceAfter0 = IERC20Partial(token0).balanceOf(Alice);
+        uint256 balanceAfter1 = IERC20Partial(token1).balanceOf(Alice);
 
         // check the withdrawal was successful
         assertEq(assets, balanceAfter0 - balanceBefore0);
@@ -716,29 +763,29 @@ contract CollateralTrackerTest is Test, PositionUtils {
     function test_Fail_withdraw_onBehalf(uint256 x) public {
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         uint256 assets = type(uint104).max;
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), assets);
         IERC20Partial(token1).approve(address(collateralToken1), assets);
 
         // deposit fuzzed amount of tokens
-        collateralToken0.deposit(uint128(assets), bob);
-        collateralToken1.deposit(uint128(assets), bob);
+        collateralToken0.deposit(uint128(assets), Bob);
+        collateralToken1.deposit(uint128(assets), Bob);
 
         vm.stopPrank();
-        vm.startPrank(alice);
+        vm.startPrank(Alice);
 
         // attempt to withdraw
         // fail as user does not have approval to transfer on behalf
         vm.expectRevert(stdError.arithmeticError);
-        collateralToken0.withdraw(100, alice, bob);
+        collateralToken0.withdraw(100, Alice, Bob);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -748,25 +795,25 @@ contract CollateralTrackerTest is Test, PositionUtils {
     function test_Success_mint(uint256 x, uint104 shares) public {
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         shares = uint104(bound(shares, 0, (uint256(type(uint104).max) * 1000) / 1001));
         // the amount of assets that would be deposited
         uint256 assetsToken0 = convertToAssets(shares, collateralToken0);
         uint256 assetsToken1 = convertToAssets(shares, collateralToken1);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), type(uint256).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint256).max);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        uint256 returnedAssets0 = collateralToken0.mint(shares, bob);
-        uint256 returnedAssets1 = collateralToken1.mint(shares, bob);
+        uint256 returnedAssets0 = collateralToken0.mint(shares, Bob);
+        uint256 returnedAssets1 = collateralToken1.mint(shares, Bob);
 
         vm.stopPrank();
 
@@ -778,8 +825,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         assertEq(assetsToken1 + mevTax, returnedAssets1);
 
         // check if receiver got the shares
-        assertEq(shares, collateralToken0.balanceOf(bob));
-        assertEq(shares, collateralToken1.balanceOf(bob));
+        assertEq(shares, collateralToken0.balanceOf(Bob));
+        assertEq(shares, collateralToken1.balanceOf(Bob));
 
         address underlyingToken0 = collateralToken0.asset();
         address underlyingToken1 = collateralToken1.asset();
@@ -793,32 +840,30 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // initalize world state
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         // approve collateral tracker to move tokens on the msg.senders behalf
         IERC20Partial(token0).approve(address(collateralToken0), type(uint256).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint256).max);
 
         // change the share price a little so we know it's checking the assets
-        collateralToken0.deposit(2 ** 64, bob);
-        collateralToken1.deposit(2 ** 64, bob);
+        collateralToken0.deposit(2 ** 64, Bob);
+        collateralToken1.deposit(2 ** 64, Bob);
 
         IERC20Partial(token0).transfer(address(panopticPool), 2 ** 64);
         IERC20Partial(token1).transfer(address(panopticPool), 2 ** 64);
 
         // mint more than the maximum (2**128 - 1)
         shares = bound(shares, collateralToken0.maxMint(address(0)) + 2, type(uint128).max);
-        console2.log(collateralToken0.previewMint(collateralToken0.maxMint(address(0)) + 2));
-        console2.log(collateralToken0.previewMint(shares));
-        console2.log(type(uint104).max);
+
         vm.expectRevert(Errors.DepositTooLarge.selector);
-        uint256 returnedShares0 = collateralToken0.mint(shares, bob);
+        uint256 returnedShares0 = collateralToken0.mint(shares, Bob);
         vm.expectRevert(Errors.DepositTooLarge.selector);
-        uint256 returnedShares1 = collateralToken1.mint(shares, bob);
+        uint256 returnedShares1 = collateralToken1.mint(shares, Bob);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -829,31 +874,31 @@ contract CollateralTrackerTest is Test, PositionUtils {
     function test_Success_transfer(uint256 x, uint104 amount) public {
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), amount);
         IERC20Partial(token1).approve(address(collateralToken1), amount);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(amount, bob);
-        collateralToken1.deposit(amount, bob);
+        collateralToken0.deposit(amount, Bob);
+        collateralToken1.deposit(amount, Bob);
 
-        uint256 bal0 = collateralToken0.balanceOf(bob);
-        uint256 bal1 = collateralToken1.balanceOf(bob);
+        uint256 bal0 = collateralToken0.balanceOf(Bob);
+        uint256 bal1 = collateralToken1.balanceOf(Bob);
 
-        // Transfer to alice
-        collateralToken0.transfer(alice, bal0);
-        collateralToken1.transfer(alice, bal1);
+        // Transfer to Alice
+        collateralToken0.transfer(Alice, bal0);
+        collateralToken1.transfer(Alice, bal1);
 
-        // Check alice received the correct amounts
-        assertEq(bal0, collateralToken0.balanceOf(alice));
-        assertEq(bal1, collateralToken1.balanceOf(alice));
+        // Check Alice received the correct amounts
+        assertEq(bal0, collateralToken0.balanceOf(Alice));
+        assertEq(bal1, collateralToken1.balanceOf(Alice));
     }
 
     // transfer fail Errors.PositionCountNotZero()
@@ -866,18 +911,18 @@ contract CollateralTrackerTest is Test, PositionUtils {
     ) public {
         _initWorld(x);
 
-        vm.startPrank(bob);
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve Collateral Token's to move tokens on bob's behalf
+        // approve Collateral Token's to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
         // deposit a significant amount of assets into the Panoptic pool
-        collateralToken0.deposit(type(uint104).max, bob);
-        collateralToken1.deposit(type(uint104).max, bob);
+        collateralToken0.deposit(type(uint104).max, Bob);
+        collateralToken1.deposit(type(uint104).max, Bob);
 
         // call will be minted in range
         (width, strike) = PositionUtils.getOTMSW(
@@ -888,7 +933,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             1
         );
 
-        // sell as bob
+        // sell as Bob
         tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 0, 0, strike, width);
         positionIdList.push(tokenId);
 
@@ -896,53 +941,53 @@ contract CollateralTrackerTest is Test, PositionUtils {
         (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
         positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-        _assumePositionValidity(bob, tokenId, positionSize0);
+        _assumePositionValidity(Bob, tokenId, positionSize0);
 
         panopticPool.mintOptions(positionIdList, positionSize0, 0, 0, 0);
 
-        // Attempt a transfer to alice from bob
+        // Attempt a transfer to Alice from Bob
         vm.expectRevert(Errors.PositionCountNotZero.selector);
-        collateralToken0.transfer(alice, amount);
+        collateralToken0.transfer(Alice, amount);
 
         vm.expectRevert(Errors.PositionCountNotZero.selector);
-        collateralToken1.transfer(alice, amount);
+        collateralToken1.transfer(Alice, amount);
     }
 
     // transferFrom
     function test_Success_transferFrom(uint256 x, uint104 amount) public {
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), amount);
         IERC20Partial(token1).approve(address(collateralToken1), amount);
 
-        // approve alice to move tokens on bob's behalf
-        collateralToken0.approve(alice, amount);
-        collateralToken1.approve(alice, amount);
+        // approve Alice to move tokens on Bob's behalf
+        collateralToken0.approve(Alice, amount);
+        collateralToken1.approve(Alice, amount);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(amount, bob);
-        collateralToken1.deposit(amount, bob);
+        collateralToken0.deposit(amount, Bob);
+        collateralToken1.deposit(amount, Bob);
 
-        changePrank(alice);
+        changePrank(Alice);
 
-        uint256 bal0 = collateralToken0.balanceOf(bob);
-        uint256 bal1 = collateralToken1.balanceOf(bob);
+        uint256 bal0 = collateralToken0.balanceOf(Bob);
+        uint256 bal1 = collateralToken1.balanceOf(Bob);
 
-        // alice executes transferFrom bob to herself
-        collateralToken0.transferFrom(bob, alice, bal0);
-        collateralToken1.transferFrom(bob, alice, bal1);
+        // Alice executes transferFrom Bob to herself
+        collateralToken0.transferFrom(Bob, Alice, bal0);
+        collateralToken1.transferFrom(Bob, Alice, bal1);
 
-        // Check alice received the correct amounts
-        assertEq(bal0, collateralToken0.balanceOf(alice));
-        assertEq(bal1, collateralToken1.balanceOf(alice));
+        // Check Alice received the correct amounts
+        assertEq(bal0, collateralToken0.balanceOf(Alice));
+        assertEq(bal1, collateralToken1.balanceOf(Alice));
     }
 
     // transferFrom fail Errors.PositionCountNotZero()
@@ -954,26 +999,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
     ) public {
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), type(uint256).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint256).max);
 
         // award corresponding shares
         deal(
             address(collateralToken0),
-            bob,
+            Bob,
             collateralToken0.previewDeposit(type(uint120).max),
             true
         );
         deal(
             address(collateralToken1),
-            bob,
+            Bob,
             collateralToken1.previewDeposit(type(uint120).max),
             true
         );
@@ -995,33 +1040,33 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 1
             );
 
-            // sell as bob
+            // sell as Bob
             tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
             positionIdList.push(tokenId);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(positionIdList, positionSize0, 0, 0, 0);
         }
 
-        // approve alice to move shares on bob's behalf
-        IERC20Partial(address(collateralToken0)).approve(alice, type(uint256).max);
-        IERC20Partial(address(collateralToken1)).approve(alice, type(uint256).max);
+        // approve Alice to move shares on Bob's behalf
+        IERC20Partial(address(collateralToken0)).approve(Alice, type(uint256).max);
+        IERC20Partial(address(collateralToken1)).approve(Alice, type(uint256).max);
 
-        uint256 bal0 = collateralToken0.balanceOf(bob);
-        uint256 bal1 = collateralToken1.balanceOf(bob);
+        uint256 bal0 = collateralToken0.balanceOf(Bob);
+        uint256 bal1 = collateralToken1.balanceOf(Bob);
 
-        // redeem from alice on behalf of bob
-        changePrank(alice);
-
-        // Check if test reverted
-        vm.expectRevert(Errors.PositionCountNotZero.selector);
-        collateralToken0.transferFrom(bob, alice, bal0);
+        // redeem from Alice on behalf of Bob
+        changePrank(Alice);
 
         // Check if test reverted
         vm.expectRevert(Errors.PositionCountNotZero.selector);
-        collateralToken1.transferFrom(bob, alice, bal1);
+        collateralToken0.transferFrom(Bob, Alice, bal0);
+
+        // Check if test reverted
+        vm.expectRevert(Errors.PositionCountNotZero.selector);
+        collateralToken1.transferFrom(Bob, Alice, bal1);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1037,53 +1082,53 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
             // calculate underlying assets via amount of shares
             assetsToken0 = convertToAssets(shares, collateralToken0);
             assetsToken1 = convertToAssets(shares, collateralToken1);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), assetsToken0);
             IERC20Partial(token1).approve(address(collateralToken1), assetsToken1);
 
             // deposit a number of assets determined via fuzzing
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(uint128(assetsToken0), bob);
-            collateralToken1.deposit(uint128(assetsToken1), bob);
+            collateralToken0.deposit(uint128(assetsToken0), Bob);
+            collateralToken1.deposit(uint128(assetsToken1), Bob);
 
-            // bob's asset balance after depositing to the Panoptic pool
-            debitedBalance0 = IERC20Partial(token0).balanceOf(bob);
-            debitedBalance1 = IERC20Partial(token1).balanceOf(bob);
+            // Bob's asset balance after depositing to the Panoptic pool
+            debitedBalance0 = IERC20Partial(token0).balanceOf(Bob);
+            debitedBalance1 = IERC20Partial(token1).balanceOf(Bob);
         }
 
         // Bound the shares redemption to the maxRedeemable amount
-        uint256 shares0 = bound(shares, 0, collateralToken0.maxRedeem(bob));
-        uint256 shares1 = bound(shares, 0, collateralToken1.maxRedeem(bob));
+        uint256 shares0 = bound(shares, 0, collateralToken0.maxRedeem(Bob));
+        uint256 shares1 = bound(shares, 0, collateralToken1.maxRedeem(Bob));
 
-        // amount of shares bob held before burn
-        uint256 sharesBefore0 = collateralToken0.balanceOf(bob);
-        uint256 sharesBefore1 = collateralToken1.balanceOf(bob);
+        // amount of shares Bob held before burn
+        uint256 sharesBefore0 = collateralToken0.balanceOf(Bob);
+        uint256 sharesBefore1 = collateralToken1.balanceOf(Bob);
 
         // execute redemption
-        uint256 returnedAssets0 = collateralToken0.redeem(shares0, bob, bob);
-        uint256 returnedAssets1 = collateralToken1.redeem(shares1, bob, bob);
+        uint256 returnedAssets0 = collateralToken0.redeem(shares0, Bob, Bob);
+        uint256 returnedAssets1 = collateralToken1.redeem(shares1, Bob, Bob);
 
-        // amount of shares bob holds after burn
-        uint256 sharesAfter0 = collateralToken0.balanceOf(bob);
-        uint256 sharesAfter1 = collateralToken1.balanceOf(bob);
+        // amount of shares Bob holds after burn
+        uint256 sharesAfter0 = collateralToken0.balanceOf(Bob);
+        uint256 sharesAfter1 = collateralToken1.balanceOf(Bob);
 
         // check shares were burned correctly
         assertEq(sharesAfter0, sharesBefore0 - shares0);
         assertEq(sharesAfter1, sharesBefore1 - shares1);
 
-        // bob's current asset balance after redeemed assets were returned to him
-        uint256 creditedBalance0 = IERC20Partial(token0).balanceOf(bob);
-        uint256 creditedBalance1 = IERC20Partial(token1).balanceOf(bob);
+        // Bob's current asset balance after redeemed assets were returned to him
+        uint256 creditedBalance0 = IERC20Partial(token0).balanceOf(Bob);
+        uint256 creditedBalance1 = IERC20Partial(token1).balanceOf(Bob);
 
         // check correct amount of assets were moved from the the Panoptic Pool to LP
         assertEq(returnedAssets0, creditedBalance0 - debitedBalance0);
@@ -1094,25 +1139,25 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // fuzz
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), type(uint256).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint256).max);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(type(uint104).max, bob);
-        collateralToken1.deposit(type(uint104).max, bob);
+        collateralToken0.deposit(type(uint104).max, Bob);
+        collateralToken1.deposit(type(uint104).max, Bob);
 
         // Get minimum amount to bound for
         // as we want to gurantee a redemption attempt of above the max redeemable amount
-        uint256 exceedsMaxRedeem0 = collateralToken0.maxRedeem(bob) + 1;
-        uint256 exceedsMaxRedeem1 = collateralToken1.maxRedeem(bob) + 1;
+        uint256 exceedsMaxRedeem0 = collateralToken0.maxRedeem(Bob) + 1;
+        uint256 exceedsMaxRedeem1 = collateralToken1.maxRedeem(Bob) + 1;
 
         // Bound the shares redemption to the maxRedeemable amount
         uint256 shares0 = bound(sharesSeed, exceedsMaxRedeem0, type(uint128).max);
@@ -1120,10 +1165,10 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // execute redemption
         vm.expectRevert(Errors.ExceedsMaximumRedemption.selector);
-        uint256 returnedAssets0 = collateralToken0.redeem(shares0, bob, bob);
+        uint256 returnedAssets0 = collateralToken0.redeem(shares0, Bob, Bob);
 
         vm.expectRevert(Errors.ExceedsMaximumRedemption.selector);
-        uint256 returnedAssets1 = collateralToken1.redeem(shares1, bob, bob);
+        uint256 returnedAssets1 = collateralToken1.redeem(shares1, Bob, Bob);
     }
 
     function test_Success_Redeem_onBehalf(uint128 x, uint104 shares) public {
@@ -1133,59 +1178,59 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
             // calculate underlying assets via amount of shares
             assetsToken0 = convertToAssets(shares, collateralToken0);
             assetsToken1 = convertToAssets(shares, collateralToken1);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), assetsToken0);
             IERC20Partial(token1).approve(address(collateralToken1), assetsToken1);
 
             // deposit a number of assets determined via fuzzing
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(uint128(assetsToken0), bob);
-            collateralToken1.deposit(uint128(assetsToken1), bob);
+            collateralToken0.deposit(uint128(assetsToken0), Bob);
+            collateralToken1.deposit(uint128(assetsToken1), Bob);
         }
 
         // Bound the shares redemption to the maxRedeemable amount
-        uint256 shares0 = bound(shares, 0, collateralToken0.maxRedeem(bob));
-        uint256 shares1 = bound(shares, 0, collateralToken1.maxRedeem(bob));
+        uint256 shares0 = bound(shares, 0, collateralToken0.maxRedeem(Bob));
+        uint256 shares1 = bound(shares, 0, collateralToken1.maxRedeem(Bob));
 
-        // amount of shares bob held before burn
-        uint256 sharesBefore0 = collateralToken0.balanceOf(bob);
-        uint256 sharesBefore1 = collateralToken1.balanceOf(bob);
+        // amount of shares Bob held before burn
+        uint256 sharesBefore0 = collateralToken0.balanceOf(Bob);
+        uint256 sharesBefore1 = collateralToken1.balanceOf(Bob);
 
-        // approve alice to move shares/assets on bob's behalf
-        IERC20Partial(address(collateralToken0)).approve(alice, assetsToken0);
-        IERC20Partial(address(collateralToken1)).approve(alice, assetsToken1);
+        // approve Alice to move shares/assets on Bob's behalf
+        IERC20Partial(address(collateralToken0)).approve(Alice, assetsToken0);
+        IERC20Partial(address(collateralToken1)).approve(Alice, assetsToken1);
 
-        changePrank(alice);
+        changePrank(Alice);
 
         // execute redemption
-        uint256 returnedAssets0 = collateralToken0.redeem(shares0, alice, bob);
-        uint256 returnedAssets1 = collateralToken1.redeem(shares1, alice, bob);
+        uint256 returnedAssets0 = collateralToken0.redeem(shares0, Alice, Bob);
+        uint256 returnedAssets1 = collateralToken1.redeem(shares1, Alice, Bob);
 
-        // amount of shares bob holds after burn
-        uint256 sharesAfter0 = collateralToken0.balanceOf(bob);
-        uint256 sharesAfter1 = collateralToken1.balanceOf(bob);
+        // amount of shares Bob holds after burn
+        uint256 sharesAfter0 = collateralToken0.balanceOf(Bob);
+        uint256 sharesAfter1 = collateralToken1.balanceOf(Bob);
 
         // check shares were burned correctly
         assertEq(sharesAfter0, sharesBefore0 - shares0);
         assertEq(sharesAfter1, sharesBefore1 - shares1);
 
-        // bob's current asset balance after redeemed assets were returned to him
-        uint256 aliceBal0 = IERC20Partial(token0).balanceOf(alice);
-        uint256 aliceBal1 = IERC20Partial(token1).balanceOf(alice);
+        // Bob's current asset balance after redeemed assets were returned to him
+        uint256 AliceBal0 = IERC20Partial(token0).balanceOf(Alice);
+        uint256 AliceBal1 = IERC20Partial(token1).balanceOf(Alice);
 
-        // // check correct amount of assets were moved from pool to alice
-        assertEq(returnedAssets0, aliceBal0);
-        assertEq(returnedAssets1, aliceBal1);
+        // // check correct amount of assets were moved from pool to Alice
+        assertEq(returnedAssets0, AliceBal0);
+        assertEq(returnedAssets1, AliceBal1);
     }
 
     function test_Fail_redeem_onBehalf(uint128 x) public {
@@ -1194,34 +1239,34 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // hardcoded amount of shares to redeem
         uint256 shares = 100;
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         // calculate underlying assets via amount of shares
         uint256 assetsToken0 = convertToAssets(shares, collateralToken0);
         uint256 assetsToken1 = convertToAssets(shares, collateralToken1);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), assetsToken0);
         IERC20Partial(token1).approve(address(collateralToken1), assetsToken1);
 
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(uint128(assetsToken0), bob);
-        collateralToken1.deposit(uint128(assetsToken1), bob);
+        collateralToken0.deposit(uint128(assetsToken0), Bob);
+        collateralToken1.deposit(uint128(assetsToken1), Bob);
 
-        // Start new interactions with user alice
-        changePrank(alice);
+        // Start new interactions with user Alice
+        changePrank(Alice);
 
         // execute redemption
-        // should fail as alice is not authorized to withdraw assets on bob behalf
+        // should fail as Alice is not authorized to withdraw assets on Bob behalf
         vm.expectRevert(stdError.arithmeticError);
-        collateralToken0.redeem(assetsToken0, alice, bob);
+        collateralToken0.redeem(assetsToken0, Alice, Bob);
 
         vm.expectRevert(stdError.arithmeticError);
-        collateralToken1.redeem(assetsToken1, alice, bob);
+        collateralToken1.redeem(assetsToken1, Alice, Bob);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1233,33 +1278,33 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // fuzz
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), assets);
         IERC20Partial(token1).approve(address(collateralToken1), assets);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(assets, bob);
-        collateralToken1.deposit(assets, bob);
+        collateralToken0.deposit(assets, Bob);
+        collateralToken1.deposit(assets, Bob);
 
         // check delegatee balance before
-        uint256 sharesBefore0 = collateralToken0.balanceOf(bob);
-        uint256 sharesBefore1 = collateralToken1.balanceOf(bob);
+        uint256 sharesBefore0 = collateralToken0.balanceOf(Bob);
+        uint256 sharesBefore1 = collateralToken1.balanceOf(Bob);
 
         // invoke delegate transactions from the Panoptic pool
-        panopticPool.delegate(bob, alice, assets, collateralToken0);
+        panopticPool.delegate(Bob, Alice, assets, collateralToken0);
 
-        panopticPool.delegate(bob, alice, assets, collateralToken1);
+        panopticPool.delegate(Bob, Alice, assets, collateralToken1);
 
         // check delegatee balance after
-        uint256 sharesAfter0 = collateralToken0.balanceOf(alice);
-        uint256 sharesAfter1 = collateralToken1.balanceOf(alice);
+        uint256 sharesAfter0 = collateralToken0.balanceOf(Alice);
+        uint256 sharesAfter1 = collateralToken1.balanceOf(Alice);
 
         assertApproxEqAbs(sharesBefore0, sharesAfter0, 5);
         assertApproxEqAbs(sharesBefore1, sharesAfter1, 5);
@@ -1271,11 +1316,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // fuzz
             _initWorld(x);
 
-            // Invoke all interactions with the Collateral Tracker from user alice
-            vm.startPrank(alice);
+            // Invoke all interactions with the Collateral Tracker from user Alice
+            vm.startPrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
             uint256 assetsToken0 = bound(
                 convertToAssets(shares, collateralToken0),
@@ -1288,27 +1333,27 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 type(uint104).max
             );
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), assetsToken0);
             IERC20Partial(token1).approve(address(collateralToken1), assetsToken1);
 
             // deposit a number of assets determined via fuzzing
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(uint128(assetsToken0), alice);
-            collateralToken1.deposit(uint128(assetsToken1), alice);
+            collateralToken0.deposit(uint128(assetsToken0), Alice);
+            collateralToken1.deposit(uint128(assetsToken1), Alice);
         }
 
         // check delegator balance before
-        uint256 sharesBefore0 = collateralToken0.balanceOf(bob);
-        uint256 sharesBefore1 = collateralToken1.balanceOf(bob);
+        uint256 sharesBefore0 = collateralToken0.balanceOf(Bob);
+        uint256 sharesBefore1 = collateralToken1.balanceOf(Bob);
 
         // invoke delegate transactions from the Panoptic pool
-        panopticPool.revoke(bob, alice, shares, collateralToken0);
-        panopticPool.revoke(bob, alice, shares, collateralToken1);
+        panopticPool.revoke(Bob, Alice, shares, collateralToken0);
+        panopticPool.revoke(Bob, Alice, shares, collateralToken1);
 
         // check delegatee balance after
-        uint256 sharesAfter0 = collateralToken0.balanceOf(alice);
-        uint256 sharesAfter1 = collateralToken1.balanceOf(alice);
+        uint256 sharesAfter0 = collateralToken0.balanceOf(Alice);
+        uint256 sharesAfter1 = collateralToken1.balanceOf(Alice);
 
         assertApproxEqAbs(sharesBefore0, sharesAfter0, 5);
         assertApproxEqAbs(sharesBefore1, sharesAfter1, 5);
@@ -1319,11 +1364,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // fuzz
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user alice
-        vm.startPrank(alice);
+        // Invoke all interactions with the Collateral Tracker from user Alice
+        vm.startPrank(Alice);
 
-        // give bob the max amount of tokens
-        _grantTokens(alice);
+        // give Bob the max amount of tokens
+        _grantTokens(Alice);
 
         uint256 assetsToken0 = bound(
             convertToAssets(shares, collateralToken0),
@@ -1336,27 +1381,27 @@ contract CollateralTrackerTest is Test, PositionUtils {
             type(uint104).max
         );
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), assetsToken0);
         IERC20Partial(token1).approve(address(collateralToken1), assetsToken1);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(uint128(assetsToken0), alice);
-        collateralToken1.deposit(uint128(assetsToken1), alice);
+        collateralToken0.deposit(uint128(assetsToken0), Alice);
+        collateralToken1.deposit(uint128(assetsToken1), Alice);
 
         // check delegatee balance before
-        uint256 sharesBefore0 = collateralToken0.balanceOf(alice);
-        uint256 sharesBefore1 = collateralToken1.balanceOf(alice);
+        uint256 sharesBefore0 = collateralToken0.balanceOf(Alice);
+        uint256 sharesBefore1 = collateralToken1.balanceOf(Alice);
 
         // invoke delegate transactions from the Panoptic pool
         // attempt to request an amount greater than the delegatee's balance
-        panopticPool.revoke(bob, alice, shares + 100, collateralToken0);
-        panopticPool.revoke(bob, alice, shares + 100, collateralToken1);
+        panopticPool.revoke(Bob, Alice, shares + 100, collateralToken0);
+        panopticPool.revoke(Bob, Alice, shares + 100, collateralToken1);
 
         // check delegatee balance after
-        uint256 sharesAfter0 = collateralToken0.balanceOf(bob);
-        uint256 sharesAfter1 = collateralToken1.balanceOf(bob);
+        uint256 sharesAfter0 = collateralToken0.balanceOf(Bob);
+        uint256 sharesAfter1 = collateralToken1.balanceOf(Bob);
 
         assertApproxEqAbs(sharesBefore0 + 100, sharesAfter0, 5);
         assertApproxEqAbs(sharesBefore0 + 100, sharesAfter1, 5);
@@ -1381,19 +1426,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
         _initWorld(x);
 
         {
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
             // put will be minted OTM
             (width, strike) = PositionUtils.getOTMSW(
@@ -1404,7 +1449,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 1
             );
 
-            // sell as bob
+            // sell as Bob
             tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
             positionIdList.push(tokenId);
 
@@ -1413,18 +1458,18 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // buy as alice
-            changePrank(alice);
+            // buy as Alice
+            changePrank(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // give alice the max amount of tokens
-            _grantTokens(alice);
+            // give Alice the max amount of tokens
+            _grantTokens(Alice);
 
-            collateralToken0.deposit(positionSize0, alice);
-            collateralToken1.deposit(positionSize0, alice);
+            collateralToken0.deposit(positionSize0, Alice);
+            collateralToken1.deposit(positionSize0, Alice);
 
             // long put
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
@@ -1444,11 +1489,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint160 twapSqrtPrice = TickMath.getSqrtRatioAtTick(twapTick);
 
         (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-            .calculateAccumulatedFeesBatch(alice, positionIdList1);
+            .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
         // verify computeBonus values
         (int256 bonusAmounts0, uint256 tokenData0) = collateralToken0.computeBonus(
-            alice,
+            Alice,
             posBalanceArray,
             0,
             twapTick,
@@ -1457,7 +1502,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         );
 
         (int256 bonusAmounts1, uint256 tokenData1) = collateralToken1.computeBonus(
-            alice,
+            Alice,
             posBalanceArray,
             tokenData0,
             twapTick,
@@ -1479,19 +1524,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
         _initWorld(x);
 
         {
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
             // put will be minted OTM
             (width, strike) = PositionUtils.getOTMSW(
@@ -1502,29 +1547,29 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 1
             );
 
-            // sell as bob
+            // sell as Bob
             tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
             positionIdList.push(tokenId);
 
             positionSize0 = uint128(bound(positionSizeSeed, 10 ** 10, 10 ** 22));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(positionIdList, positionSize0, 0, 0, 0);
         }
 
         {
-            // buy as alice
-            changePrank(alice);
+            // buy as Alice
+            changePrank(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // give alice the max amount of tokens
-            _grantTokens(alice);
+            // give Alice the max amount of tokens
+            _grantTokens(Alice);
 
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            collateralToken0.deposit(type(uint104).max, Alice);
+            collateralToken1.deposit(type(uint104).max, Alice);
 
             // long put
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
@@ -1544,13 +1589,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint160 twapSqrtPrice = TickMath.getSqrtRatioAtTick(twapTick);
 
         (, , uint256[2][] memory posBalanceArray) = panopticPool.calculateAccumulatedFeesBatch(
-            alice,
+            Alice,
             positionIdList1
         );
 
         // verify computeBonus values
         (int256 bonusAmounts0, uint256 tokenData0) = collateralToken0.computeBonus(
-            alice,
+            Alice,
             posBalanceArray,
             0,
             twapTick,
@@ -1559,7 +1604,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         );
 
         (int256 bonusAmounts1, uint256 tokenData1) = collateralToken1.computeBonus(
-            alice,
+            Alice,
             posBalanceArray,
             tokenData0,
             twapTick,
@@ -1581,26 +1626,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // fuzz
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
         // award corresponding shares
         deal(
             address(collateralToken0),
-            bob,
+            Bob,
             collateralToken0.previewDeposit(type(uint120).max),
             true
         );
         deal(
             address(collateralToken1),
-            bob,
+            Bob,
             collateralToken1.previewDeposit(type(uint120).max),
             true
         );
@@ -1621,7 +1666,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             1
         );
 
-        // sell as bob
+        // sell as Bob
         tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
         positionIdList.push(tokenId);
 
@@ -1629,7 +1674,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
         positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-        _assumePositionValidity(bob, tokenId, positionSize0);
+        _assumePositionValidity(Bob, tokenId, positionSize0);
 
         panopticPool.mintOptions(positionIdList, uint128(positionSize0), 0, 0, 0);
 
@@ -1638,13 +1683,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint160 twapSqrtPrice = TickMath.getSqrtRatioAtTick(twapTick);
 
         (, , uint256[2][] memory posBalanceArray) = panopticPool.calculateAccumulatedFeesBatch(
-            bob,
+            Bob,
             positionIdList
         );
 
         vm.expectRevert(Errors.NotMarginCalled.selector);
         (int256 bonusAmounts, uint256 tokenData) = collateralToken0.computeBonus(
-            bob,
+            Bob,
             posBalanceArray,
             0,
             twapTick,
@@ -1667,19 +1712,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // fuzz
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(type(uint104).max, bob);
-        collateralToken1.deposit(type(uint104).max, bob);
+        collateralToken0.deposit(type(uint104).max, Bob);
+        collateralToken1.deposit(type(uint104).max, Bob);
 
         // call will be minted OTM
         (width, strike) = PositionUtils.getOTMSW(
@@ -1690,7 +1735,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             1
         );
 
-        // sell as bob
+        // sell as Bob
         tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
         positionIdList.push(tokenId);
 
@@ -1698,7 +1743,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
         positionSize0 = uint128(bound(positionSizeSeed, 5, 2 ** 120));
-        _assumePositionValidity(bob, tokenId, positionSize0);
+        _assumePositionValidity(Bob, tokenId, positionSize0);
 
         panopticPool.mintOptions(positionIdList, uint128(positionSize0), 0, 0, 0);
 
@@ -1707,13 +1752,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint160 twapSqrtPrice = TickMath.getSqrtRatioAtTick(twapTick);
 
         (, , uint256[2][] memory posBalanceArray) = panopticPool.calculateAccumulatedFeesBatch(
-            bob,
+            Bob,
             positionIdList
         );
 
         vm.expectRevert(Errors.NotMarginCalled.selector);
         (int256 bonusAmounts0, uint256 tokenData0) = collateralToken0.computeBonus(
-            bob,
+            Bob,
             posBalanceArray,
             0,
             twapTick,
@@ -1723,7 +1768,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         vm.expectRevert(Errors.NotMarginCalled.selector);
         (int256 bonusAmounts1, uint256 tokenData1) = collateralToken0.computeBonus(
-            bob,
+            Bob,
             posBalanceArray,
             0,
             twapTick,
@@ -1742,19 +1787,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // fuzz
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(type(uint104).max, bob);
-        collateralToken1.deposit(type(uint104).max, bob);
+        collateralToken0.deposit(type(uint104).max, Bob);
+        collateralToken1.deposit(type(uint104).max, Bob);
 
         // call will be minted OTM
         (width, strike) = PositionUtils.getOTMSW(
@@ -1765,7 +1810,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             1
         );
 
-        // sell as bob
+        // sell as Bob
         tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
         positionIdList.push(tokenId);
 
@@ -1773,7 +1818,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
         positionSize0 = uint128(bound(positionSizeSeed, 5, 2 ** 120));
-        _assumePositionValidity(bob, tokenId, positionSize0);
+        _assumePositionValidity(Bob, tokenId, positionSize0);
 
         panopticPool.mintOptions(positionIdList, uint128(positionSize0), 0, 0, 0);
 
@@ -1781,10 +1826,10 @@ contract CollateralTrackerTest is Test, PositionUtils {
         int24 twapTick = panopticPool.getTWAP();
         uint160 twapSqrtPrice = TickMath.getSqrtRatioAtTick(twapTick);
 
-        changePrank(alice);
+        changePrank(Alice);
 
         (, , uint256[2][] memory posBalanceArray) = panopticPool.calculateAccumulatedFeesBatch(
-            bob,
+            Bob,
             positionIdList
         );
 
@@ -1793,7 +1838,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         vm.expectRevert();
         (int256 bonusAmounts, uint256 tokenData) = collateralToken0.computeBonus(
-            alice,
+            Alice,
             posBalanceArray,
             0,
             twapTick,
@@ -1823,19 +1868,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         // initalize a custom Panoptic pool
     //         _deployCustomPanopticPool(token0, token1, pool);
 
-    //         // Invoke all interactions with the Collateral Tracker from user bob
-    //         vm.startPrank(bob);
+    //         // Invoke all interactions with the Collateral Tracker from user Bob
+    //         vm.startPrank(Bob);
 
-    //         // give bob the max amount of tokens
-    //         _grantTokens(bob);
+    //         // give Bob the max amount of tokens
+    //         _grantTokens(Bob);
 
-    //         // approve collateral tracker to move tokens on bob's behalf
+    //         // approve collateral tracker to move tokens on Bob's behalf
     //         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
     //         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
     //         // equal deposits for both collateral token pairs for testing purposes
-    //         collateralToken0.deposit(type(uint128).max, bob);
-    //         collateralToken1.deposit(type(uint128).max, bob);
+    //         collateralToken0.deposit(type(uint128).max, Bob);
+    //         collateralToken1.deposit(type(uint128).max, Bob);
     //     }
 
     //     {
@@ -1847,7 +1892,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //             currentTick
     //         );
 
-    //         // sell as bob
+    //         // sell as Bob
     //         tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
     //         positionIdList.push(tokenId);
 
@@ -1872,20 +1917,20 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     }
 
     //     // {
-    //     //     // buy as alice
-    //     //     changePrank(alice);
+    //     //     // buy as Alice
+    //     //     changePrank(Alice);
 
-    //     //     // approve collateral tracker to move tokens on alice's behalf
+    //     //     // approve collateral tracker to move tokens on Alice's behalf
     //     //     IERC20Partial(token0).approve(address(collateralToken0), positionSize);
     //     //     IERC20Partial(token1).approve(address(collateralToken1), positionSize);
 
-    //     //     // give alice the max amount of tokens
-    //     //     _grantTokens(alice);
+    //     //     // give Alice the max amount of tokens
+    //     //     _grantTokens(Alice);
 
     //     //     // deposit only the token that is moved to avoid cross collateralization
     //     //     // only deposit the token which is WETH
-    //     //     collateralToken0.deposit(positionSize0 / 2, alice);
-    //     //     collateralToken1.deposit(positionSize0 / 2, alice);
+    //     //     collateralToken0.deposit(positionSize0 / 2, Alice);
+    //     //     collateralToken1.deposit(positionSize0 / 2, Alice);
 
     //     //     // long call
     //     //     tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
@@ -1893,9 +1938,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     //     panopticPool.mintOptions(positionIdList1, uint128(positionSize), type(uint64).max, 0, 0);
     //     // }
 
-    //     // // (int256 premium0, int256 premium1) = panopticPool.calculateAccumulatedFeesBatch(alice, positionIdList1);
-    //     // // console2.log("alice premium0", premium0);
-    //     // // console2.log("alice premium1", premium1);
+    //     // // (int256 premium0, int256 premium1) = panopticPool.calculateAccumulatedFeesBatch(Alice, positionIdList1);
+    //     // // console2.log("Alice premium0", premium0);
+    //     // // console2.log("Alice premium1", premium1);
 
     //     // // etch and set/check
     //     // UniswapV3PoolMock uniswapV3PoolMock = new UniswapV3PoolMock();
@@ -1919,16 +1964,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     // console2.log("leg lower tick", legLowerTick);
     //     // console2.log("leg upper tick", legUpperTick);
 
-    //     // (int256 premium0, int256 premium1) = panopticPool.calculateAccumulatedFeesBatch(alice, positionIdList1);
-    //     // console2.log("alice premium0", premium0);
-    //     // console2.log("alice premium1", premium1);
+    //     // (int256 premium0, int256 premium1) = panopticPool.calculateAccumulatedFeesBatch(Alice, positionIdList1);
+    //     // console2.log("Alice premium0", premium0);
+    //     // console2.log("Alice premium1", premium1);
 
     //     // // feeGrowthInside0X128 = upperOut0 - lowerOut0;
     //     // // feeGrowthInside1X128 = upperOut1 - lowerOut1;
 
-    //     // // // liquidate alice as bob
-    //     // // changePrank(bob);
-    //     // // panopticPool.liquidateAccount(alice, TickMath.MIN_TICK, TickMath.MAX_TICK, positionIdList1);
+    //     // // // liquidate Alice as Bob
+    //     // // changePrank(Bob);
+    //     // // panopticPool.liquidateAccount(Alice, TickMath.MIN_TICK, TickMath.MAX_TICK, positionIdList1);
     // }
 
     // // pos starts and ends OTM
@@ -1947,19 +1992,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         // initalize a custom Panoptic pool
     //         _deployCustomPanopticPool(token0, token1, pool);
 
-    //         // Invoke all interactions with the Collateral Tracker from user bob
-    //         vm.startPrank(bob);
+    //         // Invoke all interactions with the Collateral Tracker from user Bob
+    //         vm.startPrank(Bob);
 
-    //         // give bob the max amount of tokens
-    //         _grantTokens(bob);
+    //         // give Bob the max amount of tokens
+    //         _grantTokens(Bob);
 
-    //         // approve collateral tracker to move tokens on bob's behalf
+    //         // approve collateral tracker to move tokens on Bob's behalf
     //         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
     //         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
     //         // equal deposits for both collateral token pairs for testing purposes
-    //         collateralToken0.deposit(type(uint128).max, bob);
-    //         collateralToken1.deposit(type(uint128).max, bob);
+    //         collateralToken0.deposit(type(uint128).max, Bob);
+    //         collateralToken1.deposit(type(uint128).max, Bob);
     //     }
 
     //     {
@@ -1972,7 +2017,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //             1
     //         );
 
-    //         // sell as bob
+    //         // sell as Bob
     //         tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
     //         positionIdList.push(tokenId);
 
@@ -1997,15 +2042,15 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     }
 
     //     {
-    //         // buy as alice
-    //         changePrank(alice);
+    //         // buy as Alice
+    //         changePrank(Alice);
 
-    //         // approve collateral tracker to move tokens on alice's behalf
+    //         // approve collateral tracker to move tokens on Alice's behalf
     //         IERC20Partial(token0).approve(address(collateralToken0), positionSize);
     //         IERC20Partial(token1).approve(address(collateralToken1), positionSize);
 
-    //         // give alice the max amount of tokens
-    //         _grantTokens(alice);
+    //         // give Alice the max amount of tokens
+    //         _grantTokens(Alice);
     //     }
 
     //     // current params
@@ -2014,15 +2059,15 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     uint256 s_maintenanceMarginRatio = 13_333;
 
     //     {
-    //         // buy as alice
-    //         changePrank(alice);
+    //         // buy as Alice
+    //         changePrank(Alice);
 
-    //         // approve collateral tracker to move tokens on bob's behalf
+    //         // approve collateral tracker to move tokens on Bob's behalf
     //         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
     //         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-    //         // give alice the max amount of tokens
-    //         _grantTokens(alice);
+    //         // give Alice the max amount of tokens
+    //         _grantTokens(Alice);
 
     //         // long call
     //         tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
@@ -2045,7 +2090,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     //         // get min tokenToPay to satisfy the collateral requirement
     //         (, uint256 tokenData, int256 tokenToPay) = collateralToken1.getRateAndUtilization(
-    //             alice,
+    //             Alice,
     //             longAmount, // only the token which is moved
     //             0, // short amounts 0 (long pos)
     //             0, // swapped amounts 0 (OTM)
@@ -2091,8 +2136,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         // deposit only the token that is moved to avoid cross collateralization
     //         // only deposit the token which is WETH
     //         1 == 0
-    //             ? collateralToken0.deposit(validDeposit, alice)
-    //             : collateralToken1.deposit(validDeposit, alice);
+    //             ? collateralToken0.deposit(validDeposit, Alice)
+    //             : collateralToken1.deposit(validDeposit, Alice);
 
     //         panopticPool.mintOptions(positionIdList1, positionSize0 / 2, type(uint64).max, 0, 0);
     //     }
@@ -2122,13 +2167,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         // premiumAccumulator0 - premiumAccumulatorLast.rightSlot() * (liquidityChunk.liquidity())) / 2 ** 64
 
     //         uint128 tokenRequired = collateralToken1.getTotalRequiredCollateral(
-    //             alice,
+    //             Alice,
     //             currentTick,
     //             positionIdList1,
     //             0
     //         );
     //         uint256 collateralAmount = convertToAssets(
-    //             collateralToken1.balanceOf(alice),
+    //             collateralToken1.balanceOf(Alice),
     //             collateralToken1
     //         );
     //         uint256 minTokenRequired = FullMath.mulDiv(
@@ -2165,15 +2210,15 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     UniswapV3PoolMock(address(pool)).setInfo(legUpperTick, 0, 0);
 
     //     (int256 premium0, int256 premium1) = panopticPool.calculateAccumulatedFeesBatch(
-    //         alice,
+    //         Alice,
     //         positionIdList1
     //     );
-    //     console2.log("alice premium0", premium0);
-    //     console2.log("alice premium1", premium1);
+    //     console2.log("Alice premium0", premium0);
+    //     console2.log("Alice premium1", premium1);
 
-    //     // liquidate alice as bob
-    //     changePrank(bob);
-    //     panopticPool.liquidateAccount(alice, TickMath.MIN_TICK, TickMath.MAX_TICK, positionIdList1);
+    //     // liquidate Alice as Bob
+    //     changePrank(Bob);
+    //     panopticPool.liquidateAccount(Alice, TickMath.MIN_TICK, TickMath.MAX_TICK, positionIdList1);
     // }
 
     // should not liquidate
@@ -2190,19 +2235,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         // initalize a custom Panoptic pool
     //         _deployCustomPanopticPool(token0, token1, pool);
 
-    //         // Invoke all interactions with the Collateral Tracker from user bob
-    //         vm.startPrank(bob);
+    //         // Invoke all interactions with the Collateral Tracker from user Bob
+    //         vm.startPrank(Bob);
 
-    //         // give bob the max amount of tokens
-    //         _grantTokens(bob);
+    //         // give Bob the max amount of tokens
+    //         _grantTokens(Bob);
 
-    //         // approve collateral tracker to move tokens on bob's behalf
+    //         // approve collateral tracker to move tokens on Bob's behalf
     //         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
     //         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
     //         // equal deposits for both collateral token pairs for testing purposes
-    //         collateralToken0.deposit(type(uint128).max, bob);
-    //         collateralToken1.deposit(type(uint128).max, bob);
+    //         collateralToken0.deposit(type(uint128).max, Bob);
+    //         collateralToken1.deposit(type(uint128).max, Bob);
     //     }
 
     //     {
@@ -2210,7 +2255,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         (width, strike) =
     //             PositionUtils.getInRangeSW(widthSeed, strikeSeed, uint24(tickSpacing), currentTick);
 
-    //         // sell as bob
+    //         // sell as Bob
     //         tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
     //         positionIdList.push(tokenId);
 
@@ -2233,20 +2278,20 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     }
 
     //     {
-    //         // buy as alice
-    //         changePrank(alice);
+    //         // buy as Alice
+    //         changePrank(Alice);
 
-    //         // approve collateral tracker to move tokens on bob's behalf
+    //         // approve collateral tracker to move tokens on Bob's behalf
     //         IERC20Partial(token0).approve(address(collateralToken0), positionSize);
     //         IERC20Partial(token1).approve(address(collateralToken1), positionSize);
 
-    //         // give alice the max amount of tokens
-    //         _grantTokens(alice);
+    //         // give Alice the max amount of tokens
+    //         _grantTokens(Alice);
 
     //         // deposit only the token that is moved to avoid cross collateralization
     //         // only deposit the token which is WETH
-    //         collateralToken1.deposit(positionSize0, alice);
-    //         collateralToken0.deposit(positionSize0, alice);
+    //         collateralToken1.deposit(positionSize0, Alice);
+    //         collateralToken0.deposit(positionSize0, Alice);
 
     //         // long call
     //         tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
@@ -2254,7 +2299,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         panopticPool.mintOptions(positionIdList1, uint128(positionSize) / 2, type(uint64).max, 0, 0);
     //     }
 
-    //     changePrank(swapper);
+    //     changePrank(Swapper);
 
     //     IERC20Partial(token0).approve(address(pool), type(uint256).max);
     //     IERC20Partial(token1).approve(address(pool), type(uint256).max);
@@ -2287,7 +2332,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //             0
     //         );
 
-    //         _grantTokens(swapper);
+    //         _grantTokens(Swapper);
 
     //         for (uint256 i = 0; i < 1; i++) {
     //             (, currentTick,,,,,) = pool.slot0();
@@ -2307,18 +2352,18 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     }
 
     //     int24 twapTick = panopticPool.getTWAP();
-    //     (int128 premium0, int128 premium1) = panopticPool.calculateAccumulatedFeesBatch(alice, positionIdList1);
-    //     console2.log("alice premium0", premium0);
-    //     console2.log("alice premium1", premium1);
+    //     (int128 premium0, int128 premium1) = panopticPool.calculateAccumulatedFeesBatch(Alice, positionIdList1);
+    //     console2.log("Alice premium0", premium0);
+    //     console2.log("Alice premium1", premium1);
 
     //     (, feeGrowthInside0LastX128, feeGrowthInside1LastX128,,) =
     //         pool.positions(PositionKey.compute(address(sfpm), legLowerTick, legUpperTick));
     //     console2.log("feeGrowthInside0LastX128", feeGrowthInside0LastX128);
     //     console2.log("feeGrowthInside1LastX128", feeGrowthInside1LastX128);
 
-    //     // liquidate alice as bob
-    //     changePrank(bob);
-    //     panopticPool.liquidateAccount(alice, TickMath.MIN_TICK, TickMath.MAX_TICK, positionIdList1);
+    //     // liquidate Alice as Bob
+    //     changePrank(Bob);
+    //     panopticPool.liquidateAccount(Alice, TickMath.MIN_TICK, TickMath.MAX_TICK, positionIdList1);
 
     //     // verify bonus amounts
     // }
@@ -2336,19 +2381,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         // initalize a custom Panoptic pool
     //         _deployCustomPanopticPool(token0, token1, pool);
 
-    //         // Invoke all interactions with the Collateral Tracker from user bob
-    //         vm.startPrank(bob);
+    //         // Invoke all interactions with the Collateral Tracker from user Bob
+    //         vm.startPrank(Bob);
 
-    //         // give bob the max amount of tokens
-    //         _grantTokens(bob);
+    //         // give Bob the max amount of tokens
+    //         _grantTokens(Bob);
 
-    //         // approve collateral tracker to move tokens on bob's behalf
+    //         // approve collateral tracker to move tokens on Bob's behalf
     //         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
     //         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
     //         // equal deposits for both collateral token pairs for testing purposes
-    //         collateralToken0.deposit(type(uint104).max, bob);
-    //         collateralToken1.deposit(type(uint104).max, bob);
+    //         collateralToken0.deposit(type(uint104).max, Bob);
+    //         collateralToken1.deposit(type(uint104).max, Bob);
     //     }
 
     //     {
@@ -2361,12 +2406,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //             1
     //         );
 
-    //         // sell as bob
+    //         // sell as Bob
     //         tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
     //         positionIdList.push(tokenId);
 
     //         positionSize0 = uint128(bound(positionSizeSeed, 10 ** 22, 10 ** 22));
-    //         _assumePositionValidity(bob, tokenId, positionSize0);
+    //         _assumePositionValidity(Bob, tokenId, positionSize0);
 
     //         panopticPool.mintOptions(
     //             positionIdList,
@@ -2378,25 +2423,25 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     }
 
     //     {
-    //         // buy as alice
-    //         changePrank(alice);
+    //         // buy as Alice
+    //         changePrank(Alice);
 
-    //         // give alice the max amount of tokens
-    //         _grantTokens(alice);
+    //         // give Alice the max amount of tokens
+    //         _grantTokens(Alice);
 
-    //         // approve collateral tracker to move tokens on alice's behalf
+    //         // approve collateral tracker to move tokens on Alice's behalf
     //         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
     //         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
     //         // deposit a number of assets determined via fuzzing
     //         // equal deposits for both collateral token pairs for testing purposes
-    //         collateralToken0.deposit(type(uint104).max, alice);
-    //         collateralToken1.deposit(type(uint104).max, alice);
+    //         collateralToken0.deposit(type(uint104).max, Alice);
+    //         collateralToken1.deposit(type(uint104).max, Alice);
 
     //         // long put
     //         tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
     //         positionIdList1.push(tokenId1);
-    //         _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
+    //         _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
     //         panopticPool.mintOptions(
     //             positionIdList1,
@@ -2408,18 +2453,18 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     }
 
     //     // manipulate balances
-    //     collateralToken0.setBalance(alice, 100);
-    //     collateralToken1.setBalance(alice, 100);
+    //     collateralToken0.setBalance(Alice, 100);
+    //     collateralToken1.setBalance(Alice, 100);
 
     //     (, currentTick, , , , , ) = pool.slot0();
     //     int24 twapTick = panopticPool.getTWAP();
     //     uint160 twapSqrtPrice = TickMath.getSqrtRatioAtTick(twapTick);
 
     //     (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-    //         .calculateAccumulatedFeesBatch(alice, positionIdList1);
+    //         .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
     //     (, uint256 tokenData0) = collateralToken0.computeBonus(
-    //         alice,
+    //         Alice,
     //         posBalanceArray,
     //         0,
     //         twapTick,
@@ -2429,7 +2474,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     //     // this computes the bonus ratio and computes the tokens required for token1
     //     (int256 bonusAmounts, uint256 tokenData1) = collateralToken1.computeBonus(
-    //         alice,
+    //         Alice,
     //         posBalanceArray,
     //         tokenData0,
     //         twapTick,
@@ -2438,29 +2483,29 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //     );
 
     //     {
-    //         // liquidate alice as bob
-    //         changePrank(bob);
+    //         // liquidate Alice as Bob
+    //         changePrank(Bob);
 
-    //         // bob original balance
-    //         uint256 sharesBefore0 = collateralToken0.balanceOf(bob);
-    //         uint256 sharesBefore1 = collateralToken1.balanceOf(bob);
+    //         // Bob original balance
+    //         uint256 sharesBefore0 = collateralToken0.balanceOf(Bob);
+    //         uint256 sharesBefore1 = collateralToken1.balanceOf(Bob);
 
     //         panopticPool.liquidateAccount(
-    //             alice,
+    //             Alice,
     //             TickMath.MIN_TICK,
     //             TickMath.MAX_TICK,
     //             positionIdList1
     //         );
 
-    //         // bob's balance + bonus amounts
-    //         uint256 sharesAfter0 = collateralToken0.balanceOf(bob);
-    //         uint256 sharesAfter1 = collateralToken1.balanceOf(bob);
+    //         // Bob's balance + bonus amounts
+    //         uint256 sharesAfter0 = collateralToken0.balanceOf(Bob);
+    //         uint256 sharesAfter1 = collateralToken1.balanceOf(Bob);
 
-    //         // ensure alice's position was liquidated
-    //         (uint128 alicePositionBal, , ) = panopticPool.optionPositionBalance(alice, tokenId1);
-    //         assertEq(0, alicePositionBal);
+    //         // ensure Alice's position was liquidated
+    //         (uint128 AlicePositionBal, , ) = panopticPool.optionPositionBalance(Alice, tokenId1);
+    //         assertEq(0, AlicePositionBal);
 
-    //         // // Check bob received the correct amount of shares
+    //         // // Check Bob received the correct amount of shares
     //         // assertApproxEqAbs(sharesBefore0 - uint128(bonusAmounts.rightSlot()), sharesAfter0, 5);
     //         // assertApproxEqAbs(sharesBefore1 - uint128(bonusAmounts.leftSlot()), sharesAfter1, 5);
     //     }
@@ -2488,21 +2533,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -2527,7 +2572,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 10 ** 18, 10 ** 20));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList,
@@ -2539,25 +2584,25 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            collateralToken0.deposit(type(uint104).max, Alice);
+            collateralToken1.deposit(type(uint104).max, Alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 0, 0, 0, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 0, 0, 1, 0, strike1, width1);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
             uint256 snapshot = vm.snapshot();
 
@@ -2592,23 +2637,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -2631,16 +2676,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -2651,7 +2696,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 panopticPool,
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -2680,23 +2725,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                bob,
+                Bob,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                bob,
+                Bob,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -2708,7 +2753,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             deal(token0, address(panopticPool), type(uint120).max);
             deal(token1, address(panopticPool), type(uint120).max);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -2733,7 +2778,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList,
@@ -2745,23 +2790,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                alice,
+                Alice,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                alice,
+                Alice,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -2791,23 +2836,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -2830,16 +2875,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -2850,7 +2895,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -2872,7 +2917,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed,
         int256 strikeSeed2,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -2882,26 +2928,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                bob,
+                Bob,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                bob,
+                Bob,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -2913,7 +2959,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             deal(token0, address(panopticPool), type(uint120).max);
             deal(token1, address(panopticPool), type(uint120).max);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -2935,7 +2981,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList.push(tokenId);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList,
@@ -2947,26 +2993,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                alice,
+                Alice,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                alice,
+                Alice,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -2982,7 +3028,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 1, 0, strike1, width1);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
             _spreadTokensRequired(tokenId1, positionSize0);
 
             panopticPool.mintOptions(
@@ -3000,31 +3046,35 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
 
             uint128 required = _spreadTokensRequired(tokenId1, positionSize0 / 2);
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
-            premium0 = premium0 < 0 ? int128(13_333 * uint128(-premium0)) / 10_000 : int128(0); // add only long premia (premia owed)
+            // only add premium requirement, if there is net premia owed
+            premium0 = premium0 < 0 ? int128(13_333 * uint128(-premium0)) / 10_000 : int128(0);
             required += premium1 < 0 ? uint128((uint128(13_333) * uint128(-premium1)) / 10_000) : 0;
             assertEq(premium0, int128(tokenData0.leftSlot()), "required token0");
             assertEq(required, tokenData1.leftSlot(), "required token1");
@@ -3032,16 +3082,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         {
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -3052,7 +3102,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -3080,21 +3130,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -3116,7 +3166,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList.push(tokenId);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
             _spreadTokensRequired(tokenId1, positionSize0);
 
             panopticPool.mintOptions(
@@ -3129,25 +3179,25 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            collateralToken0.deposit(type(uint104).max, Alice);
+            collateralToken1.deposit(type(uint104).max, Alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 0, 0, strike1, width1);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(alice, tokenId1, positionSize0 / 4);
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 4);
 
             panopticPool.mintOptions(
                 positionIdList1,
@@ -3164,23 +3214,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -3198,16 +3248,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -3218,7 +3268,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -3236,7 +3286,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed,
         int256 strikeSeed2,
-        int24 atTick
+        int24 atTick,
+        uint256 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -3246,31 +3297,29 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                bob,
+                Bob,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                bob,
+                Bob,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
-            console2.log("bal0", collateralToken0.balanceOf(bob));
-            console2.log("bal1", collateralToken1.balanceOf(bob));
 
             // equal deposits for both collateral token pairs for testing purposes
             // deposit to panoptic pool
@@ -3279,7 +3328,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             deal(token0, address(panopticPool), type(uint120).max);
             deal(token1, address(panopticPool), type(uint120).max);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getITMSW(
                 widthSeed,
                 strikeSeed,
@@ -3302,7 +3351,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             /// calculate position
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 64));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
             _spreadTokensRequired(tokenId1, positionSize0);
 
             panopticPool.mintOptions(
@@ -3315,32 +3364,29 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
-            console2.log("bal0a", collateralToken0.balanceOf(alice));
-            console2.log("bal1a", collateralToken1.balanceOf(alice));
+
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                alice,
+                Alice,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                alice,
+                Alice,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
-            console2.log("bal0a", collateralToken0.balanceOf(alice));
-            console2.log("bal1a", collateralToken1.balanceOf(alice));
 
             // equal deposits for both collateral token pairs for testing purposes
             // deposit to panoptic pool
@@ -3352,9 +3398,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 1, 0, strike1, width1);
             positionIdList1.push(tokenId1);
-            _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
-            console2.log("bal0a", collateralToken0.balanceOf(alice));
-            console2.log("bal1a", collateralToken1.balanceOf(alice));
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
             panopticPool.mintOptions(
                 positionIdList1,
@@ -3371,31 +3415,33 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
 
             uint128 required = _spreadTokensRequired(tokenId1, positionSize0 / 2);
 
-            // checks tokens required
-            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0); // add only long premia (premia owed)
+            twoWaySwap(swapSizeSeed);
+
+            // only add premium requirement, if there is net premia owed
+            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0);
             required += premium1 < 0 ? uint128((uint128(13_333) * uint128(-premium1)) / 10_000) : 0;
             assertEq(premium0, int128(tokenData0.leftSlot()), "required token0");
             assertEq(required, tokenData1.leftSlot(), "required token1");
@@ -3405,16 +3451,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -3425,7 +3471,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -3443,7 +3489,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed,
         int256 strikeSeed2,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -3453,26 +3500,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                bob,
+                Bob,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                bob,
+                Bob,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -3484,7 +3531,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             deal(token0, address(panopticPool), type(uint120).max);
             deal(token1, address(panopticPool), type(uint120).max);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getITMSW(
                 widthSeed,
                 strikeSeed,
@@ -3507,7 +3554,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             /// calculate position size
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList,
@@ -3519,26 +3566,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                alice,
+                Alice,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                alice,
+                Alice,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -3554,7 +3601,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 0, 0, strike1, width1);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
             panopticPool.mintOptions(
                 positionIdList1,
@@ -3571,33 +3618,37 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
 
             uint128 required = _spreadTokensRequired(tokenId1, positionSize0 / 2);
-            _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
+
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
 
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
             required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
-            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0); // add only long premia (premia owed)
+            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
@@ -3606,16 +3657,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -3626,7 +3677,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -3644,7 +3695,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed,
         int256 strikeSeed2,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -3656,26 +3708,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                bob,
+                Bob,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                bob,
+                Bob,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -3687,7 +3739,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             deal(token0, address(panopticPool), type(uint120).max);
             deal(token1, address(panopticPool), type(uint120).max);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getITMSW(
                 widthSeed,
                 strikeSeed,
@@ -3709,7 +3761,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList.push(tokenId);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
             _spreadTokensRequired(tokenId1, positionSize0);
 
             panopticPool.mintOptions(
@@ -3722,26 +3774,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                alice,
+                Alice,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                alice,
+                Alice,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -3757,7 +3809,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId1 = tokenId1.addLeg(1, 1, 0, 0, 0, 0, strike1, width1);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
             required = _spreadTokensRequired(tokenId1, positionSize0 / 2);
 
             panopticPool.mintOptions(
@@ -3775,31 +3827,35 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
             required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
+            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
-            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0); // add only long premia (premia owed)
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
 
@@ -3807,16 +3863,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -3827,7 +3883,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 panopticPool,
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -3855,21 +3911,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -3891,7 +3947,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // must be minimum at least 2 so there is enough liquidity to buy
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
 
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
             _spreadTokensRequired(tokenId1, positionSize0);
 
             panopticPool.mintOptions(
@@ -3904,25 +3960,25 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            collateralToken0.deposit(type(uint104).max, Alice);
+            collateralToken1.deposit(type(uint104).max, Alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 0, 0, strike, width);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(alice, tokenId1, positionSize0);
+            _assumePositionValidity(Alice, tokenId1, positionSize0);
             required = _spreadTokensRequired(tokenId1, positionSize0);
 
             panopticPool.mintOptions(
@@ -3940,31 +3996,31 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
 
             // checks tokens required
             required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
+            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
-            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0); // add only long premia (premia owed)
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
 
@@ -3972,16 +4028,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -3992,7 +4048,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -4013,7 +4069,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint128 positionSizeSeed,
         uint256 widthSeed,
         int256 strikeSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         {
             _initWorld(x);
@@ -4021,26 +4078,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                bob,
+                Bob,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                bob,
+                Bob,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -4052,7 +4109,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             deal(token0, address(panopticPool), type(uint120).max);
             deal(token1, address(panopticPool), type(uint120).max);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -4074,7 +4131,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // must be minimum at least 2 so there is enough liquidity to buy
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
 
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList,
@@ -4086,26 +4143,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                alice,
+                Alice,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                alice,
+                Alice,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -4121,7 +4178,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 1, 0, strike, width);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(alice, tokenId1, positionSize0);
+            _assumePositionValidity(Alice, tokenId1, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList1,
@@ -4138,31 +4195,35 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
 
             uint128 required = _spreadTokensRequired(tokenId1, positionSize0);
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
-            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0); // add only long premia (premia owed)
+            // only add premium requirement, if there is net premia owed
+            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0);
             required += premium1 < 0 ? uint128((uint128(13_333) * uint128(-premium1)) / 10_000) : 0;
             assertEq(premium0, int128(tokenData0.leftSlot()), "required token0");
             assertEq(required, tokenData1.leftSlot(), "required token1");
@@ -4172,16 +4233,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -4192,7 +4253,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 panopticPool,
-                alice,
+                Alice,
                 currentTick,
                 1,
                 positionIdList1
@@ -4221,7 +4282,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed2,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -4232,21 +4294,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -4262,7 +4324,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList,
@@ -4274,19 +4336,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            collateralToken0.deposit(type(uint104).max, Alice);
+            collateralToken1.deposit(type(uint104).max, Alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
             positionIdList1.push(tokenId1);
@@ -4330,23 +4392,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -4360,9 +4422,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
+            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
-            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0); // add only long premia (premia owed)
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
 
@@ -4370,16 +4436,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -4390,7 +4456,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 0,
                 positionIdList1
@@ -4421,7 +4487,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed2,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -4432,21 +4499,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -4462,7 +4529,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList,
@@ -4474,19 +4541,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            collateralToken0.deposit(type(uint104).max, Alice);
+            collateralToken1.deposit(type(uint104).max, Alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
             positionIdList1.push(tokenId1);
@@ -4530,23 +4597,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -4560,10 +4627,14 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
             required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
+            premium0 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
-            premium0 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0); // add only long premia (premia owed)
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
 
@@ -4571,16 +4642,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -4591,7 +4662,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 0,
                 positionIdList1
@@ -4611,7 +4682,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed2,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         uint64 targetUtilization;
         {
@@ -4620,21 +4692,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -4650,7 +4722,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList,
@@ -4662,19 +4734,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            // alice buys
-            changePrank(alice);
+            // Alice buys
+            changePrank(Alice);
 
-            // give bob the max amount of tokens
-            _grantTokens(alice);
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            collateralToken0.deposit(type(uint104).max, Alice);
+            collateralToken1.deposit(type(uint104).max, Alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
             positionIdList1.push(tokenId1);
@@ -4718,23 +4790,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(alice, tokenId1);
+                .optionPositionBalance(Alice, tokenId1);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -4748,10 +4820,14 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
             required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
+            premium0 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
-            premium0 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0); // add only long premia (premia owed)
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
 
@@ -4759,16 +4835,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(alice, positionIdList1);
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                alice,
+                Alice,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -4779,7 +4855,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                alice,
+                Alice,
                 currentTick,
                 0,
                 positionIdList1
@@ -4801,7 +4877,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed,
         int256 strikeSeed,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         uint64 targetUtilization;
         {
@@ -4810,21 +4887,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -4840,7 +4917,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             uint256 snapshot = vm.snapshot();
 
@@ -4886,23 +4963,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(bob, tokenId);
+                .optionPositionBalance(Bob, tokenId);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -4916,8 +4993,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
-            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0); // add only long premia (premia owed)
+            // only add premium requirement, if there is net premia owed
+            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
@@ -4927,16 +5008,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -4947,7 +5028,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 panopticPool,
-                bob,
+                Bob,
                 currentTick,
                 0,
                 positionIdList
@@ -4964,7 +5045,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed,
         int256 strikeSeed,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         uint64 targetUtilization;
         {
@@ -4973,21 +5055,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -5003,7 +5085,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 10 ** 15, 10 ** 20));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             uint256 snapshot = vm.snapshot();
 
@@ -5047,23 +5129,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(bob, tokenId);
+                .optionPositionBalance(Bob, tokenId);
 
             // check user packed utilization
             assertApproxEqAbs(targetUtilization, poolUtilization0, 1, "utilization ct 0");
@@ -5081,9 +5163,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
             required += premium1 < 0 ? uint128((uint128(13_333) * uint128(-premium1)) / 10_000) : 0;
-            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0); // add only long premia (premia owed)
+            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0);
             assertEq(premium0, int128(tokenData0.leftSlot()), "required token0");
             assertEq(required, tokenData1.leftSlot(), "required token1");
         }
@@ -5093,16 +5179,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -5113,7 +5199,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                bob,
+                Bob,
                 currentTick,
                 0,
                 positionIdList
@@ -5133,7 +5219,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed2,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -5144,21 +5231,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -5174,7 +5261,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             uint256 snapshot = vm.snapshot();
 
@@ -5213,23 +5300,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(bob, tokenId);
+                .optionPositionBalance(Bob, tokenId);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -5243,10 +5330,14 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
             required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
+            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
-            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0); // add only long premia (premia owed)
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
 
@@ -5254,16 +5345,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -5274,7 +5365,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                bob,
+                Bob,
                 currentTick,
                 0,
                 positionIdList
@@ -5293,7 +5384,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed2,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -5304,21 +5396,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -5334,7 +5426,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             uint256 snapshot = vm.snapshot();
 
@@ -5373,23 +5465,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(bob, tokenId);
+                .optionPositionBalance(Bob, tokenId);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -5403,9 +5495,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
             required += premium1 < 0 ? uint128((uint128(13_333) * uint128(-premium1)) / 10_000) : 0;
-            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0); // add only long premia (premia owed)
+            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0);
             assertEq(premium0, int128(tokenData0.leftSlot()), "required token0");
             assertEq(required, tokenData1.leftSlot(), "required token1");
         }
@@ -5414,16 +5510,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -5434,7 +5530,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 panopticPool,
-                bob,
+                Bob,
                 currentTick,
                 0,
                 positionIdList
@@ -5454,7 +5550,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed2,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -5465,26 +5562,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                bob,
+                Bob,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                bob,
+                Bob,
                 collateralToken1.previewDeposit(type(uint128).max),
                 true
             );
@@ -5496,7 +5593,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             deal(token0, address(panopticPool), type(uint120).max);
             deal(token1, address(panopticPool), type(uint120).max);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -5509,7 +5606,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList.push(tokenId);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             uint256 snapshot = vm.snapshot();
 
@@ -5548,23 +5645,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(bob, tokenId);
+                .optionPositionBalance(Bob, tokenId);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -5578,9 +5675,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
+            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
-            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0); // add only long premia (premia owed)
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
 
@@ -5588,16 +5689,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -5608,7 +5709,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 PanopticPool(address(panopticPool)),
-                bob,
+                Bob,
                 currentTick,
                 0,
                 positionIdList
@@ -5627,7 +5728,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 widthSeed2,
         int256 strikeSeed2,
         uint64 utilizationSeed,
-        int24 atTick
+        int24 atTick,
+        uint24 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
 
@@ -5638,26 +5740,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
 
-            // Invoke all interactions with the Collateral Tracker from user bob
-            vm.startPrank(bob);
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
 
-            // give bob the max amount of tokens
-            _grantTokens(bob);
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
 
-            // approve collateral tracker to move tokens on bob's behalf
+            // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
             deal(
                 address(collateralToken0),
-                bob,
+                Bob,
                 collateralToken0.previewDeposit(type(uint120).max),
                 true
             );
             deal(
                 address(collateralToken1),
-                bob,
+                Bob,
                 collateralToken1.previewDeposit(type(uint120).max),
                 true
             );
@@ -5669,7 +5771,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             deal(token0, address(panopticPool), type(uint120).max);
             deal(token1, address(panopticPool), type(uint120).max);
 
-            // have bob sell
+            // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
                 widthSeed,
                 strikeSeed,
@@ -5682,7 +5784,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList.push(tokenId);
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
-            _assumePositionValidity(bob, tokenId, positionSize0);
+            _assumePositionValidity(Bob, tokenId, positionSize0);
 
             uint256 snapshot = vm.snapshot();
 
@@ -5720,23 +5822,23 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 atTick,
                 posBalanceArray,
                 premium1
             );
 
             (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
-                .optionPositionBalance(bob, tokenId);
+                .optionPositionBalance(Bob, tokenId);
 
             uint128 poolUtilizations = uint128(poolUtilization0) +
                 (uint128(poolUtilization1) << 64);
@@ -5750,9 +5852,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 checkSingle
             );
 
+            // mimic pool activity
+            twoWaySwap(swapSizeSeed);
+
             // checks tokens required
+            // only add premium requirement, if there is net premia owed
             required += premium1 < 0 ? uint128((uint128(13_333) * uint128(-premium1)) / 10_000) : 0;
-            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0); // add only long premia (premia owed)
+            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0);
             assertEq(premium0, int128(tokenData0.leftSlot()), "required token0");
             assertEq(required, tokenData1.leftSlot(), "required token1");
         }
@@ -5761,16 +5867,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (, currentTick, , , , , ) = pool.slot0();
 
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
-                .calculateAccumulatedFeesBatch(bob, positionIdList);
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
 
             uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium0
             );
             uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
-                bob,
+                Bob,
                 currentTick,
                 posBalanceArray,
                 premium1
@@ -5781,7 +5887,154 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
                 panopticPool,
-                bob,
+                Bob,
+                currentTick,
+                0,
+                positionIdList
+            );
+
+            assertEq(tokenData0, calcBalanceCross);
+            assertEq(tokenData1, calcThresholdCross);
+        }
+    }
+
+    // Positive premia
+    function test_Success_collateralCheck_sellPosPremia(
+        uint256 x,
+        uint128 positionSizeSeed,
+        uint256 widthSeed,
+        int256 strikeSeed,
+        uint64 utilizationSeed,
+        int24 atTick,
+        uint24 swapSizeSeed
+    ) public {
+        uint64 targetUtilization;
+        {
+            _initWorld(x);
+
+            // initalize a custom Panoptic pool
+            _deployCustomPanopticPool(token0, token1, pool);
+
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
+
+            // have Bob sell
+            (width, strike) = PositionUtils.getOTMSW(
+                widthSeed,
+                strikeSeed,
+                uint24(tickSpacing),
+                currentTick,
+                1
+            );
+
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
+            positionIdList.push(tokenId);
+
+            /// calculate position size
+            (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
+
+            positionSize0 = uint128(bound(positionSizeSeed, 10 ** 15, 10 ** 20));
+            _assumePositionValidity(Bob, tokenId, positionSize0);
+
+            panopticPool.mintOptions(
+                positionIdList,
+                positionSize0,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+        }
+
+        // mimic pool activity
+        twoWaySwap(swapSizeSeed);
+
+        // check requirement at fuzzed tick
+        {
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
+
+            (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
+
+            uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
+                Bob,
+                atTick,
+                posBalanceArray,
+                premium0
+            );
+            uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
+                Bob,
+                atTick,
+                posBalanceArray,
+                premium1
+            );
+
+            (, uint64 poolUtilization0, uint64 poolUtilization1) = panopticPool
+                .optionPositionBalance(Bob, tokenId);
+
+            // check user packed utilization
+            assertApproxEqAbs(targetUtilization, poolUtilization0, 1, "utilization ct 0");
+            assertApproxEqAbs(0, poolUtilization1, 1, "utilization ct 1");
+
+            uint128 poolUtilizations = uint128(poolUtilization0) +
+                (uint128(poolUtilization1) << 64);
+
+            uint256[2] memory checkSingle = [uint256(0), uint256(0)];
+            uint128 required = _tokensRequired(
+                tokenId,
+                positionSize0,
+                atTick,
+                poolUtilizations,
+                checkSingle
+            );
+
+            assertTrue(premium0 >= 0 && premium1 >= 0, "invalid premia");
+
+            // checks tokens required
+            // only add premium requirement, if there is net premia owed
+            required += premium1 < 0 ? uint128((uint128(13_333) * uint128(-premium1)) / 10_000) : 0;
+            premium0 = premium0 < 0 ? int128((13_333 * uint128(-premium0)) / 10_000) : int128(0);
+            assertEq(premium0, int128(tokenData0.leftSlot()), "required token0");
+            assertEq(required, tokenData1.leftSlot(), "required token1");
+        }
+
+        //check collateral output against panoptic pool at current tick
+        {
+            (, currentTick, , , , , ) = pool.slot0();
+
+            (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
+                .calculateAccumulatedFeesBatch(Bob, positionIdList);
+
+            uint256 tokenData0 = collateralToken0.getAccountMarginDetails(
+                Bob,
+                currentTick,
+                posBalanceArray,
+                premium0
+            );
+            uint256 tokenData1 = collateralToken1.getAccountMarginDetails(
+                Bob,
+                currentTick,
+                posBalanceArray,
+                premium1
+            );
+
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+                .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
+
+            (tokenData0, tokenData1) = panopticHelper.checkCollateral(
+                PanopticPool(address(panopticPool)),
+                Bob,
                 currentTick,
                 0,
                 positionIdList
@@ -5838,10 +6091,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // set states
         collateralToken.setInAMM(int128(inAMM));
         deal(token, address(panopticPool), uint128(_poolBalance));
-
-        console2.log("set _poolBalance", _poolBalance);
-        console2.log("set inAMM", inAMM);
-        console2.log("set _totalAssets", collateralToken.totalAssets());
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -5874,20 +6123,20 @@ contract CollateralTrackerTest is Test, PositionUtils {
     // convert to assets tests with a non-zero supply
     // internal function as this is used in many other preview tests
     function _testconvertToAssetsNonZero(uint104 shares) internal returns (uint256) {
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), shares);
         IERC20Partial(token1).approve(address(collateralToken1), shares);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(shares, bob);
-        collateralToken1.deposit(shares, bob);
+        collateralToken0.deposit(shares, Bob);
+        collateralToken1.deposit(shares, Bob);
 
         // amount of assets user deposited computed in amount of shares
         uint256 assets0 = convertToAssets(shares, collateralToken0);
@@ -5934,20 +6183,20 @@ contract CollateralTrackerTest is Test, PositionUtils {
     // convert to assets tests with a non-zero supply
     // internal function as this is used in many other preview tests
     function _testconvertToSharesNonZero(uint104 assets) internal returns (uint256 shares0) {
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), assets);
         IERC20Partial(token1).approve(address(collateralToken1), assets);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(assets, bob);
-        collateralToken1.deposit(assets, bob);
+        collateralToken0.deposit(assets, Bob);
+        collateralToken1.deposit(assets, Bob);
 
         // amount of assets user deposited computed in amount of shares
         uint256 shares0 = convertToShares(assets, collateralToken0);
@@ -5984,24 +6233,24 @@ contract CollateralTrackerTest is Test, PositionUtils {
     function test_Success_maxRedeem(uint256 x, uint104 shares) public {
         _initWorld(x);
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
         // calculate underlying assets via amount of shares
         uint256 assetsToken0 = convertToAssets(shares, collateralToken0);
         uint256 assetsToken1 = convertToAssets(shares, collateralToken1);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), assetsToken0);
         IERC20Partial(token1).approve(address(collateralToken1), assetsToken1);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(uint128(assetsToken0), bob);
-        collateralToken1.deposit(uint128(assetsToken1), bob);
+        collateralToken0.deposit(uint128(assetsToken0), Bob);
+        collateralToken1.deposit(uint128(assetsToken1), Bob);
 
         // how many funds that can be redeemed currently
         uint256 availableAssets0 = convertToShares(
@@ -6014,15 +6263,15 @@ contract CollateralTrackerTest is Test, PositionUtils {
         );
 
         // current share balance of owner
-        uint256 balance0 = collateralToken0.balanceOf(bob);
-        uint256 balance1 = collateralToken1.balanceOf(bob);
+        uint256 balance0 = collateralToken0.balanceOf(Bob);
+        uint256 balance1 = collateralToken1.balanceOf(Bob);
 
         // actual maxRedeem returned value
-        uint256 actualValue0 = collateralToken0.maxRedeem(bob);
-        uint256 actualValue1 = collateralToken1.maxRedeem(bob);
+        uint256 actualValue0 = collateralToken0.maxRedeem(Bob);
+        uint256 actualValue1 = collateralToken1.maxRedeem(Bob);
 
         // if there are option positions this should return 0
-        if (panopticPool.numberOfPositions(bob) != 0) {
+        if (panopticPool.numberOfPositions(Bob) != 0) {
             assertEq(0, actualValue0);
             assertEq(0, actualValue1);
             // if available is greater than the user balance
@@ -6057,20 +6306,20 @@ contract CollateralTrackerTest is Test, PositionUtils {
         collateralToken0 = CollateralTrackerHarness(address(panopticPool.collateralToken0()));
         collateralToken1 = CollateralTrackerHarness(address(panopticPool.collateralToken1()));
 
-        // Invoke all interactions with the Collateral Tracker from user bob
-        vm.startPrank(bob);
+        // Invoke all interactions with the Collateral Tracker from user Bob
+        vm.startPrank(Bob);
 
-        // give bob the max amount of tokens
-        _grantTokens(bob);
+        // give Bob the max amount of tokens
+        _grantTokens(Bob);
 
-        // approve collateral tracker to move tokens on bob's behalf
+        // approve collateral tracker to move tokens on Bob's behalf
         IERC20Partial(token0).approve(address(collateralToken0), assets);
         IERC20Partial(token1).approve(address(collateralToken1), assets);
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(assets, bob);
-        collateralToken1.deposit(assets, bob);
+        collateralToken0.deposit(assets, Bob);
+        collateralToken1.deposit(assets, Bob);
 
         // how many funds that can be redeemed currently
         uint256 availableAssets0 = convertToShares(
@@ -6083,15 +6332,15 @@ contract CollateralTrackerTest is Test, PositionUtils {
         );
 
         // current share balance of owner
-        uint256 balance0 = convertToAssets(collateralToken0.balanceOf(bob), collateralToken0);
-        uint256 balance1 = convertToAssets(collateralToken1.balanceOf(bob), collateralToken0);
+        uint256 balance0 = convertToAssets(collateralToken0.balanceOf(Bob), collateralToken0);
+        uint256 balance1 = convertToAssets(collateralToken1.balanceOf(Bob), collateralToken0);
 
         // actual maxRedeem returned value
-        uint256 actualValue0 = collateralToken0.maxWithdraw(bob);
-        uint256 actualValue1 = collateralToken1.maxWithdraw(bob);
+        uint256 actualValue0 = collateralToken0.maxWithdraw(Bob);
+        uint256 actualValue1 = collateralToken1.maxWithdraw(Bob);
 
         // if there are option positions this should return 0
-        if (panopticPool.numberOfPositions(bob) != 0) {
+        if (panopticPool.numberOfPositions(Bob) != 0) {
             assertEq(0, actualValue0, "with open positions 0");
             assertEq(0, actualValue1, "with open positions 1");
             // if available is greater than the user balance
@@ -6128,7 +6377,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 expectedValue = (collateralToken0.convertToShares(type(uint104).max) * 1000) / 1001;
 
         // real value
-        uint256 actualValue = collateralToken0.maxMint(bob);
+        uint256 actualValue = collateralToken0.maxMint(Bob);
 
         assertEq(expectedValue, actualValue);
     }
@@ -6153,7 +6402,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 expectedValue = type(uint104).max;
 
         // real value
-        uint256 actualValue = collateralToken0.maxDeposit(bob);
+        uint256 actualValue = collateralToken0.maxDeposit(Bob);
 
         assertEq(expectedValue, actualValue);
     }
