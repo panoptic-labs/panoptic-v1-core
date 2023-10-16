@@ -4958,6 +4958,180 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
     }
 
+    function test_Success_collateralCheck_getPositionCollateralRequirement(
+        uint256 x,
+        uint256 widthSeed,
+        int256 strikeSeed
+    ) public {
+        uint64 targetUtilization;
+        {
+            _initWorld(x);
+
+            // initalize a custom Panoptic pool
+            _deployCustomPanopticPool(token0, token1, pool);
+
+            // Invoke all interactions with the Collateral Tracker from user bob
+            vm.startPrank(bob);
+
+            // give bob the max amount of tokens
+            _grantTokens(bob);
+
+            // approve collateral tracker to move tokens on bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(type(uint104).max, bob);
+            collateralToken1.deposit(type(uint104).max, bob);
+
+            // have bob sell
+            (width, strike) = PositionUtils.getOTMSW(
+                widthSeed,
+                strikeSeed,
+                uint24(tickSpacing),
+                currentTick,
+                1
+            );
+
+            // put tokenId
+            uint256 asset = 0;
+            uint256 tokenType = 0;
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+                0,
+                1,
+                asset,
+                0,
+                tokenType,
+                0,
+                strike,
+                width
+            );
+            positionIdList.push(tokenId);
+
+            /// calculate position size
+            (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
+
+            positionSize0 = uint128(10 ** 18);
+            _assumePositionValidity(bob, tokenId, positionSize0);
+
+            int24 deltaStrike = 1000;
+            uint256 tokensRequired0 = collateralToken0.getPositionCollateralRequirement(
+                tokenId,
+                positionSize0,
+                strike - deltaStrike
+            );
+            uint256 tokensRequired1 = collateralToken1.getPositionCollateralRequirement(
+                tokenId,
+                positionSize0,
+                strike - deltaStrike
+            );
+            assertEq(tokensRequired0, positionSize0 / 5);
+            assertEq(tokensRequired1, 0);
+
+            (uint256 ITMtokensRequired0, int256 itm0) = collateralToken0
+                .getITMPositionCollateralRequirement(tokenId, positionSize0, strike - deltaStrike);
+            (uint256 ITMtokensRequired1, int256 itm1) = collateralToken1
+                .getITMPositionCollateralRequirement(tokenId, positionSize0, strike - deltaStrike);
+
+            // ITM
+            (tokensRequired0) = collateralToken0.getPositionCollateralRequirement(
+                tokenId,
+                positionSize0,
+                strike + deltaStrike
+            );
+            (tokensRequired1) = collateralToken1.getPositionCollateralRequirement(
+                tokenId,
+                positionSize0,
+                strike + deltaStrike
+            );
+
+            (ITMtokensRequired0, itm0) = collateralToken0.getITMPositionCollateralRequirement(
+                tokenId,
+                positionSize0,
+                strike + deltaStrike
+            );
+            (ITMtokensRequired1, itm1) = collateralToken1.getITMPositionCollateralRequirement(
+                tokenId,
+                positionSize0,
+                strike + deltaStrike
+            );
+
+            panopticPool.mintOptions(
+                positionIdList,
+                positionSize0,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+
+            {
+                tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(
+                    0,
+                    1,
+                    asset,
+                    1,
+                    tokenType,
+                    0,
+                    strike,
+                    width
+                );
+                positionIdList.push(tokenId1);
+
+                positionSize1 = uint128(10 ** 18) / 10;
+
+                deltaStrike = 1000;
+                console2.log("");
+                console2.log("strike", strike);
+                console2.log("atTick", strike - deltaStrike);
+                tokensRequired0 = collateralToken0.getPositionCollateralRequirement(
+                    tokenId1,
+                    positionSize1,
+                    strike - deltaStrike
+                );
+                tokensRequired1 = collateralToken1.getPositionCollateralRequirement(
+                    tokenId1,
+                    positionSize1,
+                    strike - deltaStrike
+                );
+
+                (ITMtokensRequired0, itm0) = collateralToken0.getITMPositionCollateralRequirement(
+                    tokenId1,
+                    positionSize1,
+                    strike - deltaStrike
+                );
+                (ITMtokensRequired1, itm1) = collateralToken1.getITMPositionCollateralRequirement(
+                    tokenId1,
+                    positionSize1,
+                    strike - deltaStrike
+                );
+
+                deltaStrike = 1000;
+                console2.log("atTick", strike + deltaStrike);
+                (tokensRequired0) = collateralToken0.getPositionCollateralRequirement(
+                    tokenId1,
+                    positionSize1,
+                    strike + deltaStrike
+                );
+                (tokensRequired1) = collateralToken1.getPositionCollateralRequirement(
+                    tokenId1,
+                    positionSize1,
+                    strike + deltaStrike
+                );
+                (ITMtokensRequired0, itm0) = collateralToken0.getITMPositionCollateralRequirement(
+                    tokenId1,
+                    positionSize1,
+                    strike + deltaStrike
+                );
+                (ITMtokensRequired1, itm1) = collateralToken1.getITMPositionCollateralRequirement(
+                    tokenId1,
+                    positionSize1,
+                    strike + deltaStrike
+                );
+            }
+            revert();
+        }
+    }
+
     function test_Success_collateralCheck_sellPutMinUtilization(
         uint256 x,
         uint128 positionSizeSeed,
