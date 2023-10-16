@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
+import {stdMath} from "forge-std/StdMath.sol";
 import {Errors} from "@libraries/Errors.sol";
 import {Math} from "@libraries/Math.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
@@ -4077,5 +4078,68 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
         );
         assertApproxEqAbs(premium0Short, premium0ShortOld, premiaError0[0]);
         assertApproxEqAbs(premium1Short, premium1ShortOld, premiaError1[0]);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                 SANITY
+    //////////////////////////////////////////////////////////////*/
+
+    function test_Sanity_ITMSwapApprox(uint256 price, int256 itm0, int256 itm1) public {
+        price = bound(price, 1, 10 ** 25);
+        itm0 = bound(itm0, -10 ** 27, 10 ** 27);
+        itm1 = bound(itm1, -10 ** 27, 10 ** 27);
+
+        bool zeroForOne;
+        int256 swapAmount;
+
+        int256 net0 = itm0 - (itm1 * 10 ** 6) / int256(price);
+
+        // if net0 is negative, then the protocol has a net surplus of token0
+        zeroForOne = net0 < 0;
+
+        //compute the swap amount, set as positive (exact input)
+        swapAmount = -net0;
+
+        (int256 d0, int256 d1) = evalSwapFixed(swapAmount, zeroForOne, int256(price));
+        (int256 d0_, int256 d1_) = dualITMSwap(price, itm0, itm1);
+
+        assertApproxEqAbs(d0, d0_, stdMath.abs(d0_ / 10000) > 10 ? stdMath.abs(d0_ / 10000) : 10);
+        console2.log("C");
+        assertApproxEqAbs(d1, d1_, stdMath.abs(d1_ / 10000) > 10 ? stdMath.abs(d1_ / 10000) : 10);
+    }
+
+    function dualITMSwap(
+        uint256 price,
+        int256 itm0,
+        int256 itm1
+    ) internal pure returns (int256, int256) {
+        bool zeroForOne = itm0 < 0;
+        int256 swapAmount = -itm0;
+        (int256 d0, int256 d1) = evalSwapFixed(swapAmount, zeroForOne, int256(price));
+
+        zeroForOne = itm1 > 0;
+        swapAmount = -itm1;
+        (int256 d0_, int256 d1_) = evalSwapFixed(swapAmount, zeroForOne, int256(price));
+        return (d0 + d0_, d1 + d1_);
+    }
+
+    function evalSwapFixed(
+        int256 swapAmount,
+        bool zeroForOne,
+        int256 price
+    ) internal pure returns (int256 d0, int256 d1) {
+        console2.log("swap...");
+        console2.log("amount", swapAmount);
+        console2.log("zeroForOne", zeroForOne);
+        console2.log("price", price / 10 ** 6);
+        if (zeroForOne) {
+            d0 = -(swapAmount > 0 ? swapAmount : (-swapAmount * 10 ** 6) / price);
+            d1 = swapAmount > 0 ? (swapAmount * price) / 10 ** 6 : -swapAmount;
+        } else {
+            d0 = swapAmount > 0 ? (swapAmount * 10 ** 6) / price : -swapAmount;
+            d1 = -(swapAmount > 0 ? swapAmount : (-swapAmount * price) / 10 ** 6);
+        }
+        console2.log("d0", d0);
+        console2.log("d1", d1);
     }
 }
