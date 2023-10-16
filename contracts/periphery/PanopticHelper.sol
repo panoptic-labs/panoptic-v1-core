@@ -2,6 +2,7 @@
 pragma solidity =0.8.18;
 
 // Interfaces
+import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 // Libraries
@@ -19,15 +20,14 @@ contract PanopticHelper {
 
     struct Leg {
         uint64 poolId;
-        uint8 asset;
-        uint8 optionRatio;
-        uint8 tokenType;
-        uint8 isLong;
-        uint8 riskPartner;
+        address UniswapV3Pool;
+        uint256 asset;
+        uint256 optionRatio;
+        uint256 tokenType;
+        uint256 isLong;
+        uint256 riskPartner;
         int24 strike;
         int24 width;
-        int24 lowerTick;
-        int24 upperTick;
     }
 
     /// @notice Construct the PanopticHelper contract
@@ -105,8 +105,11 @@ contract PanopticHelper {
         uint256 numLegs = tokenId.countLegs();
         Leg[] memory legs = new Leg[](numLegs);
 
+        uint64 poolId = tokenId.validate();
+        address UniswapV3Pool = address(SFPM.getUniswapV3PoolFromId(tokenId.univ3pool()));
         for (uint256 leg = 0; leg < numLegs; ++leg) {
-            legs[leg].poolId = tokenId.univ3pool();
+            legs[leg].poolId = poolId;
+            legs[leg].UniswapV3Pool = UniswapV3Pool;
             legs[leg].asset = tokenId.asset(leg);
             legs[leg].optionRatio = tokenId.optionRatio(leg);
             legs[leg].tokenType = tokenId.tokenType(leg);
@@ -114,9 +117,6 @@ contract PanopticHelper {
             legs[leg].riskPartner = tokenId.riskPartner(leg);
             legs[leg].strike = tokenId.strike(leg);
             legs[leg].width = tokenId.width(leg);
-            (int24 lowerTick, int24 upperTick) = tokenId.asTicks(leg);
-            legs[leg].lowerTick = lowerTick;
-            legs[leg].upperTick = upperTick;
         }
     }
 
