@@ -1474,24 +1474,22 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int24 atTick
     ) public view returns (uint256 tokensRequired, int256 itmAmount) {
         // get tokens required for the current tokenId position
-        uint256 tokensRequired = getPositionCollateralRequirement(tokenId, positionSize, atTick);
+        tokensRequired = getPositionCollateralRequirement(tokenId, positionSize, atTick);
 
         // compute ITM amounts
-        (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getITMAmountsForPosition(
+        (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
             tokenId,
             positionSize,
             s_tickSpacing,
             atTick
         );
-
         // use the ITM amount for the current collateral token
         itmAmount = s_underlyingIsToken0 ? int256(itmAmount0) : int256(itmAmount1);
 
-        unchecked {
-            // deduct ITM amounts from tokens required, make strictly positive (is it ever necessary?)
-            int256 _tokenRequired = int256(tokensRequired) - itmAmount;
-            tokensRequired = _tokenRequired < int256(0) ? uint256(0) : uint256(_tokenRequired);
-        }
+        // deduct ITM amounts from tokens required (is it ever negative? leaving it unchecked)
+        tokensRequired = itmAmount < 0
+            ? tokensRequired + uint256(-itmAmount)
+            : tokensRequired - uint256(itmAmount);
     }
 
     /// @notice Get the collateral status/margin details of an account/user.
