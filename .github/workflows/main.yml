@@ -5,7 +5,7 @@ jobs:
     strategy:
       fail-fast: true
     name: Foundry suite
-    runs-on: ubuntu-latest
+    runs-on: mainnet-node
     steps:
       - uses: actions/checkout@v3
         with:
@@ -16,16 +16,16 @@ jobs:
           version: nightly
       - name: Build
         env:
-          FOUNDRY_PROFILE: test
+          FOUNDRY_PROFILE: ci_test
         run: |
           forge --version
           forge build
         id: build
       - name: Run Forge tests
         env:
-          FOUNDRY_PROFILE: test
+          FOUNDRY_PROFILE: ci_test
         run: |
-          forge test --fork-url ${{ secrets.NODE_URL }} -vvv
+          forge test --fork-url http://localhost:8545 -vvv
         id: forge-test
 
   contract_sizes:
