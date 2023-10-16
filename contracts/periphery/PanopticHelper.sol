@@ -61,6 +61,56 @@ contract PanopticHelper {
         return PanopticMath.convertCollateralData(tokenData0, tokenData1, tokenType, atTick);
     }
 
+    /// @notice Compute the collateral requirement of a given tokenId at the given tick
+    /// @param pool The PanopticPool instance to check collateral on
+    /// @param positionSize the size of the new position
+    /// @param atTick At what price is the collateral requirement evaluated at
+    /// @return requiredCollateral0 The collateral requirement for token0
+    /// @return requiredCollateral1 The collateral requirement for token0
+    function computeCollateralRequirement(
+        PanopticPool pool,
+        uint128 positionSize,
+        int24 atTick
+    ) public view returns (uint256 requiredCollateral0, uint256 requiredCollateral1) {
+        // Query the required collateral amounts for the two tokens
+        requiredCollateral0 = pool.collateralToken0().getPositionCollateralRequirement(
+            tokenId,
+            positionSize,
+            atTick
+        );
+        // Query the required collateral amounts for the two tokens
+        requiredCollateral1 = pool.collateralToken1().getPositionCollateralRequirement(
+            tokenId,
+            positionSize,
+            atTick
+        );
+    }
+
+    /// @notice Compute the collateral requirement of a given tokenId at the given tick, considering the ITM amounts
+    /// @param pool The PanopticPool instance to check collateral on
+    /// @param positionSize the size of the new position
+    /// @param atTick At what price is the collateral requirement evaluated at
+    /// @return requiredCollateralITM0 The collateral requirement for token0
+    /// @return requiredCollateralITM1 The collateral requirement for token0
+    function computeCollateralRequirementITM(
+        PanopticPool pool,
+        uint128 positionSize,
+        int24 atTick
+    ) public view returns (uint256 requiredCollateralITM0, uint256 requiredCollateralITM1) {
+        // Query the required collateral amounts for the two tokens
+        requiredCollateralITM0 = pool.collateralToken0().getITMPositionCollateralRequirement(
+            tokenId,
+            positionSize,
+            atTick
+        );
+        // Query the required collateral amounts for the two tokens
+        requiredCollateralITM1 = pool.collateralToken1().getITMPositionCollateralRequirement(
+            tokenId,
+            positionSize,
+            atTick
+        );
+    }
+
     /// @notice Returns the net assets (balance - maintenance margin) of a given account on a given pool.
     /// @dev does not work for very large tick gradients.
     /// @param pool address of the pool
