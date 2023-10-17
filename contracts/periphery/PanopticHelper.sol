@@ -118,6 +118,7 @@ contract PanopticHelper {
             legs[leg].strike = tokenId.strike(leg);
             legs[leg].width = tokenId.width(leg);
         }
+        return legs;
     }
 
     /// @notice Returns an estimate of the downside liquidation price for a given account on a given pool.
