@@ -2696,8 +2696,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
             _assumePositionValidity(bob, tokenId, positionSize0);
 
-            _mockMaxDeposit(bob);
-
             panopticPool.mintOptions(
                 positionIdList,
                 positionSize0,
@@ -2721,6 +2719,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 1, 0, 0, strike1, width1);
             positionIdList1.push(tokenId1);
+            _assumePositionValidity(alice, tokenId1, positionSize0 / 4);
 
             panopticPool.mintOptions(
                 positionIdList1,
