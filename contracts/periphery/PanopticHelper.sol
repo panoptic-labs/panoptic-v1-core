@@ -107,16 +107,16 @@ contract PanopticHelper {
 
         uint64 poolId = tokenId.validate();
         address UniswapV3Pool = address(SFPM.getUniswapV3PoolFromId(tokenId.univ3pool()));
-        for (uint256 leg = 0; leg < numLegs; ++leg) {
-            legs[leg].poolId = poolId;
-            legs[leg].UniswapV3Pool = UniswapV3Pool;
-            legs[leg].asset = tokenId.asset(leg);
-            legs[leg].optionRatio = tokenId.optionRatio(leg);
-            legs[leg].tokenType = tokenId.tokenType(leg);
-            legs[leg].isLong = tokenId.isLong(leg);
-            legs[leg].riskPartner = tokenId.riskPartner(leg);
-            legs[leg].strike = tokenId.strike(leg);
-            legs[leg].width = tokenId.width(leg);
+        for (uint256 i = 0; i < numLegs; ++i) {
+            legs[i].poolId = poolId;
+            legs[i].UniswapV3Pool = UniswapV3Pool;
+            legs[i].asset = tokenId.asset(i);
+            legs[i].optionRatio = tokenId.optionRatio(i);
+            legs[i].tokenType = tokenId.tokenType(i);
+            legs[i].isLong = tokenId.isLong(i);
+            legs[i].riskPartner = tokenId.riskPartner(i);
+            legs[i].strike = tokenId.strike(i);
+            legs[i].width = tokenId.width(i);
         }
         return legs;
     }
