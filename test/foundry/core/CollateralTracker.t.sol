@@ -373,7 +373,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     // granted token amounts
-    uint256 constant initialMockTokens = type(uint128).max;
+    uint256 constant initialMockTokens = type(uint120).max;
 
     /*//////////////////////////////////////////////////////////////
                               WORLD STATE
@@ -393,6 +393,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     // Current instance of Panoptic Pool, CollateralTokens, and SFPM
     PanopticPoolHarness panopticPool;
+    address panopticPoolAddress;
     PanopticHelper panopticHelper;
     SemiFungiblePositionManagerHarness sfpm;
     CollateralTrackerHarness collateralToken0;
@@ -487,6 +488,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // get the Collateral Tokens
         collateralToken0 = CollateralTrackerHarness(address(panopticPool.collateralToken0()));
         collateralToken1 = CollateralTrackerHarness(address(panopticPool.collateralToken1()));
+
+        // store panoptic pool address
+        panopticPoolAddress = address(panopticPool);
     }
 
     function _grantTokens(address recipient) internal {
@@ -514,10 +518,18 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // equal deposits for both collateral token pairs for testing purposes
         // deposit to panoptic pool
-        collateralToken0.setPoolAssets(initialMockTokens);
-        collateralToken1.setPoolAssets(initialMockTokens);
-        deal(token0, address(panopticPool), initialMockTokens);
-        deal(token1, address(panopticPool), initialMockTokens);
+        collateralToken0.setPoolAssets(collateralToken0._availableAssets() + initialMockTokens);
+        collateralToken1.setPoolAssets(collateralToken0._availableAssets() + initialMockTokens);
+        deal(
+            token0,
+            address(panopticPool),
+            IERC20Partial(token0).balanceOf(panopticPoolAddress) + initialMockTokens
+        );
+        deal(
+            token1,
+            address(panopticPool),
+            IERC20Partial(token1).balanceOf(panopticPoolAddress) + initialMockTokens
+        );
     }
 
     function setUp() public {}
@@ -2536,7 +2548,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             // set utilization before minting
             // take into account the offsets as states are updated before utilization is checked for the mint
-            uint64 targetUtilization = uint64(bound(utilizationSeed, 1, 9_998));
+            uint64 targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
             setUtilization(collateralToken0, token1, int64(targetUtilization), inAMMOffset, false);
 
             panopticPool.mintOptions(
