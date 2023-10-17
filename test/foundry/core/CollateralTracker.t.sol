@@ -2696,6 +2696,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
             _assumePositionValidity(bob, tokenId, positionSize0);
 
+            _mockMaxDeposit(bob);
+
             panopticPool.mintOptions(
                 positionIdList,
                 positionSize0,
