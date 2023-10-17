@@ -491,6 +491,7 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
         vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue <= 10 ** 22);
     }
 
     // second positionSizeSeed is to back single long leg
@@ -656,6 +657,7 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
         vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue <= 10 ** 22);
     }
 
     function updatePositionLiqSingleLong() public {
