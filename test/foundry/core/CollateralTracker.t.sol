@@ -17,6 +17,7 @@ import {LeftRight} from "@types/LeftRight.sol";
 import {TokenId} from "@types/TokenId.sol";
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 import {TickStateCallContext} from "@types/TickStateCallContext.sol";
+import {Constants} from "@libraries/Constants.sol";
 // Panoptic Interfaces
 import {IERC20Partial} from "@tokens/interfaces/IERC20Partial.sol";
 // Uniswap - Panoptic's version 0.8
@@ -1421,8 +1422,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     // when tokenValue is below required value
     // fuzz the inputs
-    // when tokenValue is below required value
-    // fuzz the inputs
     function test_Success_computeBonus(
         uint256 x,
         uint128 positionSizeSeed,
@@ -1505,7 +1504,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             0,
             twapTick,
             twapSqrtPrice,
-            -type(int96).max
+            -type(int120).max
         );
 
         (int256 bonusAmounts1, uint256 tokenData1) = collateralToken1.computeBonus(
@@ -1514,18 +1513,38 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenData0,
             twapTick,
             twapSqrtPrice,
-            -type(int96).max
+            -type(int120).max
         );
 
-        // verify premia and bonus amounts
+        uint256 _tokenData0 = collateralToken0.getAccountMarginDetails(
+            Alice,
+            twapTick,
+            posBalanceArray,
+            -type(int120).max
+        );
+
+        uint256 _tokenData1 = collateralToken1.getAccountMarginDetails(
+            Alice,
+            twapTick,
+            posBalanceArray,
+            -type(int120).max
+        );
+
+        int256 _bonusAmounts0 = _verifyBonusAmounts(_tokenData0, 0, twapSqrtPrice);
+        int256 _bonusAmounts1 = _verifyBonusAmounts(_tokenData1, _tokenData0, twapSqrtPrice);
+
+        assertEq(tokenData0, _tokenData0, "tokenData0");
+        assertEq(tokenData1, _tokenData1, "tokenData1");
+
+        assertEq(bonusAmounts0, _bonusAmounts0, "bonusAmounts0");
+        assertEq(bonusAmounts1, _bonusAmounts1, "bonusAmounts1");
     }
 
     function test_Success_computeBonus_invalidPrice(
         uint256 x,
         uint128 positionSizeSeed,
         int256 strikeSeed,
-        uint256 widthSeed,
-        uint256 swapSizeSeed
+        uint256 widthSeed
     ) public {
         // fuzz
         _initWorld(x);
@@ -1618,7 +1637,25 @@ contract CollateralTrackerTest is Test, PositionUtils {
             -type(int120).max
         );
 
-        // verify premia and bonus amounts
+        uint256 _tokenData0 = collateralToken0.getAccountMarginDetails(
+            Alice,
+            twapTick,
+            posBalanceArray,
+            -type(int120).max
+        );
+
+        uint256 _tokenData1 = collateralToken1.getAccountMarginDetails(
+            Alice,
+            twapTick,
+            posBalanceArray,
+            -type(int120).max
+        );
+
+        assertEq(tokenData0, _tokenData0);
+        assertEq(tokenData1, _tokenData1);
+
+        assertEq(bonusAmounts0, 0);
+        assertEq(bonusAmounts1, 0);
     }
 
     // error NotMarginCalled() (healthy account failed liquidate)
@@ -3702,8 +3739,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint128 positionSizeSeed,
         uint256 widthSeed,
         int256 strikeSeed,
-        int24 atTick,
-        uint256 swapSizeSeed
+        int24 atTick
     ) public {
         uint128 required;
 
@@ -3746,7 +3782,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             // must be minimum at least 2 so there is enough liquidity to buy
-            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
 
             _assumePositionValidity(Bob, tokenId, positionSize0);
             _spreadTokensRequired(tokenId1, positionSize0);
@@ -3789,9 +3825,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 TickMath.MAX_TICK
             );
         }
-
-        // mimic pool activity
-        twoWaySwap(swapSizeSeed);
 
         // check requirement at fuzzed tick
         {
@@ -3872,8 +3905,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint128 positionSizeSeed,
         uint256 widthSeed,
         int256 strikeSeed,
-        int24 atTick,
-        uint256 swapSizeSeed
+        int24 atTick
     ) public {
         {
             _initWorld(x);
@@ -3914,7 +3946,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             // must be minimum at least 2 so there is enough liquidity to buy
-            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
 
             _assumePositionValidity(Bob, tokenId, positionSize0);
 
@@ -3955,9 +3987,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 TickMath.MAX_TICK
             );
         }
-
-        // mimic pool activity
-        twoWaySwap(swapSizeSeed);
 
         // check requirement at fuzzed tick
         {
@@ -4190,6 +4219,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             // only add premium requirement if there is net premia owed
+            required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
             premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
@@ -4290,7 +4320,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             /// calculate position size
             (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
-            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 104));
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
             _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
@@ -4393,7 +4423,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             // only add premium requirement if there is net premia owed
             required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
-            premium0 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
+            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             assertEq(required, tokenData0.leftSlot(), "required token0");
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
         }
@@ -4527,7 +4557,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             // set utilization before minting
             // take into account the offsets as states are updated before utilization is checked for the mint
-            targetUtilization = uint64(bound(utilizationSeed, 9_002, 9_999));
+            targetUtilization = uint64(bound(utilizationSeed, 9_001, 9_999));
             setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, true);
 
             panopticPool.mintOptions(
@@ -4582,7 +4612,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             // checks tokens required
-            premium1 = premium0 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
+            premium1 = premium1 < 0 ? int128((13_333 * uint128(-premium1)) / 10_000) : int128(0);
             required += premium0 < 0 ? uint128((uint128(13_333) * uint128(-premium0)) / 10_000) : 0;
             assertEq(required, tokenData0.leftSlot(), "required token0");
             assertEq(premium1, int128(tokenData1.leftSlot()), "required token1");
@@ -6587,6 +6617,48 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // revert back to original caller
         changePrank(caller);
+    }
+
+    function _verifyBonusAmounts(
+        uint256 tokenData,
+        uint256 otherTokenData,
+        uint160 sqrtPriceX96
+    ) internal returns (int256 bonusAmounts) {
+        uint256 token1TotalValue;
+        uint256 tokenValue;
+        token1TotalValue = (tokenData.rightSlot() * Constants.FP96) / sqrtPriceX96;
+        tokenValue = token1TotalValue + Math.mulDiv96(otherTokenData.rightSlot(), sqrtPriceX96);
+
+        uint256 requiredValue;
+        requiredValue =
+            (tokenData.leftSlot() * Constants.FP96) /
+            sqrtPriceX96 +
+            Math.mulDiv96(otherTokenData.leftSlot(), sqrtPriceX96);
+
+        uint256 valueRatio1;
+        valueRatio1 = (tokenData.rightSlot() * Constants.FP96 * 10_000) / tokenValue / sqrtPriceX96;
+
+        int128 bonus0;
+        int128 bonus1;
+        bonus0 = int128(
+            int256(
+                otherTokenData.leftSlot() < otherTokenData.rightSlot()
+                    ? ((tokenValue) * (10_000 - valueRatio1) * Constants.FP96) / sqrtPriceX96
+                    : ((requiredValue - tokenValue) * (10_000 - valueRatio1) * Constants.FP96) /
+                        sqrtPriceX96
+            )
+        );
+
+        bonus1 = int128(
+            int256(
+                tokenData.leftSlot() < tokenData.rightSlot()
+                    ? Math.mulDiv96((tokenValue) * (valueRatio1), sqrtPriceX96)
+                    : Math.mulDiv96((requiredValue - tokenValue) * (valueRatio1), sqrtPriceX96)
+            )
+        );
+
+        // store bonus amounts as actual amounts by dividing by DECIMALS_128
+        bonusAmounts = bonusAmounts.toRightSlot(bonus0 / 10_000).toLeftSlot(bonus1 / 10_000);
     }
 
     /*//////////////////////////////////////////////////////////////
