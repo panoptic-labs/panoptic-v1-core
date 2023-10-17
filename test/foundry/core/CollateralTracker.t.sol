@@ -373,7 +373,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     // granted token amounts
-    uint256 constant initialMockTokens = type(uint256).max;
+    uint256 constant initialMockTokens = type(uint128).max;
 
     /*//////////////////////////////////////////////////////////////
                               WORLD STATE
@@ -495,6 +495,29 @@ contract CollateralTrackerTest is Test, PositionUtils {
         deal(token1, recipient, initialMockTokens);
         assertEq(IERC20Partial(token0).balanceOf(recipient), initialMockTokens);
         assertEq(IERC20Partial(token1).balanceOf(recipient), initialMockTokens);
+    }
+
+    function _mockMaxDeposit(address recipient) internal {
+        // award corresponding shares
+        deal(
+            address(collateralToken0),
+            recipient,
+            collateralToken0.previewDeposit(initialMockTokens),
+            true
+        );
+        deal(
+            address(collateralToken1),
+            recipient,
+            collateralToken1.previewDeposit(initialMockTokens),
+            true
+        );
+
+        // equal deposits for both collateral token pairs for testing purposes
+        // deposit to panoptic pool
+        collateralToken0.setPoolAssets(initialMockTokens);
+        collateralToken1.setPoolAssets(initialMockTokens);
+        deal(token0, address(panopticPool), initialMockTokens);
+        deal(token1, address(panopticPool), initialMockTokens);
     }
 
     function setUp() public {}
@@ -661,8 +684,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token1).approve(address(collateralToken1), maxDeposit1);
 
         // deposit the max amount
-        collateralToken0.deposit(uint128(maxDeposit0), bob);
-        collateralToken1.deposit(uint128(maxDeposit1), bob);
+        _mockMaxDeposit(bob);
 
         // max withdrawable amount
         uint256 maxAssets = collateralToken0.maxWithdraw(bob);
@@ -691,8 +713,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token1).approve(address(collateralToken1), assets);
 
         // deposit fuzzed amount of tokens
-        collateralToken0.deposit(assets, bob);
-        collateralToken1.deposit(assets, bob);
+        _mockMaxDeposit(bob);
 
         changePrank(alice);
 
@@ -729,8 +750,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token1).approve(address(collateralToken1), assets);
 
         // deposit fuzzed amount of tokens
-        collateralToken0.deposit(uint128(assets), bob);
-        collateralToken1.deposit(uint128(assets), bob);
+        _mockMaxDeposit(bob);
 
         vm.stopPrank();
         vm.startPrank(alice);
@@ -841,8 +861,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(amount, bob);
-        collateralToken1.deposit(amount, bob);
+        _mockMaxDeposit(bob);
 
         uint256 bal0 = collateralToken0.balanceOf(bob);
         uint256 bal1 = collateralToken1.balanceOf(bob);
@@ -876,8 +895,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
         // deposit a significant amount of assets into the Panoptic pool
-        collateralToken0.deposit(type(uint104).max, bob);
-        collateralToken1.deposit(type(uint104).max, bob);
+        _mockMaxDeposit(bob);
 
         // call will be minted in range
         (width, strike) = PositionUtils.getOTMSW(
@@ -928,8 +946,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(amount, bob);
-        collateralToken1.deposit(amount, bob);
+        _mockMaxDeposit(bob);
 
         changePrank(alice);
 
@@ -965,25 +982,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token1).approve(address(collateralToken1), type(uint256).max);
 
         // award corresponding shares
-        deal(
-            address(collateralToken0),
-            bob,
-            collateralToken0.previewDeposit(type(uint120).max),
-            true
-        );
-        deal(
-            address(collateralToken1),
-            bob,
-            collateralToken1.previewDeposit(type(uint120).max),
-            true
-        );
-
-        // equal deposits for both collateral token pairs for testing purposes
-        // deposit to panoptic pool
-        collateralToken0.setPoolAssets(type(uint120).max);
-        collateralToken1.setPoolAssets(type(uint120).max);
-        deal(token0, address(panopticPool), type(uint120).max);
-        deal(token1, address(panopticPool), type(uint120).max);
+        _mockMaxDeposit(bob);
 
         {
             // call will be minted in range
@@ -1053,8 +1052,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             // deposit a number of assets determined via fuzzing
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(uint128(assetsToken0), bob);
-            collateralToken1.deposit(uint128(assetsToken1), bob);
+            _mockMaxDeposit(bob);
 
             // bob's asset balance after depositing to the Panoptic pool
             debitedBalance0 = IERC20Partial(token0).balanceOf(bob);
@@ -1106,8 +1104,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(type(uint104).max, bob);
-        collateralToken1.deposit(type(uint104).max, bob);
+        _mockMaxDeposit(bob);
 
         // Get minimum amount to bound for
         // as we want to gurantee a redemption attempt of above the max redeemable amount
@@ -1149,8 +1146,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             // deposit a number of assets determined via fuzzing
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(uint128(assetsToken0), bob);
-            collateralToken1.deposit(uint128(assetsToken1), bob);
+            _mockMaxDeposit(bob);
         }
 
         // Bound the shares redemption to the maxRedeemable amount
@@ -1209,8 +1205,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token1).approve(address(collateralToken1), assetsToken1);
 
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(uint128(assetsToken0), bob);
-        collateralToken1.deposit(uint128(assetsToken1), bob);
+        _mockMaxDeposit(bob);
 
         // Start new interactions with user alice
         changePrank(alice);
@@ -1245,8 +1240,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(assets, bob);
-        collateralToken1.deposit(assets, bob);
+        _mockMaxDeposit(bob);
 
         // check delegatee balance before
         uint256 sharesBefore0 = collateralToken0.balanceOf(bob);
@@ -1294,8 +1288,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             // deposit a number of assets determined via fuzzing
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(uint128(assetsToken0), alice);
-            collateralToken1.deposit(uint128(assetsToken1), alice);
+            _mockMaxDeposit(bob);
         }
 
         // check delegator balance before
@@ -1342,8 +1335,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(uint128(assetsToken0), alice);
-        collateralToken1.deposit(uint128(assetsToken1), alice);
+        _mockMaxDeposit(bob);
 
         // check delegatee balance before
         uint256 sharesBefore0 = collateralToken0.balanceOf(alice);
@@ -1392,8 +1384,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // put will be minted OTM
             (width, strike) = PositionUtils.getOTMSW(
@@ -1423,8 +1414,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // give alice the max amount of tokens
             _grantTokens(alice);
 
-            collateralToken0.deposit(positionSize0, alice);
-            collateralToken1.deposit(positionSize0, alice);
+            _mockMaxDeposit(alice);
 
             // long put
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
@@ -1490,8 +1480,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // put will be minted OTM
             (width, strike) = PositionUtils.getOTMSW(
@@ -1523,8 +1512,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // give alice the max amount of tokens
             _grantTokens(alice);
 
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            _mockMaxDeposit(alice);
 
             // long put
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
@@ -1591,26 +1579,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-        // award corresponding shares
-        deal(
-            address(collateralToken0),
-            bob,
-            collateralToken0.previewDeposit(type(uint120).max),
-            true
-        );
-        deal(
-            address(collateralToken1),
-            bob,
-            collateralToken1.previewDeposit(type(uint120).max),
-            true
-        );
-
-        // equal deposits for both collateral token pairs for testing purposes
-        // deposit to panoptic pool
-        collateralToken0.setPoolAssets(type(uint120).max);
-        collateralToken1.setPoolAssets(type(uint120).max);
-        deal(token0, address(panopticPool), type(uint120).max);
-        deal(token1, address(panopticPool), type(uint120).max);
+        _mockMaxDeposit(bob);
 
         // call will be minted OTM
         (width, strike) = PositionUtils.getOTMSW(
@@ -1677,9 +1646,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-        // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(type(uint104).max, bob);
-        collateralToken1.deposit(type(uint104).max, bob);
+        _mockMaxDeposit(bob);
 
         // call will be minted OTM
         (width, strike) = PositionUtils.getOTMSW(
@@ -1752,9 +1719,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
         IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-        // equal deposits for both collateral token pairs for testing purposes
-        collateralToken0.deposit(type(uint104).max, bob);
-        collateralToken1.deposit(type(uint104).max, bob);
+        _mockMaxDeposit(bob);
 
         // call will be minted OTM
         (width, strike) = PositionUtils.getOTMSW(
@@ -2498,9 +2463,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -2549,9 +2512,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 0, 0, 0, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 0, 0, 1, 0, strike1, width1);
@@ -2688,25 +2649,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                bob,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                bob,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -2753,25 +2696,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                alice,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                alice,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 1, 0, 0, strike1, width1);
@@ -2893,25 +2818,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                bob,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                bob,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -2958,25 +2865,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                alice,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                alice,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 1, 0, strike1, width1);
@@ -3090,9 +2979,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            // award corresponding shares
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -3140,8 +3028,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 0, 0, strike1, width1);
@@ -3257,27 +3144,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                bob,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                bob,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-            console2.log("bal0", collateralToken0.balanceOf(bob));
-            console2.log("bal1", collateralToken1.balanceOf(bob));
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getITMSW(
@@ -3324,37 +3191,15 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // approve collateral tracker to move tokens on bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
-            console2.log("bal0a", collateralToken0.balanceOf(alice));
-            console2.log("bal1a", collateralToken1.balanceOf(alice));
-            // award corresponding shares
-            deal(
-                address(collateralToken0),
-                alice,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                alice,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-            console2.log("bal0a", collateralToken0.balanceOf(alice));
-            console2.log("bal1a", collateralToken1.balanceOf(alice));
 
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            // award corresponding shares
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 1, 0, strike1, width1);
             positionIdList1.push(tokenId1);
+
             _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
-            console2.log("bal0a", collateralToken0.balanceOf(alice));
-            console2.log("bal1a", collateralToken1.balanceOf(alice));
 
             panopticPool.mintOptions(
                 positionIdList1,
@@ -3464,25 +3309,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                bob,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                bob,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getITMSW(
@@ -3530,25 +3357,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                alice,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                alice,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 0, 0, strike1, width1);
@@ -3667,25 +3476,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                bob,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                bob,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getITMSW(
@@ -3733,25 +3524,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                alice,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                alice,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 0, 1, 0, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 0, 0, 0, 0, strike1, width1);
@@ -3866,8 +3639,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -3915,8 +3687,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 0, 0, strike, width);
@@ -4032,25 +3803,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                bob,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                bob,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -4097,25 +3850,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // award corresponding shares
-            deal(
-                address(collateralToken0),
-                alice,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                alice,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 1, strike, width);
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 1, 0, strike, width);
@@ -4243,8 +3978,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -4285,8 +4019,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
             positionIdList1.push(tokenId1);
@@ -4443,8 +4176,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -4485,8 +4217,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
             positionIdList1.push(tokenId1);
@@ -4631,8 +4362,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -4673,8 +4403,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, alice);
-            collateralToken1.deposit(type(uint104).max, alice);
+            _mockMaxDeposit(alice);
 
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
             positionIdList1.push(tokenId1);
@@ -4821,8 +4550,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -4984,8 +4712,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -5155,8 +4882,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -5315,8 +5041,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint104).max, bob);
-            collateralToken1.deposit(type(uint104).max, bob);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -5475,26 +5200,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // award corresponding shares
-            deal(
-                address(collateralToken0),
-                bob,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                bob,
-                collateralToken1.previewDeposit(type(uint128).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -5648,26 +5354,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // award corresponding shares
-            deal(
-                address(collateralToken0),
-                bob,
-                collateralToken0.previewDeposit(type(uint120).max),
-                true
-            );
-            deal(
-                address(collateralToken1),
-                bob,
-                collateralToken1.previewDeposit(type(uint120).max),
-                true
-            );
-
-            // equal deposits for both collateral token pairs for testing purposes
-            // deposit to panoptic pool
-            collateralToken0.setPoolAssets(type(uint120).max);
-            collateralToken1.setPoolAssets(type(uint120).max);
-            deal(token0, address(panopticPool), type(uint120).max);
-            deal(token1, address(panopticPool), type(uint120).max);
+            _mockMaxDeposit(bob);
 
             // have bob sell
             (width, strike) = PositionUtils.getOTMSW(
