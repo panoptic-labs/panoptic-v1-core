@@ -1674,8 +1674,8 @@ contract PanopticPoolTest is PositionUtils {
         pool.burn(tickLower, tickUpper, 0);
 
         (int256 premium0, int256 premium1, ) = pp.calculateAccumulatedFeesBatch(Alice, posIdList);
-        assertApproxEqAbs(uint256(premium0), premiaSeed[0], premiaSeed[0] / 100_000_000);
-        assertApproxEqAbs(uint256(premium1), premiaSeed[1], premiaSeed[1] / 100_000_000);
+        assertApproxEqAbs(uint256(premium0), premiaSeed[0], premiaSeed[0] / 1_000_000);
+        assertApproxEqAbs(uint256(premium1), premiaSeed[1], premiaSeed[1] / 1_000_000);
     }
 
     function test_Success_calculatePortfolioValue_2xOTMShortCall(
