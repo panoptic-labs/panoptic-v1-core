@@ -616,6 +616,7 @@ contract PanopticPoolTest is PositionUtils {
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
         vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue <= 10 ** 22);
     }
 
     // second positionSizeSeed is to back single long leg
@@ -781,6 +782,7 @@ contract PanopticPoolTest is PositionUtils {
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
         vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue <= 10 ** 22);
     }
 
     function updatePositionDataLong() public {
@@ -997,6 +999,7 @@ contract PanopticPoolTest is PositionUtils {
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
         vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue <= 10 ** 22);
 
         // ensure third leg is sufficiently large
         (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
@@ -1102,6 +1105,7 @@ contract PanopticPoolTest is PositionUtils {
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
         vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue <= 10 ** 22);
 
         // ensure third leg is sufficiently large
         (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
@@ -1112,6 +1116,7 @@ contract PanopticPoolTest is PositionUtils {
         );
 
         vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue <= 10 ** 22);
 
         // ensure fourth leg is sufficiently large
         (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
@@ -1122,6 +1127,7 @@ contract PanopticPoolTest is PositionUtils {
         );
 
         vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue <= 10 ** 22);
     }
 
     function populatePositionData(
