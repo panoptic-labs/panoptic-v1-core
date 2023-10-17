@@ -8,6 +8,7 @@ import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManage
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
+import {Math} from "@libraries/Math.sol";
 // Custom types
 import {TokenId} from "@types/TokenId.sol";
 
@@ -28,6 +29,9 @@ contract PanopticHelper {
         int24 strike;
         int24 width;
     }
+
+    uint256 RISK_PARTNER_RESET_MASK =
+        0xFFFFFFFFF3FFFFFFFFFFF3FFFFFFFFFFF3FFFFFFFFFFF3FFFFFFFFFFFFFFFFFF;
 
     /// @notice Construct the PanopticHelper contract
     /// @param _SFPM address of the SemiFungiblePositionManager
@@ -123,6 +127,49 @@ contract PanopticHelper {
             positionSize,
             atTick
         );
+    }
+
+    function optimizeRiskPartner(
+        PanopticPool pool,
+        uint256 tokenId,
+        int24 atTick
+    ) public view returns (uint256) {
+        (uint256 requiredCollateral0, uint256 requiredCollateral1) = computeCollateralRequirement(
+            pool,
+            tokenId,
+            1e18,
+            atTick
+        );
+        uint160 sqrtPrice = Math.getSqrtRatioAtTick(atTick);
+        uint256 totalRequired = PanopticMath.convert0to1(requiredCollateral0, sqrtPrice) +
+            requiredCollateral1;
+
+        uint256 numLegs = tokenId.countLegs();
+        if (numLegs == 1) {
+            return tokenId;
+        }
+        if (numLegs == 2) {
+            if (
+                (tokenId.asset(0) == tokenId.asset(1)) &&
+                (tokenId.optionRatio(0) == tokenId.optionRatio(1))
+            ) {
+                uint256 newTokenId = (tokenId & RISK_PARTNER_RESET_MASK)
+                    .addRiskPartner(1, 0)
+                    .addRiskPartner(0, 1);
+                (
+                    uint256 newRequiredCollateral0,
+                    uint256 newRequiredCollateral1
+                ) = computeCollateralRequirement(pool, newTokenId, 1e18, atTick);
+                uint256 newRequired = PanopticMath.convert0to1(requiredCollateral0, sqrtPrice) +
+                    requiredCollateral1;
+
+                if (newRequired < totalRequired) {
+                    return newTokenId;
+                } else {
+                    return tokenId;
+                }
+            }
+        }
     }
 
     /// @notice Returns the net assets (balance - maintenance margin) of a given account on a given pool.
