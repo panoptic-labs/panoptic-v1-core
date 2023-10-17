@@ -25,6 +25,6 @@ viaIR = true
 [fuzz]
 # temporary workaround while we figure out perf issues + configure different test sets + profiles
 runs = 1000
-max_test_rejects = 100_000
+max_test_rejects = 10_000_000
 [rpc_endpoints]
 sepolia = 'https://mainnet.infura.io/v3/901ff66ce2bd4fa89b01c5fd38f0ccc9'
