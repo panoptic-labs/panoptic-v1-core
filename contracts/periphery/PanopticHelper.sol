@@ -2,6 +2,7 @@
 pragma solidity =0.8.18;
 
 // Interfaces
+import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 // Libraries
@@ -16,6 +17,18 @@ contract PanopticHelper {
     using TokenId for uint256;
 
     SemiFungiblePositionManager immutable SFPM;
+
+    struct Leg {
+        uint64 poolId;
+        address UniswapV3Pool;
+        uint256 asset;
+        uint256 optionRatio;
+        uint256 tokenType;
+        uint256 isLong;
+        uint256 riskPartner;
+        int24 strike;
+        int24 width;
+    }
 
     /// @notice Construct the PanopticHelper contract
     /// @param _SFPM address of the SemiFungiblePositionManager
@@ -133,6 +146,29 @@ contract PanopticHelper {
         );
 
         return int256(balanceCross) - int256(requiredCross);
+    }
+
+    /// @notice Unwraps the contents of the tokenId into its legs.
+    /// @param tokenId the input tokenId
+    /// @return legs an array of leg structs
+    function unwrapTokenId(uint256 tokenId) public view returns (Leg[] memory) {
+        uint256 numLegs = tokenId.countLegs();
+        Leg[] memory legs = new Leg[](numLegs);
+
+        uint64 poolId = tokenId.validate();
+        address UniswapV3Pool = address(SFPM.getUniswapV3PoolFromId(tokenId.univ3pool()));
+        for (uint256 i = 0; i < numLegs; ++i) {
+            legs[i].poolId = poolId;
+            legs[i].UniswapV3Pool = UniswapV3Pool;
+            legs[i].asset = tokenId.asset(i);
+            legs[i].optionRatio = tokenId.optionRatio(i);
+            legs[i].tokenType = tokenId.tokenType(i);
+            legs[i].isLong = tokenId.isLong(i);
+            legs[i].riskPartner = tokenId.riskPartner(i);
+            legs[i].strike = tokenId.strike(i);
+            legs[i].width = tokenId.width(i);
+        }
+        return legs;
     }
 
     /// @notice Returns an estimate of the downside liquidation price for a given account on a given pool.
