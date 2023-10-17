@@ -615,7 +615,7 @@ contract PanopticPoolTest is PositionUtils {
         uint256 ETHValue = isWETH == 0
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
     }
 
@@ -768,21 +768,6 @@ contract PanopticPoolTest is PositionUtils {
                     -int128(expectedLiqs[2])
                 )
         );
-
-        // ensure second leg is sufficiently large
-        (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
-            currentSqrtPriceX96,
-            sqrtLowers[0],
-            sqrtUppers[0],
-            expectedLiqs[1]
-        );
-        uint256 priceX128 = FullMath.mulDiv(currentSqrtPriceX96, currentSqrtPriceX96, 2 ** 64);
-        // total ETH value must be >= 10 ** 15
-        uint256 ETHValue = isWETH == 0
-            ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
-            : Math.mulDiv128(amount0, priceX128) + amount1;
-        vm.assume(ETHValue >= 10 ** 15);
-        vm.assume(ETHValue <= 10 ** 22);
     }
 
     function updatePositionDataLong() public {
@@ -996,7 +981,7 @@ contract PanopticPoolTest is PositionUtils {
         uint256 ETHValue = isWETH == 0
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
 
         // ensure third leg is sufficiently large
@@ -1007,10 +992,12 @@ contract PanopticPoolTest is PositionUtils {
             expectedLiqs[2]
         );
 
-        // ETHValue = isWETH == 0 ? amount0  + FullMath.mulDiv(amount1, 2**128, priceX128) : Math.mulDiv128(amount0, priceX128) + amount1;
-        // the fuzzer doesn't seem to be able to handle the third condition here
-        // maybe it increases the difficulty too much? it will rarely and sporadically fail with this disabled
-        vm.assume(ETHValue >= 10 ** 15);
+        // total ETH value must be >= 10 ** 15
+        ETHValue = isWETH == 0
+            ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
+            : Math.mulDiv128(amount0, priceX128) + amount1;
+        vm.assume(ETHValue >= 10 ** 13);
+        vm.assume(ETHValue <= 10 ** 22);
     }
 
     function populatePositionData(
@@ -1102,7 +1089,7 @@ contract PanopticPoolTest is PositionUtils {
         uint256 ETHValue = isWETH == 0
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
 
         // ensure third leg is sufficiently large
@@ -1112,8 +1099,11 @@ contract PanopticPoolTest is PositionUtils {
             sqrtUppers[2],
             expectedLiqs[2]
         );
+        ETHValue = isWETH == 0
+            ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
+            : Math.mulDiv128(amount0, priceX128) + amount1;
 
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
 
         // ensure fourth leg is sufficiently large
@@ -1123,8 +1113,11 @@ contract PanopticPoolTest is PositionUtils {
             sqrtUppers[3],
             expectedLiqs[3]
         );
+        ETHValue = isWETH == 0
+            ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
+            : Math.mulDiv128(amount0, priceX128) + amount1;
 
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
     }
 
