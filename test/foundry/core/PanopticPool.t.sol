@@ -2451,10 +2451,8 @@ contract PanopticPoolTest is PositionUtils {
         // call leg
         tokenId = tokenId.addLeg(1, 1, isWETH, 0, 0, 1, strike1, width1);
 
-        int256 netSurplus0 = $amount0Moveds[0] +
+        int256 netSurplus0 = $amount0Moveds[0] -
             PanopticMath.convert1to0($amount1Moveds[1], currentSqrtPriceX96);
-        int256 netSurplus1 = $amount1Moveds[1] +
-            PanopticMath.convert0to1($amount0Moveds[0], currentSqrtPriceX96);
 
         (int256 amount0s, int256 amount1s) = PositionUtils.simulateSwap(
             pool,
@@ -2465,8 +2463,8 @@ contract PanopticPoolTest is PositionUtils {
             token0,
             token1,
             fee,
-            netSurplus1 < netSurplus0,
-            netSurplus1 < netSurplus0 ? netSurplus0 : netSurplus1
+            netSurplus0 < 0,
+            -netSurplus0
         );
 
         changePrank(Alice);
@@ -2630,10 +2628,8 @@ contract PanopticPoolTest is PositionUtils {
         (currentSqrtPriceX96, , , , , , ) = pool.slot0();
         updatePositionDataLong();
 
-        int256 netSurplus0 = $amount0Moveds[1] +
+        int256 netSurplus0 = $amount0Moveds[1] -
             PanopticMath.convert1to0($amount1Moveds[2], currentSqrtPriceX96);
-        int256 netSurplus1 = $amount1Moveds[2] +
-            PanopticMath.convert0to1($amount0Moveds[1], currentSqrtPriceX96);
 
         changePrank(address(sfpm));
         (int256 amount0s, int256 amount1s) = PositionUtils.simulateSwapLong(
@@ -2645,8 +2641,8 @@ contract PanopticPoolTest is PositionUtils {
             token0,
             token1,
             fee,
-            netSurplus1 < netSurplus0,
-            netSurplus1 < netSurplus0 ? netSurplus0 : netSurplus1
+            netSurplus0 < 0,
+            -netSurplus0
         );
 
         changePrank(Alice);
