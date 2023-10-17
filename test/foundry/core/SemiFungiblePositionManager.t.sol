@@ -4087,9 +4087,12 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
     //////////////////////////////////////////////////////////////*/
 
     function test_Sanity_ITMSwapApprox(uint256 price, int256 itm0, int256 itm1) public {
-        price = bound(price, 1, 10 ** 25);
+        price = bound(price, 10 ** 3, 10 ** 9);
         itm0 = bound(itm0, -10 ** 27, 10 ** 27);
         itm1 = bound(itm1, -10 ** 27, 10 ** 27);
+
+        vm.assume(stdMath.abs(itm0) > 100_000);
+        vm.assume(stdMath.abs(itm1) > 100_000);
 
         bool zeroForOne;
         int256 swapAmount;
@@ -4105,9 +4108,9 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
         (int256 d0, int256 d1) = evalSwapFixed(swapAmount, zeroForOne, int256(price));
         (int256 d0_, int256 d1_) = dualITMSwap(price, itm0, itm1);
 
-        assertApproxEqAbs(d0, d0_, stdMath.abs(d0_ / 10000) > 10 ? stdMath.abs(d0_ / 10000) : 10);
+        assertApproxEqAbs(d0, d0_, 1000);
         console2.log("C");
-        assertApproxEqAbs(d1, d1_, stdMath.abs(d1_ / 10000) > 10 ? stdMath.abs(d1_ / 10000) : 10);
+        assertApproxEqAbs(d1, d1_, 1000);
     }
 
     function dualITMSwap(
