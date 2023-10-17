@@ -17,7 +17,6 @@ contract PanopticHelper {
     using TokenId for uint256;
 
     SemiFungiblePositionManager immutable SFPM;
-
     struct Leg {
         uint64 poolId;
         address UniswapV3Pool;
@@ -75,13 +74,14 @@ contract PanopticHelper {
     }
 
     /// @notice Compute the collateral requirement of a given tokenId at the given tick
-    /// @param pool The PanopticPool instance to check collateral on
+    /// @param tokenId The tokenId to check collateral requirement for
     /// @param positionSize the size of the new position
     /// @param atTick At what price is the collateral requirement evaluated at
     /// @return requiredCollateral0 The collateral requirement for token0
     /// @return requiredCollateral1 The collateral requirement for token0
     function computeCollateralRequirement(
         PanopticPool pool,
+        uint256 tokenId,
         uint128 positionSize,
         int24 atTick
     ) public view returns (uint256 requiredCollateral0, uint256 requiredCollateral1) {
@@ -107,17 +107,18 @@ contract PanopticHelper {
     /// @return requiredCollateralITM1 The collateral requirement for token0
     function computeCollateralRequirementITM(
         PanopticPool pool,
+        uint256 tokenId,
         uint128 positionSize,
         int24 atTick
     ) public view returns (uint256 requiredCollateralITM0, uint256 requiredCollateralITM1) {
         // Query the required collateral amounts for the two tokens
-        requiredCollateralITM0 = pool.collateralToken0().getITMPositionCollateralRequirement(
+        (requiredCollateralITM0, ) = pool.collateralToken0().getITMPositionCollateralRequirement(
             tokenId,
             positionSize,
             atTick
         );
         // Query the required collateral amounts for the two tokens
-        requiredCollateralITM1 = pool.collateralToken1().getITMPositionCollateralRequirement(
+        (requiredCollateralITM1, ) = pool.collateralToken1().getITMPositionCollateralRequirement(
             tokenId,
             positionSize,
             atTick
