@@ -958,7 +958,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        _mockMaxDeposit(bob);
+        collateralToken0.deposit(amount, bob);
+        collateralToken1.deposit(amount, bob);
 
         changePrank(alice);
 
@@ -1252,7 +1253,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        _mockMaxDeposit(bob);
+        collateralToken0.deposit(assets, bob);
+        collateralToken1.deposit(assets, bob);
 
         // check delegatee balance before
         uint256 sharesBefore0 = collateralToken0.balanceOf(bob);
@@ -1300,7 +1302,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             // deposit a number of assets determined via fuzzing
             // equal deposits for both collateral token pairs for testing purposes
-            _mockMaxDeposit(bob);
+            collateralToken0.deposit(uint128(assetsToken0), alice);
+            collateralToken1.deposit(uint128(assetsToken1), alice);
         }
 
         // check delegator balance before
@@ -1347,7 +1350,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // deposit a number of assets determined via fuzzing
         // equal deposits for both collateral token pairs for testing purposes
-        _mockMaxDeposit(bob);
+        collateralToken0.deposit(uint128(assetsToken0), alice);
+        collateralToken1.deposit(uint128(assetsToken1), alice);
 
         // check delegatee balance before
         uint256 sharesBefore0 = collateralToken0.balanceOf(alice);
@@ -1426,7 +1430,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // give alice the max amount of tokens
             _grantTokens(alice);
 
-            _mockMaxDeposit(alice);
+            collateralToken0.deposit(positionSize0, alice);
+            collateralToken1.deposit(positionSize0, alice);
 
             // long put
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
@@ -1529,6 +1534,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // long put
             tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
             positionIdList1.push(tokenId1);
+            _assumePositionValidity(alice, tokenId1, positionSize0 / 2);
 
             panopticPool.mintOptions(
                 positionIdList1,
@@ -1555,7 +1561,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             0,
             twapTick,
             0,
-            -type(int96).max
+            -type(int120).max
         );
 
         (int256 bonusAmounts1, uint256 tokenData1) = collateralToken1.computeBonus(
@@ -1564,7 +1570,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenData0,
             twapTick,
             0,
-            -type(int96).max
+            -type(int120).max
         );
 
         // verify premia and bonus amounts
