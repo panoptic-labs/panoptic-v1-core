@@ -33,6 +33,26 @@ contract PanopticHelper {
     uint256 RISK_PARTNER_RESET_MASK =
         0xFFFFFFFFF3FFFFFFFFFFF3FFFFFFFFFFF3FFFFFFFFFFF3FFFFFFFFFFFFFFFFFF;
 
+    // two legs
+    uint256[16] internal riskPartners = [
+        0x4000000000000000000000000000000,
+        0x4000000000000000000,
+        0x8000000000004000000000000000000000000000000,
+        0x4000000000008000000000000000000000000000000,
+        0x8000000000000000000000004000000000000000000,
+        0x4000000000008000000000000000000,
+        0xc000000000008000000000004000000000000000000000000000000,
+        0xc000000000004000000000008000000000000000000000000000000,
+        0x400000000000800000000000c000000000000000000000000000000,
+        0x800000000000c000000000004000000000000000000000000000000,
+        0xc000000000008000000000000000000000004000000000000000000,
+        0x800000000000c000000000000000000000004000000000000000000,
+        0xc000000000000000000000004000000000008000000000000000000,
+        0x400000000000000000000000c000000000008000000000000000000,
+        0x800000000000400000000000c000000000000000000,
+        0x400000000000800000000000c000000000000000000
+    ];
+
     /// @notice Construct the PanopticHelper contract
     /// @param _SFPM address of the SemiFungiblePositionManager
     /// @dev the SFPM is used to get the pool ID for a given address
@@ -134,42 +154,71 @@ contract PanopticHelper {
         uint256 tokenId,
         int24 atTick
     ) public view returns (uint256) {
-        (uint256 requiredCollateral0, uint256 requiredCollateral1) = computeCollateralRequirement(
-            pool,
-            tokenId,
-            1e18,
-            atTick
-        );
         uint160 sqrtPrice = Math.getSqrtRatioAtTick(atTick);
-        uint256 totalRequired = PanopticMath.convert0to1(requiredCollateral0, sqrtPrice) +
-            requiredCollateral1;
 
         uint256 numLegs = tokenId.countLegs();
         if (numLegs == 1) {
             return tokenId;
         }
-        if (numLegs == 2) {
-            if (
-                (tokenId.asset(0) == tokenId.asset(1)) &&
-                (tokenId.optionRatio(0) == tokenId.optionRatio(1))
-            ) {
-                uint256 newTokenId = (tokenId & RISK_PARTNER_RESET_MASK)
-                    .addRiskPartner(1, 0)
-                    .addRiskPartner(0, 1);
+        uint256 totalRequired = type(uint256).max;
+        uint256 offset = numLegs ** 2 - 3 * numLegs + 2;
+        uint256 newTokenId;
+        for (uint256 i = offset; i < (offset + numLegs); ++i) {
+            uint256 _tokenId = (tokenId & RISK_PARTNER_RESET_MASK) + riskPartners[i];
+            if (validatePartners(_tokenId)) {
                 (
                     uint256 newRequiredCollateral0,
                     uint256 newRequiredCollateral1
-                ) = computeCollateralRequirement(pool, newTokenId, 1e18, atTick);
-                uint256 newRequired = PanopticMath.convert0to1(requiredCollateral0, sqrtPrice) +
-                    requiredCollateral1;
+                ) = computeCollateralRequirement(pool, _tokenId, 1e18, atTick);
+                uint256 newRequired = PanopticMath.convert0to1(newRequiredCollateral0, sqrtPrice) +
+                    newRequiredCollateral1;
 
                 if (newRequired < totalRequired) {
-                    return newTokenId;
-                } else {
-                    return tokenId;
+                    totalRequired = newRequired;
+                    newTokenId = _tokenId;
                 }
             }
         }
+        return newTokenId;
+    }
+
+    function validatePartners(uint256 self) internal pure returns (bool) {
+        for (uint256 i = 0; i < 4; ++i) {
+            if (self.optionRatio(i) == 0) {
+                return true;
+            }
+            // In the following, we check whether the risk partner of this leg is itself
+            // or another leg in this position.
+            // Handles case where riskPartner(i) != i ==> leg i has a risk partner that is another leg
+            uint256 riskPartnerIndex = self.riskPartner(i);
+            if (riskPartnerIndex != i) {
+                // Ensures that risk partners are mutual
+                if (self.riskPartner(riskPartnerIndex) != i) return false;
+
+                // Ensures that risk partners have 1) the same asset, and 2) the same ratio
+                if (
+                    (self.asset(riskPartnerIndex) != self.asset(i)) ||
+                    (self.optionRatio(riskPartnerIndex) != self.optionRatio(i))
+                ) return false;
+
+                // long/short status of associated legs
+                uint256 isLong = self.isLong(i);
+                uint256 isLongP = self.isLong(riskPartnerIndex);
+
+                // token type status of associated legs (call/put)
+                uint256 tokenType = self.tokenType(i);
+                uint256 tokenTypeP = self.tokenType(riskPartnerIndex);
+
+                // if the position is the same i.e both long calls, short put's etc.
+                // then this is a regular position, not a defined risk position
+                if ((isLong == isLongP) && (tokenType == tokenTypeP)) return false;
+
+                // if the two token long-types and the tokenTypes are both different (one is a short call, the other a long put, e.g.), this is a synthetic position
+                // A synthetic long or short is more capital efficient than each leg separated because the long+short premia accumulate proportionally
+                if ((isLong != isLongP) && (tokenType != tokenTypeP)) return false;
+            }
+        }
+        return true;
     }
 
     /// @notice Returns the net assets (balance - maintenance margin) of a given account on a given pool.
