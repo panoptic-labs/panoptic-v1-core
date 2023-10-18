@@ -1619,6 +1619,17 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         feesBase1 = feesBase.leftSlot();
     }
 
+    /// @notice Returns the Uniswap v3 pool for a given poolId.
+    /// @dev poolId is typically the first 8 bytes of the uni v3 pool address
+    /// @dev But poolId can be different for first 8 bytes if there is a collision between Uni v3 pool addresses
+    /// @param poolId The poolId for a Uni v3 pool
+    /// @return UniswapV3Pool The unique poolId for that Uni v3 pool
+    function getUniswapV3PoolFromId(
+        uint64 poolId
+    ) external view returns (IUniswapV3Pool UniswapV3Pool) {
+        return s_poolContext[poolId].pool;
+    }
+
     /// @notice Returns the poolId for a given Uniswap v3 pool.
     /// @dev poolId is typically the first 8 bytes of the uni v3 pool address
     /// @dev But poolId can be different for first 8 bytes if there is a collision between Uni v3 pool addresses
