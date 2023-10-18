@@ -4105,7 +4105,6 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
         (int256 d0_, int256 d1_) = dualITMSwap(price, itm0, itm1);
 
         assertApproxEqAbs(d0, d0_, 1000);
-        console2.log("C");
         assertApproxEqAbs(d1, d1_, 1000);
     }
 
@@ -4129,10 +4128,6 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
         bool zeroForOne,
         int256 price
     ) internal pure returns (int256 d0, int256 d1) {
-        console2.log("swap...");
-        console2.log("amount", swapAmount);
-        console2.log("zeroForOne", zeroForOne);
-        console2.log("price", price / 10 ** 6);
         if (zeroForOne) {
             d0 = -(swapAmount > 0 ? swapAmount : (-swapAmount * 10 ** 6) / price);
             d1 = swapAmount > 0 ? (swapAmount * price) / 10 ** 6 : -swapAmount;
@@ -4140,7 +4135,5 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
             d0 = swapAmount > 0 ? (swapAmount * 10 ** 6) / price : -swapAmount;
             d1 = -(swapAmount > 0 ? swapAmount : (-swapAmount * price) / 10 ** 6);
         }
-        console2.log("d0", d0);
-        console2.log("d1", d1);
     }
 }

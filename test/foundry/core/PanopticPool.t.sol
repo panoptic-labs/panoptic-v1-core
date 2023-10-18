@@ -5018,11 +5018,6 @@ contract PanopticPoolTest is PositionUtils {
             expectedArray[8] = int24(pokeTicks[i]);
             (priceArray, medianTick) = pp.getPriceArray();
             for (uint256 j = 0; j < 8; ++j) {
-                console2.log(expectedArray[j]);
-                console2.log(expectedArray[j + 1]);
-                console2.log(priceArray[j]);
-                console2.log(block.timestamp);
-                console2.log(lastTimestamp);
                 // only shift array if an update occured, i.e more than 60 seconds passed since the last update
                 expectedArray[j] = block.timestamp >= lastTimestamp + 60
                     ? expectedArray[j + 1]
