@@ -1234,12 +1234,8 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         /// so that the net different is always positive.
         /// So by using int128 instead of uint128, we remove the need to handle extremely large underflows and simply allow it to be negative
         feesBase = int256(0)
-            .toRightSlot(
-                int128(int256(Math.mulDiv(feeGrowthInside0LastX128, liquidity, Constants.FP128)))
-            )
-            .toLeftSlot(
-                int128(int256(Math.mulDiv(feeGrowthInside1LastX128, liquidity, Constants.FP128)))
-            );
+            .toRightSlot(int128(int256(Math.mulDiv128(feeGrowthInside0LastX128, liquidity))))
+            .toLeftSlot(int128(int256(Math.mulDiv128(feeGrowthInside1LastX128, liquidity))));
     }
 
     /// @notice Mint a chunk of liquidity (`liquidityChunk`) in the Uniswap v3 pool; return the amount moved.
@@ -1614,6 +1610,17 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         ];
         feesBase0 = feesBase.rightSlot();
         feesBase1 = feesBase.leftSlot();
+    }
+
+    /// @notice Returns the Uniswap v3 pool for a given poolId.
+    /// @dev poolId is typically the first 8 bytes of the uni v3 pool address
+    /// @dev But poolId can be different for first 8 bytes if there is a collision between Uni v3 pool addresses
+    /// @param poolId The poolId for a Uni v3 pool
+    /// @return UniswapV3Pool The unique poolId for that Uni v3 pool
+    function getUniswapV3PoolFromId(
+        uint64 poolId
+    ) external view returns (IUniswapV3Pool UniswapV3Pool) {
+        return s_poolContext[poolId].pool;
     }
 
     /// @notice Returns the poolId for a given Uniswap v3 pool.

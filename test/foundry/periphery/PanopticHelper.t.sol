@@ -63,7 +63,6 @@ contract PanopticHelperTest is PositionUtils {
     using LeftRight for int256;
     using LeftRight for uint128;
     using LiquidityChunk for uint256;
-
     /*//////////////////////////////////////////////////////////////
                            MAINNET CONTRACTS
     //////////////////////////////////////////////////////////////*/
@@ -453,6 +452,476 @@ contract PanopticHelperTest is PositionUtils {
         );
     }
 
+    /// forge-config: default.fuzz.runs = 500
+    function test_Success_wrapUnwrapTokenIds_1Leg(
+        uint256 x,
+        int24 width,
+        int24 strike,
+        bool isLong,
+        uint8 optionRatio,
+        bool tokenType,
+        bool asset
+    ) public {
+        _initPool(x);
+
+        width = int24(bound(width, 1, 2 ** 11 - 1) * 2);
+        strike = (strike / pool.tickSpacing()) * pool.tickSpacing();
+
+        optionRatio = uint8(bound(optionRatio, uint8(1), uint8(2 ** 7 - 1)));
+
+        uint256 tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+            0,
+            optionRatio,
+            asset ? 1 : 0,
+            isLong ? 1 : 0,
+            tokenType ? 1 : 0,
+            0,
+            strike,
+            width
+        );
+        tokenId.validate();
+
+        PanopticHelper.Leg memory inputLeg = PanopticHelper.Leg({
+            poolId: poolId,
+            UniswapV3Pool: address(pool),
+            optionRatio: optionRatio,
+            asset: asset ? 1 : 0,
+            isLong: isLong ? 1 : 0,
+            tokenType: tokenType ? 1 : 0,
+            riskPartner: 0,
+            strike: strike,
+            width: width
+        });
+
+        uint256 keccakIn = uint256(keccak256(abi.encode(inputLeg)));
+
+        PanopticHelper.Leg[] memory unwrappedLeg = ph.unwrapTokenId(tokenId);
+        uint256 keccakOut = uint256(keccak256(abi.encode(unwrappedLeg[0])));
+
+        assertEq(keccakIn, keccakOut);
+    }
+
+    /// forge-config: default.fuzz.runs = 5
+    function test_Success_wrapUnwrapTokenIds_2LegsSpread(
+        uint256 x,
+        int24 width,
+        int24 strike1,
+        int24 strike2,
+        bool isLong,
+        uint8 optionRatio,
+        bool tokenType
+    ) public {
+        _initPool(x);
+
+        width = int24(bound(width, 1, 2 ** 11 - 1) * 2);
+        strike1 = (strike1 / pool.tickSpacing()) * pool.tickSpacing();
+        strike2 = (strike2 / pool.tickSpacing()) * pool.tickSpacing();
+
+        optionRatio = uint8(bound(optionRatio, uint8(1), uint8(2 ** 7 - 1)));
+
+        uint256 long = isLong ? 1 : 0;
+        uint256 tt = tokenType ? 1 : 0;
+        uint256 tokenId = uint256(0).addUniv3pool(poolId);
+
+        {
+            tokenId = tokenId.addOptionRatio(optionRatio, 0);
+            tokenId = tokenId.addIsLong(long, 0);
+            tokenId = tokenId.addTokenType(tt, 0);
+            tokenId = tokenId.addStrike(strike1, 0);
+            tokenId = tokenId.addWidth(width, 0);
+            tokenId = tokenId.addRiskPartner(1, 0);
+        }
+        {
+            tokenId = tokenId.addOptionRatio(optionRatio, 1);
+            tokenId = tokenId.addIsLong(1 - long, 1);
+            tokenId = tokenId.addTokenType(tt, 1);
+            tokenId = tokenId.addStrike(strike2, 1);
+            tokenId = tokenId.addWidth(width, 1);
+        }
+        tokenId.validate();
+        PanopticHelper.Leg[2] memory inputLeg;
+        inputLeg[0] = PanopticHelper.Leg({
+            poolId: poolId,
+            UniswapV3Pool: address(pool),
+            optionRatio: optionRatio,
+            asset: 0,
+            isLong: long,
+            tokenType: tt,
+            riskPartner: 1,
+            strike: strike1,
+            width: width
+        });
+        inputLeg[1] = PanopticHelper.Leg({
+            poolId: poolId,
+            UniswapV3Pool: address(pool),
+            optionRatio: optionRatio,
+            asset: 0,
+            isLong: 1 - long,
+            tokenType: tt,
+            riskPartner: 0,
+            strike: strike2,
+            width: width
+        });
+
+        uint256 keccakIn = uint256(keccak256(abi.encode(inputLeg)));
+
+        PanopticHelper.Leg[] memory unwrappedLeg = ph.unwrapTokenId(tokenId);
+        PanopticHelper.Leg[2] memory outputLeg;
+        outputLeg[0] = unwrappedLeg[0];
+        outputLeg[1] = unwrappedLeg[1];
+        uint256 keccakOut = uint256(keccak256(abi.encode(outputLeg)));
+
+        assertEq(keccakIn, keccakOut);
+    }
+
+    /// forge-config: default.fuzz.runs = 100
+    function test_Success_wrapUnwrapTokenIds_multiLegsNoPartners(uint256 x, uint256 seed) public {
+        _initPool(x);
+
+        uint256 numberOfLegs = uint256((seed % 4) + 1);
+        PanopticHelper.Leg[] memory inputLeg = new PanopticHelper.Leg[](numberOfLegs);
+
+        uint256 tokenId = uint256(0).addUniv3pool(poolId);
+
+        for (uint256 i; i < numberOfLegs; ++i) {
+            // update seed
+            seed = uint256(keccak256(abi.encode(seed)));
+
+            // add optionRatio
+            uint256 optionRatio = uint256(seed % 2 ** 7);
+            optionRatio = optionRatio == 0 ? 1 : optionRatio;
+            tokenId = tokenId.addOptionRatio(optionRatio, i);
+
+            // add tokenType
+            uint256 tokenType = uint256((seed >> 7) % 2);
+            tokenId = tokenId.addTokenType(tokenType, i);
+
+            // add isLong
+            uint256 isLong = uint256((seed >> 8) % 2);
+            tokenId = tokenId.addIsLong(isLong, i);
+
+            // add asset
+            uint256 asset = uint256((seed >> 9) % 2);
+            tokenId = tokenId.addAsset(asset, i);
+
+            // add riskPartner
+            tokenId = tokenId.addRiskPartner(i, i);
+
+            // add strike
+            uint256 strikeTemp = uint256((seed >> 10) % 2 ** 20);
+            uint256 strikeSign = uint256((seed >> 30) % 2);
+            int24 strike = strikeTemp > 887272
+                ? int24(uint24(strikeTemp / 2))
+                : int24(uint24(strikeTemp));
+            strike = strikeSign == 0 ? -strike : strike;
+            strike = (strike / pool.tickSpacing()) * pool.tickSpacing();
+            tokenId = tokenId.addStrike(strike, i);
+
+            // add width
+            int24 width = int24(uint24(uint256((seed >> 31) % 2 ** 12)));
+            width = (width / 2) * 2;
+            width = width == 0 ? int24(2) : width;
+            tokenId = tokenId.addWidth(width, i);
+
+            // add to input array of legs
+            PanopticHelper.Leg memory _Leg = PanopticHelper.Leg({
+                poolId: poolId,
+                UniswapV3Pool: address(pool),
+                optionRatio: optionRatio,
+                asset: asset,
+                isLong: isLong,
+                tokenType: tokenType,
+                riskPartner: i,
+                strike: strike,
+                width: width
+            });
+            inputLeg[i] = _Leg;
+        }
+        tokenId.validate();
+
+        PanopticHelper.Leg[] memory unwrappedLeg = ph.unwrapTokenId(tokenId);
+
+        uint256 keccakIn = uint256(keccak256(abi.encode(inputLeg)));
+
+        uint256 keccakOut = uint256(keccak256(abi.encode(unwrappedLeg)));
+
+        assertEq(keccakIn, keccakOut);
+    }
+
+    /// forge-config: default.fuzz.runs = 100
+    function test_Success_wrapUnwrapTokenIds_multiLegsWithPartners_Spreads(
+        uint256 x,
+        uint256 seed
+    ) public {
+        _initPool(x);
+
+        uint256 numberOfLegs = 4;
+
+        PanopticHelper.Leg[] memory inputLeg = new PanopticHelper.Leg[](numberOfLegs);
+
+        uint256[10] memory riskArray;
+        riskArray[0] = uint256(0)
+            .addRiskPartner(0, 0)
+            .addRiskPartner(1, 1)
+            .addRiskPartner(2, 2)
+            .addRiskPartner(3, 3);
+        riskArray[1] = uint256(0)
+            .addRiskPartner(0, 0)
+            .addRiskPartner(2, 1)
+            .addRiskPartner(1, 2)
+            .addRiskPartner(3, 3);
+        riskArray[2] = uint256(0)
+            .addRiskPartner(0, 0)
+            .addRiskPartner(3, 1)
+            .addRiskPartner(2, 2)
+            .addRiskPartner(1, 3);
+        riskArray[3] = uint256(0)
+            .addRiskPartner(0, 0)
+            .addRiskPartner(1, 1)
+            .addRiskPartner(3, 2)
+            .addRiskPartner(2, 3);
+        riskArray[4] = uint256(0)
+            .addRiskPartner(1, 0)
+            .addRiskPartner(0, 1)
+            .addRiskPartner(2, 2)
+            .addRiskPartner(3, 3);
+        riskArray[5] = uint256(0)
+            .addRiskPartner(1, 0)
+            .addRiskPartner(0, 1)
+            .addRiskPartner(3, 2)
+            .addRiskPartner(2, 3);
+        riskArray[6] = uint256(0)
+            .addRiskPartner(2, 0)
+            .addRiskPartner(1, 1)
+            .addRiskPartner(0, 2)
+            .addRiskPartner(3, 3);
+        riskArray[7] = uint256(0)
+            .addRiskPartner(2, 0)
+            .addRiskPartner(3, 1)
+            .addRiskPartner(0, 2)
+            .addRiskPartner(1, 3);
+        riskArray[8] = uint256(0)
+            .addRiskPartner(3, 0)
+            .addRiskPartner(1, 1)
+            .addRiskPartner(2, 2)
+            .addRiskPartner(0, 3);
+        riskArray[9] = uint256(0)
+            .addRiskPartner(3, 0)
+            .addRiskPartner(2, 1)
+            .addRiskPartner(1, 2)
+            .addRiskPartner(0, 3);
+
+        uint256[10] memory isLongArray; // first of the partered leg is long, the rest are not
+        isLongArray[0] = uint256(0);
+        isLongArray[1] = uint256(0).addIsLong(1, 1);
+        isLongArray[2] = uint256(0).addIsLong(1, 1);
+        isLongArray[3] = uint256(0).addIsLong(1, 2);
+        isLongArray[4] = uint256(0).addIsLong(1, 0);
+        isLongArray[5] = uint256(0).addIsLong(1, 0).addIsLong(1, 2);
+        isLongArray[6] = uint256(0).addIsLong(1, 0);
+        isLongArray[7] = uint256(0).addIsLong(1, 0).addIsLong(1, 1);
+        isLongArray[8] = uint256(0).addIsLong(1, 0);
+        isLongArray[9] = uint256(0).addIsLong(1, 0).addIsLong(1, 1);
+
+        uint256 riskPreset = uint256(keccak256(abi.encode(seed))) % 10;
+        uint256 tokenId = riskArray[riskPreset].addUniv3pool(poolId) + isLongArray[riskPreset];
+
+        uint256 optionRatio = uint256(seed % 2 ** 7);
+        optionRatio = optionRatio == 0 ? 1 : optionRatio;
+
+        uint256 tokenType = uint256((seed >> 7) % 2);
+        int24 width = int24(uint24(uint256((seed >> 31) % 2 ** 12)));
+        width = (width / 2) * 2;
+        width = width == 0 ? int24(2) : width;
+        uint256 asset = uint256((seed >> 9) % 2);
+
+        for (uint256 i; i < numberOfLegs; ++i) {
+            // update seed
+            seed = uint256(keccak256(abi.encode(seed)));
+
+            // add optionRatio
+            tokenId = tokenId.addOptionRatio(optionRatio, i);
+
+            // add tokenType
+            tokenId = tokenId.addTokenType(tokenType, i);
+
+            // add asset
+            tokenId = tokenId.addAsset(asset, i);
+
+            // add strike
+            uint256 strikeTemp = uint256((seed >> 10) % 2 ** 20);
+            uint256 strikeSign = uint256((seed >> 30) % 2);
+            int24 strike = strikeTemp > 887272
+                ? int24(uint24(strikeTemp / 2))
+                : int24(uint24(strikeTemp));
+            strike = strikeSign == 0 ? -strike : strike;
+            strike = (strike / pool.tickSpacing()) * pool.tickSpacing();
+            tokenId = tokenId.addStrike(strike, i);
+
+            // add width
+            tokenId = tokenId.addWidth(width, i);
+
+            // add to input array of legs
+            PanopticHelper.Leg memory _Leg = PanopticHelper.Leg({
+                poolId: poolId,
+                UniswapV3Pool: address(pool),
+                optionRatio: optionRatio,
+                asset: asset,
+                isLong: tokenId.isLong(i),
+                tokenType: tokenType,
+                riskPartner: tokenId.riskPartner(i),
+                strike: strike,
+                width: width
+            });
+            inputLeg[i] = _Leg;
+        }
+        tokenId.validate();
+        PanopticHelper.Leg[] memory unwrappedLeg = ph.unwrapTokenId(tokenId);
+
+        uint256 keccakIn = uint256(keccak256(abi.encode(inputLeg)));
+
+        uint256 keccakOut = uint256(keccak256(abi.encode(unwrappedLeg)));
+
+        assertEq(keccakIn, keccakOut);
+    }
+
+    /// forge-config: default.fuzz.runs = 100
+    function test_Success_wrapUnwrapTokenIds_multiLegsWithPartners_Strangles(
+        uint256 x,
+        uint256 seed
+    ) public {
+        _initPool(x);
+
+        uint256 numberOfLegs = 4;
+
+        PanopticHelper.Leg[] memory inputLeg = new PanopticHelper.Leg[](numberOfLegs);
+
+        uint256[10] memory riskArray;
+        riskArray[0] = uint256(0)
+            .addRiskPartner(0, 0)
+            .addRiskPartner(1, 1)
+            .addRiskPartner(2, 2)
+            .addRiskPartner(3, 3);
+        riskArray[1] = uint256(0)
+            .addRiskPartner(0, 0)
+            .addRiskPartner(2, 1)
+            .addRiskPartner(1, 2)
+            .addRiskPartner(3, 3);
+        riskArray[2] = uint256(0)
+            .addRiskPartner(0, 0)
+            .addRiskPartner(3, 1)
+            .addRiskPartner(2, 2)
+            .addRiskPartner(1, 3);
+        riskArray[3] = uint256(0)
+            .addRiskPartner(0, 0)
+            .addRiskPartner(1, 1)
+            .addRiskPartner(3, 2)
+            .addRiskPartner(2, 3);
+        riskArray[4] = uint256(0)
+            .addRiskPartner(1, 0)
+            .addRiskPartner(0, 1)
+            .addRiskPartner(2, 2)
+            .addRiskPartner(3, 3);
+        riskArray[5] = uint256(0)
+            .addRiskPartner(1, 0)
+            .addRiskPartner(0, 1)
+            .addRiskPartner(3, 2)
+            .addRiskPartner(2, 3);
+        riskArray[6] = uint256(0)
+            .addRiskPartner(2, 0)
+            .addRiskPartner(1, 1)
+            .addRiskPartner(0, 2)
+            .addRiskPartner(3, 3);
+        riskArray[7] = uint256(0)
+            .addRiskPartner(2, 0)
+            .addRiskPartner(3, 1)
+            .addRiskPartner(0, 2)
+            .addRiskPartner(1, 3);
+        riskArray[8] = uint256(0)
+            .addRiskPartner(3, 0)
+            .addRiskPartner(1, 1)
+            .addRiskPartner(2, 2)
+            .addRiskPartner(0, 3);
+        riskArray[9] = uint256(0)
+            .addRiskPartner(3, 0)
+            .addRiskPartner(2, 1)
+            .addRiskPartner(1, 2)
+            .addRiskPartner(0, 3);
+
+        uint256[10] memory tokenTypeArray; // first of the partered leg is 1, the other are 0
+        tokenTypeArray[0] = uint256(0);
+        tokenTypeArray[1] = uint256(0).addTokenType(1, 1);
+        tokenTypeArray[2] = uint256(0).addTokenType(1, 1);
+        tokenTypeArray[3] = uint256(0).addTokenType(1, 2);
+        tokenTypeArray[4] = uint256(0).addTokenType(1, 0);
+        tokenTypeArray[5] = uint256(0).addTokenType(1, 0).addTokenType(1, 2);
+        tokenTypeArray[6] = uint256(0).addTokenType(1, 0);
+        tokenTypeArray[7] = uint256(0).addTokenType(1, 0).addTokenType(1, 1);
+        tokenTypeArray[8] = uint256(0).addTokenType(1, 0);
+        tokenTypeArray[9] = uint256(0).addTokenType(1, 0).addTokenType(1, 1);
+
+        uint256 riskPreset = uint256(keccak256(abi.encode(seed))) % 10;
+        uint256 tokenId = riskArray[riskPreset].addUniv3pool(poolId) + tokenTypeArray[riskPreset];
+
+        uint256 optionRatio = uint256(seed % 2 ** 7);
+        optionRatio = optionRatio == 0 ? 1 : optionRatio;
+
+        uint256 isLong = uint256((seed >> 7) % 2);
+        int24 width = int24(uint24(uint256((seed >> 31) % 2 ** 12)));
+        width = (width / 2) * 2;
+        width = width == 0 ? int24(2) : width;
+        uint256 asset = uint256((seed >> 9) % 2);
+
+        for (uint256 i; i < numberOfLegs; ++i) {
+            // update seed
+            seed = uint256(keccak256(abi.encode(seed)));
+
+            // add optionRatio
+            tokenId = tokenId.addOptionRatio(optionRatio, i);
+
+            // add isLong
+            tokenId = tokenId.addIsLong(isLong, i);
+
+            // add asset
+            tokenId = tokenId.addAsset(asset, i);
+
+            // add strike
+            uint256 strikeTemp = uint256((seed >> 10) % 2 ** 20);
+            uint256 strikeSign = uint256((seed >> 30) % 2);
+            int24 strike = strikeTemp > 887272
+                ? int24(uint24(strikeTemp / 2))
+                : int24(uint24(strikeTemp));
+            strike = strikeSign == 0 ? -strike : strike;
+            strike = (strike / pool.tickSpacing()) * pool.tickSpacing();
+            tokenId = tokenId.addStrike(strike, i);
+
+            // add width
+            tokenId = tokenId.addWidth(width, i);
+
+            // add to input array of legs
+            PanopticHelper.Leg memory _Leg = PanopticHelper.Leg({
+                poolId: poolId,
+                UniswapV3Pool: address(pool),
+                optionRatio: optionRatio,
+                asset: asset,
+                isLong: isLong,
+                tokenType: tokenId.tokenType(i),
+                riskPartner: tokenId.riskPartner(i),
+                strike: strike,
+                width: width
+            });
+            inputLeg[i] = _Leg;
+        }
+        tokenId.validate();
+        PanopticHelper.Leg[] memory unwrappedLeg = ph.unwrapTokenId(tokenId);
+
+        uint256 keccakIn = uint256(keccak256(abi.encode(inputLeg)));
+
+        uint256 keccakOut = uint256(keccak256(abi.encode(unwrappedLeg)));
+
+        assertEq(keccakIn, keccakOut);
+    }
+
     function test_Success_checkCollateral_OTMandITMShortCall(
         uint256 x,
         uint256[2] memory widthSeeds,
@@ -497,7 +966,6 @@ contract PanopticHelperTest is PositionUtils {
             $strike,
             $width
         );
-
         // leg 2
         uint256 tokenId2 = uint256(0).addUniv3pool(poolId).addLeg(
             0,
