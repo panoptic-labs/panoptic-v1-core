@@ -5176,13 +5176,13 @@ contract PanopticPoolTest is PositionUtils {
 
         twoWaySwap(swapSizeSeed);
 
-        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
-
         {
-            (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = pp
-                .calculateAccumulatedFeesBatch(Alice, $posIdList);
-            datas[3] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium0);
-            datas[4] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium1);
+            (, , uint256[2][] memory posBalanceArray) = pp.calculateAccumulatedFeesBatch(
+                Alice,
+                $posIdList
+            );
+            datas[3] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 0);
+            datas[4] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 0);
         }
         for (uint256 i = 0; i < 4; ++i) {
             datas[5] += sfpm.getAccountLiquidity(
