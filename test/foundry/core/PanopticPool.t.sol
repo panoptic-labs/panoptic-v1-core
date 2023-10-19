@@ -155,6 +155,8 @@ contract PanopticPoolTest is PositionUtils {
     uint160 sqrtLower;
     uint160 sqrtUpper;
 
+    uint256[] $posIdList;
+
     uint128 positionSize;
     uint128 positionSizeBurn;
 
@@ -5036,5 +5038,165 @@ contract PanopticPoolTest is PositionUtils {
                 lastTimestamp = block.timestamp;
             }
         }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                             SPECIAL TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    // test that minting a 4-leg position yields similar results to minting each leg individually
+    function test_Diff_4x1_1x4(
+        uint256 x,
+        uint256[4] memory isLongs,
+        uint256[4] memory tokenTypes,
+        uint256[4] memory widthSeeds,
+        int256[4] memory strikeSeeds,
+        uint256 positionSizeSeed,
+        uint256 swapSizeSeed
+    ) public {
+        _initPool(x);
+
+        int24[4] memory widths;
+        int24[4] memory strikes;
+
+        for (uint256 i = 0; i < 4; ++i) {
+            tokenTypes[i] = bound(tokenTypes[i], 0, 1);
+            isLongs[i] = bound(isLongs[i], 0, 1);
+            (widths[i], strikes[i]) = getValidSW(
+                widthSeeds[i],
+                strikeSeeds[i],
+                uint24(tickSpacing),
+                // distancing tickSpacing ensures this position stays OTM throughout this test case. ITM is tested elsewhere.
+                currentTick
+            );
+        }
+
+        populatePositionData(widths, strikes, positionSizeSeed);
+
+        // if we have long chunks we have to sell before it can be bought (let's say 2x position size for now)
+        changePrank(Seller);
+
+        uint256 tokenId = uint256(0).addUniv3pool(poolId);
+
+        for (uint256 i = 0; i < 4; ++i) {
+            if (isLongs[i] == 0) continue;
+            tokenId = tokenId.addLeg(i, 1, isWETH, 0, tokenTypes[i], i, strikes[i], widths[i]);
+        }
+
+        uint256[] memory posIdList = new uint256[](1);
+        posIdList[0] = tokenId;
+
+        // can't make an empty position
+        if (tokenId.countLegs() != 0) pp.mintOptions(posIdList, positionSize * 2, 0, 0, 0);
+
+        // setup complete
+        vm.snapshot();
+
+        // 1x4 tokendata 0, 1x4 tokendata 1, 4x1 tokendata 0, 4x1 tokendata 1, 1x4 owned liq, 4x1 owned liq
+        uint256[6] memory datas;
+
+        // mint 4-leg option
+        changePrank(Alice);
+
+        // reset tokenId so we can fill for what we're actually testing (the bought option)
+        tokenId = uint256(0).addUniv3pool(poolId);
+
+        for (uint256 i = 0; i < 4; ++i) {
+            tokenId = tokenId.addLeg(
+                i,
+                1,
+                isWETH,
+                isLongs[i],
+                tokenTypes[i],
+                i,
+                strikes[i],
+                widths[i]
+            );
+        }
+
+        posIdList[0] = tokenId;
+
+        pp.mintOptions(posIdList, positionSize, type(uint64).max, 0, 0);
+
+        twoWaySwap(swapSizeSeed);
+
+        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+        {
+            (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = pp
+                .calculateAccumulatedFeesBatch(Alice, posIdList);
+            datas[0] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium0);
+            datas[1] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium1);
+        }
+        for (uint256 i = 0; i < 4; ++i) {
+            datas[2] += sfpm.getAccountLiquidity(
+                address(pool),
+                address(pp),
+                tokenTypes[i],
+                tickLowers[i],
+                tickUppers[i]
+            );
+        }
+
+        // go back to setup state
+        vm.revertTo(0);
+
+        // now mint 4 1-leg options
+        changePrank(Alice);
+
+        for (uint256 i = 0; i < 4; ++i) {
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+                0,
+                i + 1,
+                isWETH,
+                isLongs[i],
+                tokenTypes[i],
+                0,
+                strikes[i],
+                widths[i]
+            );
+
+            $posIdList.push(tokenId);
+
+            pp.mintOptions($posIdList, positionSize / (uint128(i) + 1), type(uint64).max, 0, 0);
+        }
+
+        twoWaySwap(swapSizeSeed);
+
+        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+
+        {
+            (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = pp
+                .calculateAccumulatedFeesBatch(Alice, $posIdList);
+            datas[3] += ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium0);
+            datas[4] += ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium1);
+        }
+        for (uint256 i = 0; i < 4; ++i) {
+            datas[5] += sfpm.getAccountLiquidity(
+                address(pool),
+                address(pp),
+                tokenTypes[i],
+                tickLowers[i],
+                tickUppers[i]
+            );
+        }
+
+        // same 0 collateral req for both
+        assertApproxEqAbs(
+            datas[0].leftSlot(),
+            datas[3].leftSlot(),
+            datas[3].leftSlot() > datas[0].leftSlot()
+                ? datas[3].leftSlot() / 100
+                : datas[0].leftSlot() / 100
+        );
+        // same 1 collateral req for both
+        assertApproxEqAbs(
+            datas[1].leftSlot(),
+            datas[4].leftSlot(),
+            datas[4].leftSlot() > datas[1].leftSlot()
+                ? datas[4].leftSlot() / 100
+                : datas[1].leftSlot() / 100
+        );
+        // same liq for both
+        assertApproxEqAbs(datas[2], datas[5], 10);
     }
 }
