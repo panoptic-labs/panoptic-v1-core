@@ -20,6 +20,7 @@ import {TickStateCallContext} from "@types/TickStateCallContext.sol";
 import {LeftRight} from "@types/LeftRight.sol";
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 import {TokenId} from "@types/TokenId.sol";
+import "forge-std/Test.sol";
 
 /// @title Collateral Tracking System / Margin Accounting used in conjunction with a Panoptic Pool.
 /// @author Axicon Labs Limited
@@ -1616,6 +1617,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
         // extract the strike of the leg
         int24 strike = tokenId.strike(index);
+        console2.log("index", index);
+        console2.log("strike", strike);
+        console2.log("amountsMoved", amountsMoved);
 
         // amount moved is right slot if tokenType=0, left slot otherwise
         uint128 amountMoved = tokenType == 0 ? amountsMoved.rightSlot() : amountsMoved.leftSlot();
@@ -1623,6 +1627,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         uint256 isLong = tokenId.isLong(index);
         // start with base requirement, which is based on isLong value
         required = _getRequiredCollateralAtUtilization(amountMoved, isLong, utilization);
+        console2.log("required", required);
 
         // if the position is long, required tokens does not depend on price
         unchecked {
