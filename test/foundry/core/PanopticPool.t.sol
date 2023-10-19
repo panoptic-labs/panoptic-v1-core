@@ -5077,10 +5077,24 @@ contract PanopticPoolTest is PositionUtils {
         changePrank(Seller);
 
         uint256 tokenId = uint256(0).addUniv3pool(poolId);
-
-        for (uint256 i = 0; i < 4; ++i) {
-            if (isLongs[i] == 0) continue;
-            tokenId = tokenId.addLeg(i, 1, isWETH, 0, tokenTypes[i], i, strikes[i], widths[i]);
+        {
+            uint256 skipped;
+            for (uint256 i = 0; i < 4; ++i) {
+                if (isLongs[i] == 0) {
+                    skipped++;
+                    continue;
+                }
+                tokenId = tokenId.addLeg(
+                    i - skipped,
+                    1,
+                    isWETH,
+                    0,
+                    tokenTypes[i - skipped],
+                    i - skipped,
+                    strikes[i - skipped],
+                    widths[i - skipped]
+                );
+            }
         }
 
         uint256[] memory posIdList = new uint256[](1);
