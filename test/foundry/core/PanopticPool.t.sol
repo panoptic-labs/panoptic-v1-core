@@ -5106,8 +5106,8 @@ contract PanopticPoolTest is PositionUtils {
         // setup complete
         vm.snapshot();
 
-        // 1x4 tokendata 0, 1x4 tokendata 1, 4x1 tokendata 0, 4x1 tokendata 1, 1x4 owned liq, 4x1 owned liq
-        uint256[6] memory datas;
+        // 1x4 tokendata 0, 1x4 tokendata 1, 4x1 tokendata 0, 4x1 tokendata 1, 1x4 owned liq, 4x1 owned liq, tick
+        uint256[7] memory datas;
 
         // mint 4-leg option
         changePrank(Alice);
@@ -5134,7 +5134,8 @@ contract PanopticPoolTest is PositionUtils {
 
         twoWaySwap(swapSizeSeed);
 
-        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+        datas[6] = uint256(int256(currentTick));
+
         unchecked {
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = pp
                 .calculateAccumulatedFeesBatch(Alice, posIdList);
@@ -5197,8 +5198,18 @@ contract PanopticPoolTest is PositionUtils {
                 uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
             );
 
-            datas[3] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium0);
-            datas[4] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium1);
+            datas[3] = ct0.getAccountMarginDetails(
+                Alice,
+                int24(int256(datas[6])),
+                posBalanceArray,
+                premium0
+            );
+            datas[4] = ct1.getAccountMarginDetails(
+                Alice,
+                int24(int256(datas[6])),
+                posBalanceArray,
+                premium1
+            );
         }
         for (uint256 i = 0; i < 4; ++i) {
             datas[5] += sfpm.getAccountLiquidity(
