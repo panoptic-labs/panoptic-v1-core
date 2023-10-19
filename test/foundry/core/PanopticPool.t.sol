@@ -5186,14 +5186,14 @@ contract PanopticPoolTest is PositionUtils {
                 uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
             );
 
-            posBalanceArray[0][1] = uint256(uint128(posBalanceArray[1][1])).toLeftSlot(
+            posBalanceArray[1][1] = uint256(uint128(posBalanceArray[1][1])).toLeftSlot(
                 uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
             );
-            posBalanceArray[0][1] = uint256(uint128(posBalanceArray[2][1])).toLeftSlot(
+            posBalanceArray[2][1] = uint256(uint128(posBalanceArray[2][1])).toLeftSlot(
                 uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
             );
 
-            posBalanceArray[0][1] = uint256(uint128(posBalanceArray[3][1])).toLeftSlot(
+            posBalanceArray[3][1] = uint256(uint128(posBalanceArray[3][1])).toLeftSlot(
                 uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
             );
 
