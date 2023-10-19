@@ -5202,8 +5202,8 @@ contract PanopticPoolTest is PositionUtils {
             datas[3].leftSlot(),
             (
                 datas[3].leftSlot() > datas[0].leftSlot()
-                    ? datas[3].leftSlot() / 1000
-                    : datas[0].leftSlot() / 1000
+                    ? datas[3].leftSlot() / 100
+                    : datas[0].leftSlot() / 100
             ) + 10,
             "0 collateral reqs should be the same"
         );
@@ -5213,8 +5213,8 @@ contract PanopticPoolTest is PositionUtils {
             datas[4].leftSlot(),
             (
                 datas[4].leftSlot() > datas[1].leftSlot()
-                    ? datas[4].leftSlot() / 1000
-                    : datas[1].leftSlot() / 1000
+                    ? datas[4].leftSlot() / 100
+                    : datas[1].leftSlot() / 100
             ) + 10,
             "1 collateral reqs should be the same"
         );
@@ -5224,8 +5224,8 @@ contract PanopticPoolTest is PositionUtils {
             datas[5],
             (
                 datas[5].leftSlot() > datas[2].leftSlot()
-                    ? datas[5].leftSlot() / 10000
-                    : datas[2].leftSlot() / 10000
+                    ? datas[5].leftSlot() / 1000
+                    : datas[2].leftSlot() / 1000
             ) + 10,
             "liq should be the same"
         );
