@@ -155,6 +155,8 @@ contract PanopticPoolTest is PositionUtils {
     uint160 sqrtLower;
     uint160 sqrtUpper;
 
+    uint256[] $posIdList;
+
     uint128 positionSize;
     uint128 positionSizeBurn;
 
@@ -615,7 +617,7 @@ contract PanopticPoolTest is PositionUtils {
         uint256 ETHValue = isWETH == 0
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
     }
 
@@ -768,21 +770,6 @@ contract PanopticPoolTest is PositionUtils {
                     -int128(expectedLiqs[2])
                 )
         );
-
-        // ensure second leg is sufficiently large
-        (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
-            currentSqrtPriceX96,
-            sqrtLowers[0],
-            sqrtUppers[0],
-            expectedLiqs[1]
-        );
-        uint256 priceX128 = FullMath.mulDiv(currentSqrtPriceX96, currentSqrtPriceX96, 2 ** 64);
-        // total ETH value must be >= 10 ** 15
-        uint256 ETHValue = isWETH == 0
-            ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
-            : Math.mulDiv128(amount0, priceX128) + amount1;
-        vm.assume(ETHValue >= 10 ** 15);
-        vm.assume(ETHValue <= 10 ** 22);
     }
 
     function updatePositionDataLong() public {
@@ -862,15 +849,13 @@ contract PanopticPoolTest is PositionUtils {
         int256 swapAmount; // The amount of token0 or token1 to swap
 
         if (($itm0 != 0) && ($itm1 != 0)) {
-            int256 net0 = $itm0 + PanopticMath.convert1to0($itm1, currentSqrtPriceX96);
+            int256 net0 = $itm0 - PanopticMath.convert1to0($itm1, currentSqrtPriceX96);
 
-            int256 net1 = $itm1 + PanopticMath.convert0to1($itm0, currentSqrtPriceX96);
-
-            // if net1 is negative, then the protocol has a surplus of token0
-            zeroForOne = net1 < net0;
+            // if net0 is negative, then the protocol has a net shortage of token0
+            zeroForOne = net0 < 0;
 
             //compute the swap amount, set as positive (exact input)
-            swapAmount = zeroForOne ? net0 : net1;
+            swapAmount = -net0;
         } else if ($itm0 != 0) {
             zeroForOne = $itm0 < 0;
             swapAmount = -$itm0;
@@ -998,7 +983,7 @@ contract PanopticPoolTest is PositionUtils {
         uint256 ETHValue = isWETH == 0
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
 
         // ensure third leg is sufficiently large
@@ -1009,10 +994,12 @@ contract PanopticPoolTest is PositionUtils {
             expectedLiqs[2]
         );
 
-        // ETHValue = isWETH == 0 ? amount0  + FullMath.mulDiv(amount1, 2**128, priceX128) : Math.mulDiv128(amount0, priceX128) + amount1;
-        // the fuzzer doesn't seem to be able to handle the third condition here
-        // maybe it increases the difficulty too much? it will rarely and sporadically fail with this disabled
-        vm.assume(ETHValue >= 10 ** 15);
+        // total ETH value must be >= 10 ** 15
+        ETHValue = isWETH == 0
+            ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
+            : Math.mulDiv128(amount0, priceX128) + amount1;
+        vm.assume(ETHValue >= 10 ** 13);
+        vm.assume(ETHValue <= 10 ** 22);
     }
 
     function populatePositionData(
@@ -1104,7 +1091,7 @@ contract PanopticPoolTest is PositionUtils {
         uint256 ETHValue = isWETH == 0
             ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
             : Math.mulDiv128(amount0, priceX128) + amount1;
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
 
         // ensure third leg is sufficiently large
@@ -1114,8 +1101,11 @@ contract PanopticPoolTest is PositionUtils {
             sqrtUppers[2],
             expectedLiqs[2]
         );
+        ETHValue = isWETH == 0
+            ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
+            : Math.mulDiv128(amount0, priceX128) + amount1;
 
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
 
         // ensure fourth leg is sufficiently large
@@ -1125,8 +1115,11 @@ contract PanopticPoolTest is PositionUtils {
             sqrtUppers[3],
             expectedLiqs[3]
         );
+        ETHValue = isWETH == 0
+            ? amount0 + FullMath.mulDiv(amount1, 2 ** 128, priceX128)
+            : Math.mulDiv128(amount0, priceX128) + amount1;
 
-        vm.assume(ETHValue >= 10 ** 15);
+        vm.assume(ETHValue >= 10 ** 13);
         vm.assume(ETHValue <= 10 ** 22);
     }
 
@@ -2453,10 +2446,8 @@ contract PanopticPoolTest is PositionUtils {
         // call leg
         tokenId = tokenId.addLeg(1, 1, isWETH, 0, 0, 1, strike1, width1);
 
-        int256 netSurplus0 = $amount0Moveds[0] +
+        int256 netSurplus0 = $amount0Moveds[0] -
             PanopticMath.convert1to0($amount1Moveds[1], currentSqrtPriceX96);
-        int256 netSurplus1 = $amount1Moveds[1] +
-            PanopticMath.convert0to1($amount0Moveds[0], currentSqrtPriceX96);
 
         (int256 amount0s, int256 amount1s) = PositionUtils.simulateSwap(
             pool,
@@ -2467,8 +2458,8 @@ contract PanopticPoolTest is PositionUtils {
             token0,
             token1,
             fee,
-            netSurplus1 < netSurplus0,
-            netSurplus1 < netSurplus0 ? netSurplus0 : netSurplus1
+            netSurplus0 < 0,
+            -netSurplus0
         );
 
         changePrank(Alice);
@@ -2632,10 +2623,8 @@ contract PanopticPoolTest is PositionUtils {
         (currentSqrtPriceX96, , , , , , ) = pool.slot0();
         updatePositionDataLong();
 
-        int256 netSurplus0 = $amount0Moveds[1] +
+        int256 netSurplus0 = $amount0Moveds[1] -
             PanopticMath.convert1to0($amount1Moveds[2], currentSqrtPriceX96);
-        int256 netSurplus1 = $amount1Moveds[2] +
-            PanopticMath.convert0to1($amount0Moveds[1], currentSqrtPriceX96);
 
         changePrank(address(sfpm));
         (int256 amount0s, int256 amount1s) = PositionUtils.simulateSwapLong(
@@ -2647,8 +2636,8 @@ contract PanopticPoolTest is PositionUtils {
             token0,
             token1,
             fee,
-            netSurplus1 < netSurplus0,
-            netSurplus1 < netSurplus0 ? netSurplus0 : netSurplus1
+            netSurplus0 < 0,
+            -netSurplus0
         );
 
         changePrank(Alice);
@@ -5031,11 +5020,6 @@ contract PanopticPoolTest is PositionUtils {
             expectedArray[8] = int24(pokeTicks[i]);
             (priceArray, medianTick) = pp.getPriceArray();
             for (uint256 j = 0; j < 8; ++j) {
-                console2.log(expectedArray[j]);
-                console2.log(expectedArray[j + 1]);
-                console2.log(priceArray[j]);
-                console2.log(block.timestamp);
-                console2.log(lastTimestamp);
                 // only shift array if an update occured, i.e more than 60 seconds passed since the last update
                 expectedArray[j] = block.timestamp >= lastTimestamp + 60
                     ? expectedArray[j + 1]
@@ -5054,5 +5038,222 @@ contract PanopticPoolTest is PositionUtils {
                 lastTimestamp = block.timestamp;
             }
         }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                             SPECIAL TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    // test that minting a 4-leg position yields similar results to minting each leg individually
+    function test_Diff_4x1_1x4(
+        uint256 x,
+        uint256[4] memory isLongs,
+        uint256[4] memory tokenTypes,
+        uint256[4] memory widthSeeds,
+        int256[4] memory strikeSeeds,
+        uint256 positionSizeSeed,
+        uint256 swapSizeSeed
+    ) public {
+        _initPool(x);
+
+        int24[4] memory widths;
+        int24[4] memory strikes;
+
+        for (uint256 i = 0; i < 4; ++i) {
+            tokenTypes[i] = bound(tokenTypes[i], 0, 1);
+            isLongs[i] = bound(isLongs[i], 0, 1);
+            (widths[i], strikes[i]) = getValidSW(
+                widthSeeds[i],
+                strikeSeeds[i],
+                uint24(tickSpacing),
+                // distancing tickSpacing ensures this position stays OTM throughout this test case. ITM is tested elsewhere.
+                currentTick
+            );
+        }
+
+        populatePositionData(widths, strikes, positionSizeSeed);
+
+        // if we have long chunks we have to sell before it can be bought (let's say 2x position size for now)
+        changePrank(Seller);
+
+        uint256 tokenId = uint256(0).addUniv3pool(poolId);
+        {
+            uint256 skipped;
+            for (uint256 i = 0; i < 4; ++i) {
+                if (isLongs[i] == 0) {
+                    skipped++;
+                    continue;
+                }
+                tokenId = tokenId.addLeg(
+                    i - skipped,
+                    1,
+                    isWETH,
+                    0,
+                    tokenTypes[i],
+                    i - skipped,
+                    strikes[i],
+                    widths[i]
+                );
+            }
+        }
+
+        uint256[] memory posIdList = new uint256[](1);
+        posIdList[0] = tokenId;
+
+        // can't make an empty position
+        if (tokenId.countLegs() != 0) pp.mintOptions(posIdList, positionSize * 2, 0, 0, 0);
+
+        // setup complete
+        vm.snapshot();
+
+        // 1x4 tokendata 0, 1x4 tokendata 1, 4x1 tokendata 0, 4x1 tokendata 1, 1x4 owned liq, 4x1 owned liq, tick
+        uint256[7] memory datas;
+
+        // mint 4-leg option
+        changePrank(Alice);
+
+        // reset tokenId so we can fill for what we're actually testing (the bought option)
+        tokenId = uint256(0).addUniv3pool(poolId);
+
+        for (uint256 i = 0; i < 4; ++i) {
+            tokenId = tokenId.addLeg(
+                i,
+                1,
+                isWETH,
+                isLongs[i],
+                tokenTypes[i],
+                i,
+                strikes[i],
+                widths[i]
+            );
+        }
+
+        posIdList[0] = tokenId;
+
+        pp.mintOptions(posIdList, positionSize, type(uint64).max, 0, 0);
+
+        twoWaySwap(swapSizeSeed);
+
+        datas[6] = uint256(int256(currentTick));
+
+        unchecked {
+            (, , uint256[2][] memory posBalanceArray) = pp.calculateAccumulatedFeesBatch(
+                Alice,
+                posIdList
+            );
+            posBalanceArray[0][1] = uint256(uint128(posBalanceArray[0][1])).toLeftSlot(
+                uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
+            );
+            datas[0] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 1000);
+            datas[1] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 1000);
+        }
+        for (uint256 i = 0; i < 4; ++i) {
+            datas[2] += sfpm.getAccountLiquidity(
+                address(pool),
+                address(pp),
+                tokenTypes[i],
+                tickLowers[i],
+                tickUppers[i]
+            );
+        }
+
+        // go back to setup state
+        vm.revertTo(0);
+
+        // now mint 4 1-leg options
+        changePrank(Alice);
+
+        for (uint256 i = 0; i < 4; ++i) {
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+                0,
+                i + 1,
+                isWETH,
+                isLongs[i],
+                tokenTypes[i],
+                0,
+                strikes[i],
+                widths[i]
+            );
+
+            $posIdList.push(tokenId);
+
+            pp.mintOptions($posIdList, positionSize / (uint128(i) + 1), type(uint64).max, 0, 0);
+        }
+
+        twoWaySwap(swapSizeSeed);
+
+        {
+            (, , uint256[2][] memory posBalanceArray) = pp.calculateAccumulatedFeesBatch(
+                Alice,
+                $posIdList
+            );
+            posBalanceArray[0][1] = uint256(uint128(posBalanceArray[0][1])).toLeftSlot(
+                uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
+            );
+
+            posBalanceArray[1][1] = uint256(uint128(posBalanceArray[1][1])).toLeftSlot(
+                uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
+            );
+            posBalanceArray[2][1] = uint256(uint128(posBalanceArray[2][1])).toLeftSlot(
+                uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
+            );
+
+            posBalanceArray[3][1] = uint256(uint128(posBalanceArray[3][1])).toLeftSlot(
+                uint64(bound(swapSizeSeed, 0, 9_999)) + uint128(bound(swapSizeSeed, 0, 9_999) << 64)
+            );
+
+            datas[3] = ct0.getAccountMarginDetails(
+                Alice,
+                int24(int256(datas[6])),
+                posBalanceArray,
+                1000
+            );
+            datas[4] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 1000);
+        }
+        for (uint256 i = 0; i < 4; ++i) {
+            datas[5] += sfpm.getAccountLiquidity(
+                address(pool),
+                address(pp),
+                tokenTypes[i],
+                tickLowers[i],
+                tickUppers[i]
+            );
+        }
+
+        // high tolerances here because the swaps can get really big and change the collateral reqs
+        // way too much work to actually account for the error, this test is basically a sanity check so this is good enough
+        // same 0 collateral req for both
+        assertApproxEqAbs(
+            datas[0].leftSlot(),
+            datas[3].leftSlot(),
+            (
+                datas[3].leftSlot() > datas[0].leftSlot()
+                    ? datas[3].leftSlot() / 100
+                    : datas[0].leftSlot() / 100
+            ) + 10,
+            "0 collateral reqs should be the same"
+        );
+        // same 1 collateral req for both
+        assertApproxEqAbs(
+            datas[1].leftSlot(),
+            datas[4].leftSlot(),
+            (
+                datas[4].leftSlot() > datas[1].leftSlot()
+                    ? datas[4].leftSlot() / 100
+                    : datas[1].leftSlot() / 100
+            ) + 10,
+            "1 collateral reqs should be the same"
+        );
+        // same netliq for both (some smol innacuracies can be created by the position size division)
+        assertApproxEqAbs(
+            datas[2].leftSlot(),
+            datas[5].leftSlot(),
+            (
+                datas[5].leftSlot() > datas[2].leftSlot()
+                    ? datas[5].leftSlot() / 1000
+                    : datas[2].leftSlot() / 1000
+            ) + 10,
+            "netliq should be the same"
+        );
     }
 }
