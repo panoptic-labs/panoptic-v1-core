@@ -888,53 +888,45 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
                 })
             );
 
-            /** here's what's going on here
-             *  1) We need to know whether token0 needs to be swapped for token1 -> zeroForOne = true, or token1 for token0 -> zeroForOne = false.
-             *  2) We need to know whether it will be: -> exactInput = swapAmount is positive, or exactOutput = swapAmount is negative
-             *  3) A positive itm0 or itm1 denotes a shortage of tokens, while negative denotes a surplus
-             *  4) A positive amountSpecified means exact input, while negative is exact output
-             *
-             *  To get to this, we need to explore the 4 different scenarios for legs that involve swapping:
-             *  A) a short option is minted itm: isLong=0, isBurn=0, tokenType=1
-             *    -> sign(itm0) = + (SHORTAGE)
-             *    -> must replenish token0 shortage, so zeroForOne = false (1 to 0) (itm0 > 0)
-             *    -> we are doing (1 to 0) so must specify exact output -(+abs(itm0)) = -
-             *
-             *  B) a long option is minted itm: isLong=1, isBurn=0, tokenType=1
-             *    -> sign(itm0) = - (SURPLUS)
-             *    -> must get rid of token0 surplus, so zeroForOne = true (0 to 1) (itm0 < 0)
-             *    -> we are doing (0 to 1) so must specify exact input -(-abs(itm0)) = +
-             *
-             *  C) a short option is burnt itm: isLong=0, isBurn=1, tokenType=0
-             *    -> sign(itm1) = + (SHORTAGE)
-             *    -> must replenish token1 shortage, so zeroForOne = true (0 to 1) (itm1 > 0)
-             *    -> we are doing (0 to 1) so must specify exact output -(+abs(itm1)) = -
-             *
-             *  D) a long option is burnt itm: isLong=1, isBurn=1, tokenType=0
-             *    -> sign(itm1) = - (SURPLUS)
-             *    -> must get rid of token1 surplus, so zeroForOne = false (1 to 0) (itm1 < 0)
-             *    -> we are doing (1 to 0) so must specify exact input -(-abs(itm1)) = +
-             *
-             */
-
-            // implement a single "netting" swap. Thank you @danrobinson for this puzzle/idea
+            // note: upstream users of this function such as the Panoptic Pool should ensure users always compensate for the ITM amount delta
+            // the netting swap is not perfectly accurate, and it is possible for swaps to run out of liquidity, so we do not want to rely on it
+            // this is simply a convenience feature, and should be treated as such
             if ((itm0 != 0) && (itm1 != 0)) {
                 (uint160 sqrtPriceX96, , , , , , ) = _univ3pool.slot0();
 
-                /// we need to compare (deltaX = itm0 - itm1/price) to (deltaY =  itm1 - itm0 * price) to only swap the owed balance
-                /// To reduce the number of computation steps, we do the following:
-                ///    deltaX = (itm0*sqrtPrice - itm1/sqrtPrice)/sqrtPrice
-                ///    deltaY = -(itm0*sqrtPrice - itm1/sqrtPrice)*sqrtPrice
+                // implement a single "netting" swap. Thank you @danrobinson for this puzzle/idea
+                // note: negative ITM amounts denote a surplus of tokens (burning liquidity), while positive amounts denote a shortage of tokens (minting liquidity)
+                // compute the approximate delta of token0 that should be resolved in the swap at the current tick
+                // we do this by flipping the signs on the token1 ITM amount converting+deducting it against the token0 ITM amount
+                // couple examples (price = 2 1/0):
+                //  - 100 surplus 0, 100 surplus 1 (itm0 = -100, itm1 = -100)
+                //    normal swap 0: 100 0 => 200 1
+                //    normal swap 1: 100 1 => 50 0
+                //    final swap amounts: 50 0 => 100 1
+                //    netting swap: net0 = -100 - (-100/2) = -50, ZF1 = true, 50 0 => 100 1
+                // - 100 surplus 0, 100 shortage 1 (itm0 = -100, itm1 = 100)
+                //    normal swap 0: 100 0 => 200 1
+                //    normal swap 1: 50 0 => 100 1
+                //    final swap amounts: 150 0 => 300 1
+                //    netting swap: net0 = -100 - (100/2) = -150, ZF1 = true, 150 0 => 300 1
+                // - 100 shortage 0, 100 surplus 1 (itm0 = 100, itm1 = -100)
+                //    normal swap 0: 200 1 => 100 0
+                //    normal swap 1: 100 1 => 50 0
+                //    final swap amounts: 300 1 => 150 0
+                //    netting swap: net0 = 100 - (-100/2) = 150, ZF1 = false, 300 1 => 150 0
+                // - 100 shortage 0, 100 shortage 1 (itm0 = 100, itm1 = 100)
+                //    normal swap 0: 200 1 => 100 0
+                //    normal swap 1: 50 0 => 100 1
+                //    final swap amounts: 100 1 => 50 0
+                //    netting swap: net0 = 100 - (100/2) = 50, ZF1 = false, 100 1 => 50 0
+                // - = Net surplus of token0
+                // + = Net shortage of token0
+                int256 net0 = itm0 - PanopticMath.convert1to0(itm1, sqrtPriceX96);
 
-                int256 net0 = itm0 + PanopticMath.convert1to0(itm1, sqrtPriceX96);
-
-                int256 net1 = itm1 + PanopticMath.convert0to1(itm0, sqrtPriceX96);
-
-                // if net1 is negative, then the protocol has a surplus of token0
-                zeroForOne = net1 < net0;
+                zeroForOne = net0 < 0;
 
                 //compute the swap amount, set as positive (exact input)
-                swapAmount = zeroForOne ? net0 : net1;
+                swapAmount = -net0;
             } else if (itm0 != 0) {
                 zeroForOne = itm0 < 0;
                 swapAmount = -itm0;
@@ -942,6 +934,10 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
                 zeroForOne = itm1 > 0;
                 swapAmount = -itm1;
             }
+
+            // note - can occur if itm0 and itm1 have the same value
+            // in that case, swapping would be pointless so skip
+            if (swapAmount == 0) return int256(0);
 
             // swap tokens in the Uniswap pool
             // @dev note this triggers our swap callback function
@@ -1241,12 +1237,8 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         /// so that the net different is always positive.
         /// So by using int128 instead of uint128, we remove the need to handle extremely large underflows and simply allow it to be negative
         feesBase = int256(0)
-            .toRightSlot(
-                int128(int256(Math.mulDiv(feeGrowthInside0LastX128, liquidity, Constants.FP128)))
-            )
-            .toLeftSlot(
-                int128(int256(Math.mulDiv(feeGrowthInside1LastX128, liquidity, Constants.FP128)))
-            );
+            .toRightSlot(int128(int256(Math.mulDiv128(feeGrowthInside0LastX128, liquidity))))
+            .toLeftSlot(int128(int256(Math.mulDiv128(feeGrowthInside1LastX128, liquidity))));
     }
 
     /// @notice Mint a chunk of liquidity (`liquidityChunk`) in the Uniswap v3 pool; return the amount moved.
@@ -1621,6 +1613,17 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         ];
         feesBase0 = feesBase.rightSlot();
         feesBase1 = feesBase.leftSlot();
+    }
+
+    /// @notice Returns the Uniswap v3 pool for a given poolId.
+    /// @dev poolId is typically the first 8 bytes of the uni v3 pool address
+    /// @dev But poolId can be different for first 8 bytes if there is a collision between Uni v3 pool addresses
+    /// @param poolId The poolId for a Uni v3 pool
+    /// @return UniswapV3Pool The unique poolId for that Uni v3 pool
+    function getUniswapV3PoolFromId(
+        uint64 poolId
+    ) external view returns (IUniswapV3Pool UniswapV3Pool) {
+        return s_poolContext[poolId].pool;
     }
 
     /// @notice Returns the poolId for a given Uniswap v3 pool.

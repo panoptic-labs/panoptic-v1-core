@@ -706,14 +706,12 @@ contract PanopticPool is ERC1155Holder, Multicall {
             // cache to avoid stack to deep errors
             int24 currentTick = tickStateCallContext.currentTick();
 
-            // compute accumulated premia for long options only
-            // this is used to compute the collateral requirement
-            // we only calculate long premium here as a protection buffer against minting a large number defined risk positions -eg. tiny spreads
+            // compute accumulated premia for all open options
             // Additionally Read all position balances from the Panoptic pool
             (portfolioPremium, positionBalanceArray) = _calculateAccumulatedPremia(
                 msg.sender,
                 positionIdList,
-                COMPUTE_LONG_PREMIA,
+                COMPUTE_ALL_PREMIA,
                 currentTick
             );
 

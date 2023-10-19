@@ -1513,6 +1513,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // get all collateral required for the incoming list of positions
             tokenRequired = _getTotalRequiredCollateral(atTick, positionBalanceArray);
 
+            // If premium is negative, increase the short premium requirement by the maintenance margin ratio
             if (premiumAllPositions < 0) {
                 unchecked {
                     tokenRequired +=
