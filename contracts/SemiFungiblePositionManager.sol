@@ -888,6 +888,9 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
                 })
             );
 
+            // note: upstream users of this function such as the Panoptic Pool should ensure users always compensate for the ITM amount delta
+            // the netting swap is not perfectly accurate, and it is possible for swaps to run out of liquidity, so we do not want to rely on it
+            // this is simply a convenience feature, and should be treated as such
             if ((itm0 != 0) && (itm1 != 0)) {
                 (uint160 sqrtPriceX96, , , , , , ) = _univ3pool.slot0();
 

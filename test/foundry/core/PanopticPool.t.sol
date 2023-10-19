@@ -5136,12 +5136,13 @@ contract PanopticPoolTest is PositionUtils {
 
         (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
         {
-            (, , uint256[2][] memory posBalanceArray) = pp.calculateAccumulatedFeesBatch(
-                Alice,
-                posIdList
+            (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = pp
+                .calculateAccumulatedFeesBatch(Alice, posIdList);
+            posBalanceArray[0][1] = uint256(uint128(posBalanceArray[0][1])).toLeftSlot(
+                uint128(bound(swapSizeSeed, 0, 9_999))
             );
-            datas[0] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 1000);
-            datas[1] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 1000);
+            datas[0] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium0);
+            datas[1] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium1);
         }
         for (uint256 i = 0; i < 4; ++i) {
             datas[2] += sfpm.getAccountLiquidity(
@@ -5179,12 +5180,22 @@ contract PanopticPoolTest is PositionUtils {
         twoWaySwap(swapSizeSeed);
 
         {
-            (, , uint256[2][] memory posBalanceArray) = pp.calculateAccumulatedFeesBatch(
-                Alice,
-                $posIdList
+            (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = pp
+                .calculateAccumulatedFeesBatch(Alice, $posIdList);
+            posBalanceArray[0][1] = uint256(uint128(posBalanceArray[0][1])).toLeftSlot(
+                uint128(bound(swapSizeSeed, 0, 9_999))
             );
-            datas[3] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 1000);
-            datas[4] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, 1000);
+            posBalanceArray[1][1] = uint256(uint128(posBalanceArray[0][1])).toLeftSlot(
+                uint128(bound(swapSizeSeed, 0, 9_999))
+            );
+            posBalanceArray[2][1] = uint256(uint128(posBalanceArray[0][1])).toLeftSlot(
+                uint128(bound(swapSizeSeed, 0, 9_999))
+            );
+            posBalanceArray[3][1] = uint256(uint128(posBalanceArray[0][1])).toLeftSlot(
+                uint128(bound(swapSizeSeed, 0, 9_999))
+            );
+            datas[3] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium0);
+            datas[4] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium1);
         }
         for (uint256 i = 0; i < 4; ++i) {
             datas[5] += sfpm.getAccountLiquidity(
