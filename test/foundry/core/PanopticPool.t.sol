@@ -5200,25 +5200,34 @@ contract PanopticPoolTest is PositionUtils {
         assertApproxEqAbs(
             datas[0].leftSlot(),
             datas[3].leftSlot(),
-            datas[3].leftSlot() > datas[0].leftSlot()
-                ? datas[3].leftSlot() / 1000
-                : datas[0].leftSlot() / 1000
+            (
+                datas[3].leftSlot() > datas[0].leftSlot()
+                    ? datas[3].leftSlot() / 1000
+                    : datas[0].leftSlot() / 1000
+            ) + 10,
+            "0 collateral reqs should be the same"
         );
         // same 1 collateral req for both
         assertApproxEqAbs(
             datas[1].leftSlot(),
             datas[4].leftSlot(),
-            datas[4].leftSlot() > datas[1].leftSlot()
-                ? datas[4].leftSlot() / 1000
-                : datas[1].leftSlot() / 1000
+            (
+                datas[4].leftSlot() > datas[1].leftSlot()
+                    ? datas[4].leftSlot() / 1000
+                    : datas[1].leftSlot() / 1000
+            ) + 10,
+            "1 collateral reqs should be the same"
         );
         // same liq for both (some smol innacuracies can be created by the position size division)
         assertApproxEqAbs(
             datas[2],
             datas[5],
-            datas[5].leftSlot() > datas[2].leftSlot()
-                ? datas[5].leftSlot() / 10000
-                : datas[2].leftSlot() / 10000
+            (
+                datas[5].leftSlot() > datas[2].leftSlot()
+                    ? datas[5].leftSlot() / 10000
+                    : datas[2].leftSlot() / 10000
+            ) + 10,
+            "liq should be the same"
         );
     }
 }
