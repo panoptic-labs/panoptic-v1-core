@@ -5090,7 +5090,7 @@ contract PanopticPoolTest is PositionUtils {
                     isWETH,
                     0,
                     tokenTypes[i],
-                    i,
+                    i - skipped,
                     strikes[i],
                     widths[i]
                 );
