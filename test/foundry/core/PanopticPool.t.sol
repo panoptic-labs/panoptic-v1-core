@@ -5181,8 +5181,8 @@ contract PanopticPoolTest is PositionUtils {
         {
             (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = pp
                 .calculateAccumulatedFeesBatch(Alice, $posIdList);
-            datas[3] += ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium0);
-            datas[4] += ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium1);
+            datas[3] = ct0.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium0);
+            datas[4] = ct1.getAccountMarginDetails(Alice, currentTick, posBalanceArray, premium1);
         }
         for (uint256 i = 0; i < 4; ++i) {
             datas[5] += sfpm.getAccountLiquidity(
@@ -5218,16 +5218,16 @@ contract PanopticPoolTest is PositionUtils {
             ) + 10,
             "1 collateral reqs should be the same"
         );
-        // same liq for both (some smol innacuracies can be created by the position size division)
+        // same netliq for both (some smol innacuracies can be created by the position size division)
         assertApproxEqAbs(
-            datas[2],
-            datas[5],
+            datas[2].leftSlot(),
+            datas[5].leftSlot(),
             (
                 datas[5].leftSlot() > datas[2].leftSlot()
                     ? datas[5].leftSlot() / 1000
                     : datas[2].leftSlot() / 1000
             ) + 10,
-            "liq should be the same"
+            "netliq should be the same"
         );
     }
 }
