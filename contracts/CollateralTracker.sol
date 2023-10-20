@@ -857,7 +857,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         uint256 delegation1,
         int24 atTick,
         CollateralTracker collateralToken1
-    ) public view returns (int256 refund0, int256 refund1) {
+    ) public view returns (int256, int256) {
         uint160 sqrtPriceX96 = Math.getSqrtRatioAtTick(atTick);
 
         unchecked {
@@ -934,62 +934,90 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
                 // Case 3b: The liquidatee does not have enough surplus token1 to cover the token0 shortage, so the remaining loss must be divided among the collateral vaults.
                 // Results in protocol loss.
-                (int256 baseLoss0, int256 baseLoss1) = PanopticMath.evenSplit(
+                (int256 refund0, int256 refund1) = PanopticMath.evenSplit(
                     uint256(_balanceShortage0),
                     uint256(_balanceShortage1),
                     _sqrtPriceX96
                 );
 
-                refund0 = int256(_balance0) + baseLoss0;
-                refund1 = int256(_balance1) + baseLoss1;
+                // base (amount before bonus) that needs to be refunded is the remaining balance plus the protocol loss evenly split among the vaults
+                refund1 = int256(_balance0) + refund0;
+                refund1 = int256(_balance1) + refund1;
 
-                (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit(
-                    int256(_delegation0) - (refund0 * int256(CONVERSION_BONUS)) / int256(DECIMALS),
-                    int256(_delegation1) - (refund1 * int256(CONVERSION_BONUS)) / int256(DECIMALS),
-                    _sqrtPriceX96
-                );
+                {
+                    (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit(
+                        int256(_delegation0) -
+                            (refund0 * int256(CONVERSION_BONUS)) /
+                            int256(DECIMALS),
+                        int256(_delegation1) -
+                            (refund1 * int256(CONVERSION_BONUS)) /
+                            int256(DECIMALS),
+                        _sqrtPriceX96
+                    );
+                    refund0 += bonus0;
+                    refund1 += bonus1;
+                }
 
-                refund0 = refund0 + bonus0;
-                refund1 = refund1 + bonus1;
                 return (refund0, refund1);
             }
 
-            // // Case 4: The user has enough collateral to fully cover the token0 donation, but not the token1 donation.
-            // // May cause protocol loss depending on the exact surplus of toke0 mand shortage of token1 in the liquidatee account
-            // // This is the same as Case 3, but with token0 and token1 swapped
-            // if (balanceShortage1 > 0 && balanceShortage0 < 0) {
-            //     int256 converted0 = PanopticMath.convert1to0(balanceShortage1, sqrtPriceX96);
+            // Case 4: The user has enough collateral to fully cover the token0 donation, but not the token1 donation.
+            // May cause protocol loss depending on the exact surplus of token0 and shortage of token1 in the liquidatee account
+            // This is the same as Case 3, but with token0 and token1 swapped
+            if (balanceShortage1 > 0 && balanceShortage0 < 0) {
+                // refresh stack to prevent stack too deep
+                uint160 _sqrtPriceX96 = sqrtPriceX96;
+                int256 _balanceShortage0 = balanceShortage0;
+                int256 _balanceShortage1 = balanceShortage1;
+                uint256 _delegation0 = delegation0;
+                uint256 _delegation1 = delegation1;
+                uint256 _balance0 = balance0;
+                uint256 _balance1 = balance1;
 
-            //     // keeps track of the surplus, in this case it's whatever original surplus we had minus however much we had to convert and the commission fee
-            //     int256 balanceShortage0Final = int256(balanceShortage0) + converted0 + converted0 * int256(CONVERSION_BONUS) / int256(DECIMALS);
+                {
+                    int256 converted0 = PanopticMath.convert1to0(_balanceShortage1, _sqrtPriceX96);
 
-            //     // Case 4a: The user has enough value in surplus token0 to cover the shortage of token1 including a 10% conversion bonus.
-            //     // No protocol loss.
-            //     if (balanceShortage0Final <= 0) {
-            //         return (int256(balance0) + balanceShortage0Final, int256(balance1));
-            //     }
+                    // keeps track of the surplus, in this case it's whatever original surplus we had minus however much we had to convert and the commission fee
+                    int256 balanceShortage0Final = int256(_balanceShortage0) +
+                        converted0 +
+                        (converted0 * int256(CONVERSION_BONUS)) /
+                        int256(DECIMALS);
 
-            //     // Case 4b: The liquidatee does not have enough surplus token0 to cover the token1 shortage, so the remaining loss must be divided among the collateral vaults.
-            //     // Results in protocol loss.
-            //     (int256 baseLoss0, int256 baseLoss1) = PanopticMath.evenSplit(
-            //         uint256(balanceShortage0),
-            //         uint256(balanceShortage1),
-            //         sqrtPriceX96
-            //     );
+                    // Case 4a: The user has enough value in surplus token0 to cover the shortage of token1 including a 10% conversion bonus.
+                    // No protocol loss.
+                    if (balanceShortage0Final <= 0) {
+                        return (int256(_balance0) + balanceShortage0Final, int256(_balance1));
+                    }
+                }
 
-            //     refund0 = int256(balance0) + baseLoss0;
-            //     refund1 = int256(balance1) + baseLoss1;
+                // Case 4b: The liquidatee does not have enough surplus token0 to cover the token1 shortage, so the remaining loss must be divided among the collateral vaults.
+                // Results in protocol loss.
+                (int256 refund0, int256 refund1) = PanopticMath.evenSplit(
+                    uint256(_balanceShortage0),
+                    uint256(_balanceShortage1),
+                    _sqrtPriceX96
+                );
 
-            //     (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit(
-            //         int256(delegation0) - refund0 * int256(CONVERSION_BONUS) / int256(DECIMALS),
-            //         int256(delegation1) - refund1 * int256(CONVERSION_BONUS) / int256(DECIMALS),
-            //         sqrtPriceX96
-            //     );
+                // base (amount before bonus) that needs to be refunded is the remaining balance plus the protocol loss evenly split among the vaults
+                refund1 = int256(_balance0) + refund0;
+                refund1 = int256(_balance1) + refund1;
 
-            //     refund0 = refund0 + bonus0;
-            //     refund1 = refund1 + bonus1;
-            //     return (refund0, refund1);
-            // }
+                {
+                    (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit(
+                        int256(_delegation0) -
+                            (refund0 * int256(CONVERSION_BONUS)) /
+                            int256(DECIMALS),
+                        int256(_delegation1) -
+                            (refund1 * int256(CONVERSION_BONUS)) /
+                            int256(DECIMALS),
+                        _sqrtPriceX96
+                    );
+                    refund0 += bonus0;
+                    refund1 += bonus1;
+                }
+
+                return (refund0, refund1);
+            }
         }
     }
 
