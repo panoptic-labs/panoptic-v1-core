@@ -275,8 +275,8 @@ library PanopticMath {
     ) internal pure returns (int256, int256) {
         unchecked {
             return (
-                int256(amount0 / 2 + convert1to0(amount1, sqrtPriceX96) / 2),
-                int256(amount1 / 2 + convert0to1(amount0, sqrtPriceX96) / 2)
+                int256((amount0 + convert1to0(amount1, sqrtPriceX96)) / 2),
+                int256((amount1 + convert0to1(amount0, sqrtPriceX96)) / 2)
             );
         }
     }
@@ -295,8 +295,8 @@ library PanopticMath {
     ) internal pure returns (int256, int256) {
         unchecked {
             return (
-                amount0 / 2 + convert1to0(amount1, sqrtPriceX96) / 2,
-                amount1 / 2 + convert0to1(amount0, sqrtPriceX96) / 2
+                (amount0 + convert1to0(amount1, sqrtPriceX96)) / 2,
+                (amount1 + convert0to1(amount0, sqrtPriceX96)) / 2
             );
         }
     }
@@ -308,9 +308,9 @@ library PanopticMath {
     /// @return amount0Out an amount of token0 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
     /// @return amount1Out an amount of token1 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
     function evenSplit0(
-        uint256 amount0,
+        int256 amount0,
         uint160 sqrtPriceX96
-    ) internal pure returns (uint256, uint256) {
+    ) internal pure returns (int256, int256) {
         unchecked {
             return (amount0 / 2, convert0to1(amount0 / 2, sqrtPriceX96));
         }
@@ -323,9 +323,9 @@ library PanopticMath {
     /// @return amount0Out an amount of token0 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
     /// @return amount1Out an amount of token1 worth half the combined value of `amount0` and `amount1` at `sqrtPriceX96`
     function evenSplit1(
-        uint256 amount1,
+        int256 amount1,
         uint160 sqrtPriceX96
-    ) internal pure returns (uint256, uint256) {
+    ) internal pure returns (int256, int256) {
         unchecked {
             return (convert1to0(amount1 / 2, sqrtPriceX96), amount1 / 2);
         }

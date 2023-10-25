@@ -118,8 +118,22 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// int type for composability with signed integer based mathematical operations.
     int128 internal constant DECIMALS_128 = 10_000;
 
-    /// @notice Liquidation bonus for converted(swapped) tokens in liquidations (10%)
-    uint256 internal constant CONVERSION_BONUS = 100;
+    /// @notice 10% Liquidation bonus for converted(swapped) tokens in liquidations
+    /// Because the liquidation bonus is usually split equally between token0 and token1,
+    /// and it is based on the amount of one of the tokens that is not paid back,
+    /// half of the bonus goes towards reducing its own basis.
+    /// Thus, in order to achieve a 10% bonus, the actual bonus multiplier must be slightly smaller.
+    /// x - initial token shortfall
+    /// b - bonus multiplier
+    /// final shortfall: x - 0.5bx
+    /// bx = 0.1(x - 0.5bx)
+    /// bx = 0.1x - 0.05bx
+    /// 1.05bx = 0.1x
+    /// b = 0.1 / 1.05 = 0.0952380952380...
+    int256 internal constant BONUS_NUMERATOR = 10;
+    int256 internal constant BONUS_DENOMINATOR = 105;
+    /// In cases where the liquidation bonus does not count toward the shortage, just use this
+    int256 internal constant LIQ_BONUS = 1000;
 
     /*//////////////////////////////////////////////////////////////
                            UNISWAP POOL DATA
@@ -866,7 +880,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                 collateralToken1.balanceOf(refunder)
             );
 
-            int256 balanceShortage0 = int256(delegation0) - int256(balance1);
+            int256 balanceShortage0 = int256(delegation0) - int256(balance0);
             int256 balanceShortage1 = int256(delegation1) - int256(balance1);
 
             // Case 1: The user has enough collateral left to fully cover the liquidator's donation in its original tokens. No bonus is needed.
@@ -875,7 +889,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             }
 
             // Case 2: The user has insufficient collateral for both the token0 and token1 donations. We send the liquidator whatever tokens the user has left,
-            // and divide the loss resulting from the remaining shortage equally among the collateral vaults, giving the liquidator a bonus on tokens that had to be returned in alternate forms.
+            // and divide t  he loss resulting from the remaining shortage equally among the collateral vaults, giving the liquidator a bonus on tokens that had to be returned in alternate forms.
             // This situation results in protocol loss.
             if (balanceShortage0 >= 0 && balanceShortage1 >= 0) {
                 // refresh stack to prevent stack too deep
@@ -891,13 +905,17 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                 );
 
                 int256 paid0 = int256(_balance0) + balanceShortage0;
-                int256 paid1 = int256(_balance1) + balanceShortage0;
+                int256 paid1 = int256(_balance1) + balanceShortage1;
 
                 (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit(
-                    (Math.rectified(int256(_delegation0) - paid0) * int256(CONVERSION_BONUS)) /
-                        int256(DECIMALS),
-                    (Math.rectified(int256(_delegation1) - paid1) * int256(CONVERSION_BONUS)) /
-                        int256(DECIMALS),
+                    uint256(
+                        (Math.rectified(int256(_delegation0) - paid0) * BONUS_NUMERATOR) /
+                            BONUS_DENOMINATOR
+                    ),
+                    uint256(
+                        (Math.rectified(int256(_delegation1) - paid1) * BONUS_NUMERATOR) /
+                            BONUS_DENOMINATOR
+                    ),
                     sqrtPriceX96
                 );
 
@@ -919,39 +937,31 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                 {
                     int256 converted1 = PanopticMath.convert0to1(_balanceShortage0, _sqrtPriceX96);
 
-                    // keeps track of the surplus, in this case it's whatever original surplus we had minus however much we had to convert and the commission fee
-                    int256 balanceShortage1Final = int256(_balanceShortage1) +
-                        converted1 +
-                        (converted1 * int256(CONVERSION_BONUS)) /
-                        int256(DECIMALS);
+                    // we can use the raw bonus here since none of the bonus goes toward the token0 shortage
+                    converted1 += (converted1 * LIQ_BONUS) / int256(DECIMALS);
 
                     // Case 3a: The user has enough value in surplus token1 to cover the shortage of token0 including a 10% conversion bonus.
                     // No protocol loss.
-                    if (balanceShortage1Final <= 0) {
-                        return (int256(_balance0), int256(_balance1) + balanceShortage1Final);
+                    if (_balanceShortage1 + converted1 <= 0) {
+                        return (int256(_balance0), int256(_delegation1) + converted1);
                     }
                 }
 
                 // Case 3b: The liquidatee does not have enough surplus token1 to cover the token0 shortage, so the remaining loss must be divided among the collateral vaults.
                 // Results in protocol loss.
                 (int256 refund0, int256 refund1) = PanopticMath.evenSplit(
-                    uint256(_balanceShortage0),
-                    uint256(_balanceShortage1),
+                    _balanceShortage0,
+                    _balanceShortage1,
                     _sqrtPriceX96
                 );
 
                 // base (amount before bonus) that needs to be refunded is the remaining balance plus the protocol loss evenly split among the vaults
-                refund1 = int256(_balance0) + refund0;
+                refund0 = int256(_balance0) + refund0;
                 refund1 = int256(_balance1) + refund1;
 
                 {
-                    (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit(
-                        int256(_delegation0) -
-                            (refund0 * int256(CONVERSION_BONUS)) /
-                            int256(DECIMALS),
-                        int256(_delegation1) -
-                            (refund1 * int256(CONVERSION_BONUS)) /
-                            int256(DECIMALS),
+                    (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit0(
+                        ((int256(_delegation0) - refund0) * BONUS_NUMERATOR) / BONUS_DENOMINATOR,
                         _sqrtPriceX96
                     );
                     refund0 += bonus0;
@@ -977,39 +987,31 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                 {
                     int256 converted0 = PanopticMath.convert1to0(_balanceShortage1, _sqrtPriceX96);
 
-                    // keeps track of the surplus, in this case it's whatever original surplus we had minus however much we had to convert and the commission fee
-                    int256 balanceShortage0Final = int256(_balanceShortage0) +
-                        converted0 +
-                        (converted0 * int256(CONVERSION_BONUS)) /
-                        int256(DECIMALS);
+                    // we can use the raw bonus here since none of the bonus goes toward the token1 shortage
+                    converted0 += (converted0 * LIQ_BONUS) / int256(DECIMALS);
 
                     // Case 4a: The user has enough value in surplus token0 to cover the shortage of token1 including a 10% conversion bonus.
                     // No protocol loss.
-                    if (balanceShortage0Final <= 0) {
-                        return (int256(_balance0) + balanceShortage0Final, int256(_balance1));
+                    if (_balanceShortage0 + converted0 <= 0) {
+                        return (int256(_delegation0) + converted0, int256(_balance1));
                     }
                 }
 
                 // Case 4b: The liquidatee does not have enough surplus token0 to cover the token1 shortage, so the remaining loss must be divided among the collateral vaults.
                 // Results in protocol loss.
                 (int256 refund0, int256 refund1) = PanopticMath.evenSplit(
-                    uint256(_balanceShortage0),
-                    uint256(_balanceShortage1),
+                    _balanceShortage0,
+                    _balanceShortage1,
                     _sqrtPriceX96
                 );
 
                 // base (amount before bonus) that needs to be refunded is the remaining balance plus the protocol loss evenly split among the vaults
-                refund1 = int256(_balance0) + refund0;
+                refund0 = int256(_balance0) + refund0;
                 refund1 = int256(_balance1) + refund1;
 
                 {
-                    (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit(
-                        int256(_delegation0) -
-                            (refund0 * int256(CONVERSION_BONUS)) /
-                            int256(DECIMALS),
-                        int256(_delegation1) -
-                            (refund1 * int256(CONVERSION_BONUS)) /
-                            int256(DECIMALS),
+                    (int256 bonus0, int256 bonus1) = PanopticMath.evenSplit1(
+                        ((int256(_delegation1) - refund1) * BONUS_NUMERATOR) / BONUS_DENOMINATOR,
                         _sqrtPriceX96
                     );
                     refund0 += bonus0;
