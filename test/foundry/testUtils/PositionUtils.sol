@@ -376,7 +376,7 @@ contract PositionUtils is Test {
         uint160 sqrtRatioBX96,
         uint256 token,
         uint256 amountToken
-    ) internal view returns (uint128 liquidity) {
+    ) internal pure returns (uint128 liquidity) {
         if (sqrtRatioAX96 > sqrtRatioBX96)
             (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
 
