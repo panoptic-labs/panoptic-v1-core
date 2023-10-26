@@ -1451,7 +1451,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             );
         }
 
-        // Compute the tolems required using new pool utilization
+        // Compute the tokens required using new pool utilization
         tokensRequired = _getRequiredCollateralAtTickSinglePosition(
             tokenId,
             positionSize,
@@ -1466,15 +1466,15 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param tokenId The option position.
     /// @param positionSize The size of the option position.
     /// @param atTick Tick to convert values at. This can be the current tick or the Uniswap pool TWAP tick.
-    /// @return tokensRequired Required tokens for that new position
+    /// @return tokensRequiredITM Required tokens for that new position
     /// @return itmAmount Amount of tokens that are ITM
     function getITMPositionCollateralRequirement(
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
-    ) public view returns (uint256 tokensRequired, int256 itmAmount) {
+    ) public view returns (int256 tokensRequiredITM, int256 itmAmount) {
         // get tokens required for the current tokenId position
-        tokensRequired = getPositionCollateralRequirement(tokenId, positionSize, atTick);
+        uint256 tokensRequired = getPositionCollateralRequirement(tokenId, positionSize, atTick);
 
         // compute ITM amounts
         (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
@@ -1483,13 +1483,13 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             s_tickSpacing,
             atTick
         );
-        // use the ITM amount for the current collateral token
-        itmAmount = s_underlyingIsToken0 ? int256(itmAmount0) : int256(itmAmount1);
 
-        // deduct ITM amounts from tokens required (is it ever negative? leaving it unchecked)
-        tokensRequired = itmAmount < 0
-            ? tokensRequired + uint256(-itmAmount)
-            : tokensRequired - uint256(itmAmount);
+        // use the ITM amount for the current collateral token
+        itmAmount = s_underlyingIsToken0 ? itmAmount0 : itmAmount1;
+
+        // deduct ITM amounts from tokens required
+        // final requirement can be negative due to an off by ~1-5 token precision loss error
+        tokensRequiredITM = tokensRequired.toInt256() - itmAmount;
     }
 
     /// @notice Get the collateral status/margin details of an account/user.

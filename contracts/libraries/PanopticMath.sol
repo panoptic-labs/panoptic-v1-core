@@ -277,7 +277,7 @@ library PanopticMath {
         unchecked {
             uint256 numLegs = tokenId.countLegs();
             for (uint256 leg = 0; leg < numLegs; ++leg) {
-                (int256 amount0, int256 amount1) = getITMAmountsForLeg(
+                (uint256 amount0, uint256 amount1) = getITMAmountsForLeg(
                     tokenId,
                     positionSize,
                     leg,
@@ -286,8 +286,12 @@ library PanopticMath {
                 );
 
                 bool isLong = tokenId.isLong(leg) == 1;
-                netAmount0 = isLong ? netAmount0 - amount0 : netAmount0 + amount0;
-                netAmount1 = isLong ? netAmount1 - amount1 : netAmount1 + amount1;
+                netAmount0 = isLong
+                    ? netAmount0 - amount0.toInt256()
+                    : netAmount0 + amount0.toInt256();
+                netAmount1 = isLong
+                    ? netAmount1 - amount1.toInt256()
+                    : netAmount1 + amount1.toInt256();
             }
         }
     }
@@ -311,7 +315,7 @@ library PanopticMath {
         uint256 legIndex,
         int24 tickSpacing,
         int24 atTick
-    ) internal pure returns (int256 itmAmount0, int256 itmAmount1) {
+    ) internal pure returns (uint256 itmAmount0, uint256 itmAmount1) {
         unchecked {
             uint256 liquidityChunk = getLiquidityChunk(
                 tokenId,
@@ -332,9 +336,9 @@ library PanopticMath {
             uint256 amountsMoved = getAmountsMoved(tokenId, positionSize, legIndex, tickSpacing);
             uint160 price = Math.getSqrtRatioAtTick(Math.max24(atTick, Constants.MIN_V3POOL_TICK));
             if ((amount0 > 0) && (tokenType == 1)) {
-                itmAmount1 = int256(amountsMoved.leftSlot() - convert0to1(amount0, price));
+                itmAmount1 = amountsMoved.leftSlot() - convert0to1(amount0, price);
             } else if ((amount1 > 0) && (tokenType == 0)) {
-                itmAmount0 = int256(amountsMoved.rightSlot() - convert1to0(amount1, price));
+                itmAmount0 = amountsMoved.rightSlot() - convert1to0(amount1, price);
             }
         }
     }

@@ -110,7 +110,7 @@ contract PanopticHelper {
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
-    ) public view returns (uint256 requiredCollateralITM0, uint256 requiredCollateralITM1) {
+    ) public view returns (int256 requiredCollateralITM0, int256 requiredCollateralITM1) {
         // Query the required collateral amounts for the two tokens
         (requiredCollateralITM0, ) = pool.collateralToken0().getITMPositionCollateralRequirement(
             tokenId,
