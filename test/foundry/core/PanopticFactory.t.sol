@@ -176,6 +176,7 @@ contract PanopticFactoryTest is Test {
         // Owner can't be changed to zero address -
         // or current owner
         vm.assume(unauthorizedOwner != address(0));
+        vm.assume(unauthorizedOwner != panopticFactory.factoryOwner());
 
         // begin impersonating transactions from fuzzed address
         vm.prank(unauthorizedOwner);

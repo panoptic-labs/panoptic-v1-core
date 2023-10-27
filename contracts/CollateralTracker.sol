@@ -8,9 +8,6 @@ import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Inherited implementations
 import {ERC20Minimal} from "@tokens/ERC20Minimal.sol";
 import {Multicall} from "@multicall/Multicall.sol";
-// Panoptic' modified Uniswap libraries
-import {LiquidityAmounts} from "@univ3-libraries/LiquidityAmounts.sol";
-import {TickMath} from "@univ3-libraries/TickMath.sol";
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
 import {Errors} from "@libraries/Errors.sol";
@@ -80,7 +77,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     using LiquidityChunk for uint256;
     // container that holds current tick, median tick, and caller
     using TickStateCallContext for uint256;
-    // represents an option position of up to four legs as a sinlge ERC1155 tokenId
+    // represents an option position of up to four legs as a single ERC1155 tokenId
     using TokenId for uint256;
 
     /// @notice Mutable parameters that can be used to adjust various protocol mechanisms and behaviors.
@@ -257,7 +254,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         address token1 = uniswapPool.token1();
 
         // Set the factory to the pool creator
-        // This function is called within the same tranaction as cloning the reference contract
+        // This function is called within the same transaction as cloning the reference contract
         // Ensuring that the deployer/owner sets the correct parameters on genesis
         // Calling 'startToken' on the reference itself is not a concern, as it's storage is never accessed
         factory = PanopticFactory(msg.sender);
@@ -753,7 +750,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param twapTick Tick at which the collateral requirement will be evaluated at(Uniswap TWAP tick at time of call).
     /// @param sqrtPriceX96 The sqrt price to 96 bit precision.
     /// @param premium The premium of the open positions.
-    /// @return bonusAmounts LeftRight encoding for the the bonus paid in each token in the Panoptic Pool to the liquidator.
+    /// @return bonusAmounts LeftRight encoding for the bonus paid in each token in the Panoptic Pool to the liquidator.
     /// @return tokenData LeftRight encoding with tokenbalance, ie assets, (in the right slot) and amount required in collateral (left slot).
     function computeBonus(
         address account,
@@ -871,8 +868,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // we don't need the leg information itself, really just "the number of half ranges" from the strike price:
         uint256 maxNumRangesFromStrike; // technically "maxNum(Half)RangesFromStrike" but the name is long
 
-        uint160 currentSqrtPriceX96 = TickMath.getSqrtRatioAtTick(currentTick);
-        uint160 medianSqrtPriceX96 = TickMath.getSqrtRatioAtTick(medianTick);
+        int24 _currentTick = currentTick;
+        int24 _medianTick = medianTick;
+
         unchecked {
             for (uint256 leg = 0; leg < TokenId.countLegs(positionId); ++leg) {
                 // short legs are not counted - exercise is intended to be based on long legs
@@ -884,7 +882,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
                 uint256 currNumRangesFromStrike;
 
-                if (currentTick < (strike - range)) {
+                if (_currentTick < (strike - range)) {
                     /**
                          current      strike
                            tick          │
@@ -894,9 +892,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                                 range=width/2
                     */
                     currNumRangesFromStrike = uint256(
-                        (2 * int256(strike - range - currentTick)) / range
-                    ); // = (strike - range - currentTick) / (range / 2); the "range/2" are the "half ranges"
-                } else if (currentTick > (strike + range)) {
+                        (2 * int256(strike - range - _currentTick)) / range
+                    ); // = (strike - range - _currentTick) / (range / 2); the "range/2" are the "half ranges"
+                } else if (_currentTick > (strike + range)) {
                     /**
                            strike      current
                               │         tick
@@ -906,7 +904,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                             range
                     */
                     currNumRangesFromStrike = uint256(
-                        (2 * int256(currentTick - strike - range)) / range
+                        (2 * int256(_currentTick - strike - range)) / range
                     );
                 }
                 maxNumRangesFromStrike = currNumRangesFromStrike > maxNumRangesFromStrike
@@ -922,21 +920,15 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     s_tickSpacing
                 );
 
-                (uint256 currentValue0, uint256 currentValue1) = LiquidityAmounts
-                    .getAmountsForLiquidity(
-                        currentSqrtPriceX96,
-                        TickMath.getSqrtRatioAtTick(liquidityChunk.tickLower()),
-                        TickMath.getSqrtRatioAtTick(liquidityChunk.tickUpper()),
-                        liquidityChunk.liquidity()
-                    );
+                (uint256 currentValue0, uint256 currentValue1) = Math.getAmountsForLiquidity(
+                    _currentTick,
+                    liquidityChunk
+                );
 
-                (uint256 medianValue0, uint256 medianValue1) = LiquidityAmounts
-                    .getAmountsForLiquidity(
-                        medianSqrtPriceX96,
-                        TickMath.getSqrtRatioAtTick(liquidityChunk.tickLower()),
-                        TickMath.getSqrtRatioAtTick(liquidityChunk.tickUpper()),
-                        liquidityChunk.liquidity()
-                    );
+                (uint256 medianValue0, uint256 medianValue1) = Math.getAmountsForLiquidity(
+                    _medianTick,
+                    liquidityChunk
+                );
 
                 // compensate user for loss in value if chunk has lost money between current and median tick
                 // note: the delta for one token will be positive and the other will be negative. This cancels out any moves in their positions
@@ -960,7 +952,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // this divergence is observed when n (the number of half ranges) is > 10 (ensuring the floor is not zero, but -1 = 1bps at that point)
             int256 fee = (s_exerciseCost >> maxNumRangesFromStrike); // exponential decay of fee based on number of half ranges away from the price
 
-            // store the exercise fees in in the exerciseFees variable
+            // store the exercise fees in the exerciseFees variable
             exerciseFees = exerciseFees
                 .toRightSlot(int128((int256(longAmounts.rightSlot()) * int256(fee)) / DECIMALS_128))
                 .toLeftSlot(int128((int256(longAmounts.leftSlot()) * int256(fee)) / DECIMALS_128));
@@ -980,7 +972,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int24 atTick,
         CollateralTracker collateralToken1
     ) public view returns (int256 refundAmounts) {
-        uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(atTick);
+        uint160 sqrtPriceX96 = Math.getSqrtRatioAtTick(atTick);
 
         unchecked {
             // if the refunder lacks sufficient token0 to pay back the refundee, have them pay back the equivalent value in token1
@@ -1422,7 +1414,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 shortAmount,
         int128 swappedAmount
     ) internal view returns (int256 exchangedAmount) {
-        // If amount is swapped is positive, the amount of tokens to pay is the ITM amount
+        // If amount swapped is positive, the amount of tokens to pay is the ITM amount
 
         unchecked {
             // intrinsic value is the amount that need to be exchanged due to minting in-the-money
@@ -1487,6 +1479,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // get all collateral required for the incoming list of positions
             tokenRequired = _getTotalRequiredCollateral(atTick, positionBalanceArray);
 
+            // If premium is negative, increase the short premium requirement by the maintenance margin ratio
             if (premiumAllPositions < 0) {
                 unchecked {
                     tokenRequired +=
@@ -1685,10 +1678,10 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     // so instead we cap it at the minimum price, which is acceptable because
                     // a higher ratio will result in an increased slope for the collateral requirement
                     uint160 ratio = tokenType == 1 // tokenType
-                        ? TickMath.getSqrtRatioAtTick(
+                        ? Math.getSqrtRatioAtTick(
                             Math.max24(2 * (atTick - strike), Constants.MIN_V3POOL_TICK)
                         ) // puts ->  price/strike
-                        : TickMath.getSqrtRatioAtTick(
+                        : Math.getSqrtRatioAtTick(
                             Math.max24(2 * (strike - atTick), Constants.MIN_V3POOL_TICK)
                         ); // calls -> strike/price
 
@@ -1729,7 +1722,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                         // the collateral requirement when in-range, which always over-estimates the amount of token required
                         // Specifically:
                         //  required = (1-sellCollateral) * (scaleFactor - ratio) / (scaleFactor + 1) + sellCollateral
-                        uint160 scaleFactor = TickMath.getSqrtRatioAtTick(2 * oneSidedRange);
+                        uint160 scaleFactor = Math.getSqrtRatioAtTick(2 * oneSidedRange);
                         uint256 c3 = Math.mulDiv(
                             c2,
                             scaleFactor - ratio,
@@ -1822,7 +1815,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             }
         } else if (isLong == 1) {
             // if options is long, use buy collateral ratio
-            // compute the buy collateral ratio, which depends on the pool utulization
+            // compute the buy collateral ratio, which depends on the pool utilization
             uint256 buyCollateral = uint256(
                 // no need to typecast input to int128 as value will be interpreted appropriately
                 int256(_buyCollateralRatio(utilization))

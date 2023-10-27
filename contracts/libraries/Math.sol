@@ -3,10 +3,15 @@ pragma solidity ^0.8.0;
 
 // Libraries
 import {Errors} from "@libraries/Errors.sol";
+import {Constants} from "@libraries/Constants.sol";
+// Custom types
+import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 
 /// @title Core math library.
 /// @author Axicon Labs Limited
 library Math {
+    using LiquidityChunk for uint256; // a leg within an option position `tokenId`
+
     // equivalent to type(uint256).max - used in assembly blocks as a replacement
     uint256 internal constant MAX_UINT256 = 2 ** 256 - 1;
 
@@ -77,6 +82,161 @@ library Math {
             if (x >= 0x10) {
                 r += 1;
             }
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                               TICK MATH
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates 1.0001^(tick/2) as an X96 number
+    /// @dev Implemented using Uniswap's "incorrect" constants. Supplying commented-out real values for an accurate calculation
+    /// @dev Will revert if |tick| > max tick
+    /// @param tick Value of the tick for which sqrt(1.0001^tick) is calculated
+    /// @return sqrtPriceX96 A Q64.96 number representing the sqrt price at the provided tick
+    function getSqrtRatioAtTick(int24 tick) internal pure returns (uint160 sqrtPriceX96) {
+        unchecked {
+            uint256 absTick = tick < 0 ? uint256(-int256(tick)) : uint256(int256(tick));
+            if (absTick > uint256(int256(Constants.MAX_V3POOL_TICK))) revert Errors.InvalidTick();
+
+            uint256 sqrtR = absTick & 0x1 != 0
+                ? 0xfffcb933bd6fad37aa2d162d1a594001
+                : 0x100000000000000000000000000000000;
+            // RealV: 0xfffcb933bd6fad37aa2d162d1a594001
+            if (absTick & 0x2 != 0) sqrtR = (sqrtR * 0xfff97272373d413259a46990580e213a) >> 128;
+            // RealV: 0xfff97272373d413259a46990580e2139
+            if (absTick & 0x4 != 0) sqrtR = (sqrtR * 0xfff2e50f5f656932ef12357cf3c7fdcc) >> 128;
+            // RealV: 0xfff2e50f5f656932ef12357cf3c7fdca
+            if (absTick & 0x8 != 0) sqrtR = (sqrtR * 0xffe5caca7e10e4e61c3624eaa0941cd0) >> 128;
+            // RealV: 0xffe5caca7e10e4e61c3624eaa0941ccd
+            if (absTick & 0x10 != 0) sqrtR = (sqrtR * 0xffcb9843d60f6159c9db58835c926644) >> 128;
+            // RealV: 0xffcb9843d60f6159c9db58835c92663e
+            if (absTick & 0x20 != 0) sqrtR = (sqrtR * 0xff973b41fa98c081472e6896dfb254c0) >> 128;
+            // RealV: 0xff973b41fa98c081472e6896dfb254b6
+            if (absTick & 0x40 != 0) sqrtR = (sqrtR * 0xff2ea16466c96a3843ec78b326b52861) >> 128;
+            // RealV: 0xff2ea16466c96a3843ec78b326b5284f
+            if (absTick & 0x80 != 0) sqrtR = (sqrtR * 0xfe5dee046a99a2a811c461f1969c3053) >> 128;
+            // RealV: 0xfe5dee046a99a2a811c461f1969c3032
+            if (absTick & 0x100 != 0) sqrtR = (sqrtR * 0xfcbe86c7900a88aedcffc83b479aa3a4) >> 128;
+            // RealV: 0xfcbe86c7900a88aedcffc83b479aa363
+            if (absTick & 0x200 != 0) sqrtR = (sqrtR * 0xf987a7253ac413176f2b074cf7815e54) >> 128;
+            // RealV: 0xf987a7253ac413176f2b074cf7815dd0
+            if (absTick & 0x400 != 0) sqrtR = (sqrtR * 0xf3392b0822b70005940c7a398e4b70f3) >> 128;
+            // RealV: 0xf3392b0822b70005940c7a398e4b6ff1
+            if (absTick & 0x800 != 0) sqrtR = (sqrtR * 0xe7159475a2c29b7443b29c7fa6e889d9) >> 128;
+            // RealV: 0xe7159475a2c29b7443b29c7fa6e887f2
+            if (absTick & 0x1000 != 0) sqrtR = (sqrtR * 0xd097f3bdfd2022b8845ad8f792aa5825) >> 128;
+            // RealV: 0xd097f3bdfd2022b8845ad8f792aa548c
+            if (absTick & 0x2000 != 0) sqrtR = (sqrtR * 0xa9f746462d870fdf8a65dc1f90e061e5) >> 128;
+            // RealV: 0xa9f746462d870fdf8a65dc1f90e05b52
+            if (absTick & 0x4000 != 0) sqrtR = (sqrtR * 0x70d869a156d2a1b890bb3df62baf32f7) >> 128;
+            // RealV: 0x70d869a156d2a1b890bb3df62baf27ff
+            if (absTick & 0x8000 != 0) sqrtR = (sqrtR * 0x31be135f97d08fd981231505542fcfa6) >> 128;
+            // RealV: 0x31be135f97d08fd981231505542fbfe8
+            if (absTick & 0x10000 != 0) sqrtR = (sqrtR * 0x9aa508b5b7a84e1c677de54f3e99bc9) >> 128;
+            // RealV: 0x9aa508b5b7a84e1c677de54f3e988fe
+            if (absTick & 0x20000 != 0) sqrtR = (sqrtR * 0x5d6af8dedb81196699c329225ee604) >> 128;
+            // RealV: 0x5d6af8dedb81196699c329225ed28d
+            if (absTick & 0x40000 != 0) sqrtR = (sqrtR * 0x2216e584f5fa1ea926041bedfe98) >> 128;
+            // RealV: 0x2216e584f5fa1ea926041bedeaf4
+            if (absTick & 0x80000 != 0) sqrtR = (sqrtR * 0x48a170391f7dc42444e8fa2) >> 128;
+            // RealV: 0x48a170391f7dc42444e7be7
+
+            if (tick > 0) sqrtR = type(uint256).max / sqrtR;
+
+            // Downcast + rounding up to keep is consistent with Uniswap's
+            sqrtPriceX96 = uint160((sqrtR >> 32) + (sqrtR % (1 << 32) == 0 ? 0 : 1));
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    LIQUIDITY AMOUNTS (STRIKE+WIDTH)
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calculates the amount of token0 received for a given liquidityChunk
+    /// @dev Had to use a less optimal calculation to match Uniswap's implementation
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @return amount0 The amount of token0
+    function getAmount0ForLiquidity(
+        uint256 liquidityChunk
+    ) internal pure returns (uint256 amount0) {
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
+        unchecked {
+            return
+                mulDiv(
+                    uint256(liquidityChunk.liquidity()) << 96,
+                    highPriceX96 - lowPriceX96,
+                    highPriceX96
+                ) / lowPriceX96;
+        }
+    }
+
+    /// @notice Calculates the amount of token1 received for a given liquidityChunk
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @return amount1 The amount of token1
+    function getAmount1ForLiquidity(
+        uint256 liquidityChunk
+    ) internal pure returns (uint256 amount1) {
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
+
+        unchecked {
+            return mulDiv96(liquidityChunk.liquidity(), highPriceX96 - lowPriceX96);
+        }
+    }
+
+    /// @notice Calculates the amount of token0 and token1 received for a given liquidityChunk at the provided currentTick
+    /// @param currentTick the current tick to be evaluated
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @return amount0 The amount of token0
+    /// @return amount1 The amount of token1
+    function getAmountsForLiquidity(
+        int24 currentTick,
+        uint256 liquidityChunk
+    ) internal pure returns (uint256 amount0, uint256 amount1) {
+        if (currentTick <= liquidityChunk.tickLower()) {
+            amount0 = getAmount0ForLiquidity(liquidityChunk);
+        } else if (currentTick >= liquidityChunk.tickUpper()) {
+            amount1 = getAmount1ForLiquidity(liquidityChunk);
+        } else {
+            amount0 = getAmount0ForLiquidity(liquidityChunk.updateTickLower(currentTick));
+            amount1 = getAmount1ForLiquidity(liquidityChunk.updateTickUpper(currentTick));
+        }
+    }
+
+    /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk
+    /// @dev Had to use a less optimal calculation to match Uniswap's implementation
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @param amount0 The amount of token0
+    /// @return liquidity The calculated amount of liquidity
+    function getLiquidityForAmount0(
+        uint256 liquidityChunk,
+        uint256 amount0
+    ) internal pure returns (uint128 liquidity) {
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
+
+        unchecked {
+            return
+                toUint128(
+                    mulDiv(amount0, mulDiv96(highPriceX96, lowPriceX96), highPriceX96 - lowPriceX96)
+                );
+        }
+    }
+
+    /// @notice Calculates the amount of liquidity for a given amount of token0 and liquidityChunk
+    /// @param liquidityChunk variable that efficiently packs the liquidity, tickLower, and tickUpper.
+    /// @param amount1 The amount of token1
+    /// @return liquidity The calculated amount of liquidity
+    function getLiquidityForAmount1(
+        uint256 liquidityChunk,
+        uint256 amount1
+    ) internal pure returns (uint128 liquidity) {
+        uint160 lowPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickLower());
+        uint160 highPriceX96 = getSqrtRatioAtTick(liquidityChunk.tickUpper());
+        unchecked {
+            return toUint128(mulDiv(amount1, Constants.FP96, highPriceX96 - lowPriceX96));
         }
     }
 

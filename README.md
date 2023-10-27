@@ -14,7 +14,7 @@ The Panoptic protocol is noncustodial, has no counterparty risk, offers instanta
 - [Panoptic's Website](https://www.panoptic.xyz)
 - [Whitepaper](https://paper.panoptic.xyz/)
 - [Litepaper](https://intro.panoptic.xyz)
-- [Documentation](https://www.docs.panoptic.xyz)
+- [Documentation](https://docs.panoptic.xyz/)
 - [Twitter](https://twitter.com/Panoptic_xyz)
 - [Discord](https://discord.gg/7fE8SN9pRT)
 - [Blog](https://www.panoptic.xyz/blog)
@@ -100,7 +100,7 @@ contracts/
 ├── SemiFungiblePositionManager — "The 'engine' of Panoptic - manages all Uniswap V3 positions in the protocol as well as being a more advanced, gas-efficient alternative to NFPM for Uniswap LPs"
 ├── tokens
 │   ├── ERC1155Minimal — "A minimalist implementation of the ERC1155 token standard without metadata"
-│   ├── ERC20Minimal — "A minimialist implementation of the ERC20 token standard without metadata"
+│   ├── ERC20Minimal — "A minimalist implementation of the ERC20 token standard without metadata"
 │   └── interfaces
 │       └── IERC20Partial — "An incomplete ERC20 interface containing functions used in Panoptic with some return values omitted to support noncompliant tokens such as USDT"
 ├── types
@@ -115,11 +115,8 @@ contracts/
 │   ├── FeesCalc — "Utility to calculate up-to-date swap fees for liquidity chunks"
 │   ├── InteractionHelper — "Helpers to perform bytecode-size-heavy interactions with external contracts like batch approvals and metadata queries"
 │   ├── Math — "Library of generic math functions like abs(), mulDiv, etc"
-│   └── PanopticMath — "Library containing advanced Panoptic/Uniswap-specific functionality such as our TWAP, price conversions, and position sizing math"
+│   ├── PanopticMath — "Library containing advanced Panoptic/Uniswap-specific functionality such as our TWAP, price conversions, and position sizing math"
 │   └── SafeTransferLib — "Safe ERC20 transfer library that gracefully handles missing return values"
-├── univ3-libraries
-│   ├── TickMath — "Math library for computing sqrt prices from ticks and vice versa"
-│   └── LiquidityAmounts — "Provides functions for computing liquidity amounts from token amounts and prices"
 ├── multicall
 │   └── Multicall — "Adds a function to inheriting contracts that allows for multiple calls to be executed in a single transaction"
 └── periphery
@@ -173,7 +170,6 @@ The primary license for Panoptic V1 is the Business Source License 1.1 (`BUSL-1.
 
 - [Interfaces](./contracts/interfaces), [tokens](./contracts/tokens), and [Multicall.sol](./contracts/multicall/Multicall.sol) have a General Public License
 - Some [libraries](./contracts/libraries) and [types](./contracts/types/) have a General Public License
-- [Libraries modified from Uniswap V3](./contracts/univ3-libraries) have a General Public License
 - [Tests](./test/) and some [scripts](./scripts) are unlicensed
 
 Each of these files states their license type.

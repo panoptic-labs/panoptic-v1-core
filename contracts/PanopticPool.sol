@@ -10,8 +10,6 @@ import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Inherited implementations
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import {Multicall} from "@multicall/Multicall.sol";
-// Panoptic's modified Uniswap libraries
-import {TickMath} from "@univ3-libraries/TickMath.sol";
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
 import {TickStateCallContext} from "@types/TickStateCallContext.sol";
@@ -737,14 +735,12 @@ contract PanopticPool is ERC1155Holder, Multicall {
             // cache to avoid stack to deep errors
             int24 currentTick = tickStateCallContext.currentTick();
 
-            // compute accumulated premia for long options only
-            // this is used to compute the collateral requirement
-            // we only calculate long premium here as a protection buffer against minting a large number defined risk positions -eg. tiny spreads
+            // compute accumulated premia for all open options
             // Additionally Read all position balances from the Panoptic pool
             (portfolioPremium, positionBalanceArray) = _calculateAccumulatedPremia(
                 msg.sender,
                 positionIdList,
-                COMPUTE_LONG_PREMIA,
+                COMPUTE_ALL_PREMIA,
                 currentTick
             );
 
@@ -847,7 +843,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 uint160 sqrtPriceX96Median;
                 {
                     int24 medianTick = _ct.medianTick();
-                    sqrtPriceX96Median = TickMath.getSqrtRatioAtTick(medianTick);
+                    sqrtPriceX96Median = Math.getSqrtRatioAtTick(medianTick);
                 }
                 // check cross-collateral (tokens 0 and 1) solvency state:
                 (uint256 balanceCross, uint256 thresholdCross) = _getSolvencyBalances(
@@ -1315,7 +1311,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
             // Compute the TWAP
             int24 twapTick = getUniV3TWAP();
-            uint160 twapSqrtPrice = TickMath.getSqrtRatioAtTick(twapTick);
+            uint160 twapSqrtPrice = Math.getSqrtRatioAtTick(twapTick);
 
             // this computes the token balance (right slot) and the tokens required (left slot) for token0
             (, uint256 tokenData0) = s_collateralToken0.computeBonus(
@@ -1476,7 +1472,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 (uint256 exerciseFeesCross, uint256 thresholdCross) = _getSolvencyBalances(
                     tokenData0,
                     tokenData1,
-                    TickMath.getSqrtRatioAtTick(twapTick)
+                    Math.getSqrtRatioAtTick(twapTick)
                 );
 
                 // if collateral decrease from position burning is insufficient to cover exercise fees, revert

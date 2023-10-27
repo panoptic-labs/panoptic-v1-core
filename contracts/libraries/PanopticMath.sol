@@ -3,9 +3,6 @@ pragma solidity ^0.8.0;
 
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
-// Panoptic's modified Uniswap libraries
-import {LiquidityAmounts} from "@univ3-libraries/LiquidityAmounts.sol";
-import {TickMath} from "@univ3-libraries/TickMath.sol";
 // Libraries
 import {Errors} from "@libraries/Errors.sol";
 import {Math} from "@libraries/Math.sol";
@@ -203,15 +200,13 @@ library PanopticMath {
         uint128 legLiquidity;
         uint256 amount = uint256(positionSize) * tokenId.optionRatio(legIndex);
         if (tokenId.asset(legIndex) == 0) {
-            legLiquidity = LiquidityAmounts.getLiquidityForAmount0(
-                TickMath.getSqrtRatioAtTick(tickLower),
-                TickMath.getSqrtRatioAtTick(tickUpper),
+            legLiquidity = Math.getLiquidityForAmount0(
+                uint256(0).addTickLower(tickLower).addTickUpper(tickUpper),
                 amount
             );
         } else {
-            legLiquidity = LiquidityAmounts.getLiquidityForAmount1(
-                TickMath.getSqrtRatioAtTick(tickLower),
-                TickMath.getSqrtRatioAtTick(tickUpper),
+            legLiquidity = Math.getLiquidityForAmount1(
+                uint256(0).addTickLower(tickLower).addTickUpper(tickUpper),
                 amount
             );
         }
@@ -306,12 +301,7 @@ library PanopticMath {
         int24 tick
     ) internal pure returns (uint256, uint256) {
         return
-            convertCollateralData(
-                tokenData0,
-                tokenData1,
-                tokenType,
-                TickMath.getSqrtRatioAtTick(tick)
-            );
+            convertCollateralData(tokenData0, tokenData1, tokenType, Math.getSqrtRatioAtTick(tick));
     }
 
     /// @notice Compute the notional amount given an incoming total number of `contracts` deployed between `tickLower` and `tickUpper`.
@@ -335,14 +325,8 @@ library PanopticMath {
     ) internal pure returns (uint128) {
         unchecked {
             uint256 notional = asset == 0
-                ? convert0to1(
-                    contractSize,
-                    TickMath.getSqrtRatioAtTick((tickUpper + tickLower) / 2)
-                )
-                : convert1to0(
-                    contractSize,
-                    TickMath.getSqrtRatioAtTick((tickUpper + tickLower) / 2)
-                );
+                ? convert0to1(contractSize, Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2))
+                : convert1to0(contractSize, Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2));
 
             if (notional == 0 || notional > type(uint128).max) revert Errors.InvalidNotionalValue();
 

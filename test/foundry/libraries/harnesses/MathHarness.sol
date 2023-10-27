@@ -98,4 +98,34 @@ contract MathHarness {
         uint256 result = Math.mulDiv192(a, b);
         return result;
     }
+
+    function getSqrtRatioAtTick(int24 a) public pure returns (uint160) {
+        uint160 result = Math.getSqrtRatioAtTick(a);
+        return result;
+    }
+
+    function getAmount0ForLiquidity(uint256 a) public pure returns (uint256) {
+        uint256 result = Math.getAmount0ForLiquidity(a);
+        return result;
+    }
+
+    function getAmount1ForLiquidity(uint256 a) public pure returns (uint256) {
+        uint256 result = Math.getAmount1ForLiquidity(a);
+        return result;
+    }
+
+    function getAmountsForLiquidity(int24 t, uint256 a) public pure returns (uint256, uint256) {
+        (uint256 result0, uint256 result1) = Math.getAmountsForLiquidity(t, a);
+        return (result0, result1);
+    }
+
+    function getLiquidityForAmount0(uint256 c, uint256 a0) public pure returns (uint256) {
+        uint256 result = Math.getLiquidityForAmount0(c, a0);
+        return result;
+    }
+
+    function getLiquidityForAmount1(uint256 c, uint256 a1) public pure returns (uint256) {
+        uint256 result = Math.getLiquidityForAmount1(c, a1);
+        return result;
+    }
 }
