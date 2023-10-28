@@ -81,18 +81,21 @@ contract PanopticHelper {
     /// @return requiredCollateral1 The collateral requirement for token0
     function computeCollateralRequirement(
         PanopticPool pool,
+        address account,
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
     ) public view returns (uint256 requiredCollateral0, uint256 requiredCollateral1) {
         // Query the required collateral amounts for the two tokens
         requiredCollateral0 = pool.collateralToken0().getPositionCollateralRequirement(
+            account,
             tokenId,
             positionSize,
             atTick
         );
         // Query the required collateral amounts for the two tokens
         requiredCollateral1 = pool.collateralToken1().getPositionCollateralRequirement(
+            account,
             tokenId,
             positionSize,
             atTick
@@ -107,18 +110,21 @@ contract PanopticHelper {
     /// @return requiredCollateralITM1 The collateral requirement for token0
     function computeCollateralRequirementITM(
         PanopticPool pool,
+        address account,
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
     ) public view returns (int256 requiredCollateralITM0, int256 requiredCollateralITM1) {
         // Query the required collateral amounts for the two tokens
         (requiredCollateralITM0, ) = pool.collateralToken0().getITMPositionCollateralRequirement(
+            account,
             tokenId,
             positionSize,
             atTick
         );
         // Query the required collateral amounts for the two tokens
         (requiredCollateralITM1, ) = pool.collateralToken1().getITMPositionCollateralRequirement(
+            account,
             tokenId,
             positionSize,
             atTick
