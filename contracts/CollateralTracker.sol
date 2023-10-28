@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
+// Foundry
+import "forge-std/Test.sol";
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
@@ -1004,6 +1006,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         }
 
         unchecked {
+            console2.log("p s_inAMM", s_inAMM);
+            console2.log("p _totalAssets", _totalAssets);
             return int128(int256((s_inAMM * DECIMALS) / _totalAssets));
         }
     }
@@ -1108,6 +1112,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         /// if utilization is less than zero, this is the calculation for a strangle, which gets 2x the capital efficiency at low pool utilization
         /// at 0% utilization, strangle legs do not compound efficiency
         if (utilization < 0) {
+            console2.log("utilization less than 0");
             unchecked {
                 buyCollateralRatio /= 2;
                 utilization = -utilization;
@@ -1422,14 +1427,18 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param atTick Tick to convert values at.
     /// @return tokensRequired Required tokens for that new position
     function getPositionCollateralRequirement(
+        address account,
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
     ) public view returns (uint256 tokensRequired) {
         // update pool utilization, taking new inAMM amounts into account
-        uint128 newPoolUtilization;
+        uint128 poolUtilization;
         unchecked {
+            (, uint128 poolUtilization0, uint128 poolUtilization1) = PanopticPool(s_panopticPool)
+                .optionPositionBalance(account, tokenId);
             int128 currentPoolUtilization = _poolUtilization();
+            console2.log("currentPoolUtilization", currentPoolUtilization);
 
             (int256 longAmounts, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
                 tokenId,
@@ -1443,12 +1452,33 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                 : (longAmounts.leftSlot(), shortAmounts.leftSlot());
 
             int256 deltaBalance = shortAmount - longAmount;
+            console2.log("longAmount", longAmount);
+            console2.log("shortAmount", shortAmount);
 
-            newPoolUtilization = uint128(
+            console2.log("deltaBalance", deltaBalance);
+            console2.log("totalAssets()", totalAssets());
+            console2.log(
+                "currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())",
+                currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
+            );
+
+            uint128 newPoolUtilization = uint128(
                 uint256(
                     currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
                 )
             );
+            console2.log("currentPoolUtilization", currentPoolUtilization);
+            console2.log("newPoolUtilization", newPoolUtilization);
+
+            s_underlyingIsToken0
+                ? poolUtilization0 = newPoolUtilization
+                : poolUtilization1 = newPoolUtilization;
+
+            console2.log("poolUtilization0", poolUtilization0);
+            console2.log("poolUtilization1", poolUtilization1);
+
+            poolUtilization = poolUtilization0 + (poolUtilization1 << 64);
+            console2.log("newPoolUtilization", newPoolUtilization);
         }
 
         // Compute the tokens required using new pool utilization
@@ -1456,8 +1486,10 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             tokenId,
             positionSize,
             atTick,
-            newPoolUtilization
+            poolUtilization
         );
+
+        console2.log("y tokensRequired", tokensRequired);
     }
 
     /// @notice Get the collateral status/margin details for a single position, includes offsetting effect of ITM positions.
@@ -1466,15 +1498,23 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param tokenId The option position.
     /// @param positionSize The size of the option position.
     /// @param atTick Tick to convert values at. This can be the current tick or the Uniswap pool TWAP tick.
-    /// @return tokensRequiredITM Required tokens for that new position
+    /// @return totalTokensRequired Required tokens for that new position
     /// @return itmAmount Amount of tokens that are ITM
     function getITMPositionCollateralRequirement(
+        address account,
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
-    ) public view returns (int256 tokensRequiredITM, int256 itmAmount) {
+    ) public view returns (int256 totalTokensRequired, int256 itmAmount) {
         // get tokens required for the current tokenId position
-        uint256 tokensRequired = getPositionCollateralRequirement(tokenId, positionSize, atTick);
+        uint256 tokensRequired = getPositionCollateralRequirement(
+            account,
+            tokenId,
+            positionSize,
+            atTick
+        );
+
+        console2.log("X tokensRequired", tokensRequired);
 
         // compute ITM amounts
         (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
@@ -1487,9 +1527,13 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // use the ITM amount for the current collateral token
         itmAmount = s_underlyingIsToken0 ? itmAmount0 : itmAmount1;
 
+        console2.log("X itmAmount", itmAmount);
+
         // deduct ITM amounts from tokens required
         // final requirement can be negative due to an off by ~1-5 token precision loss error
-        tokensRequiredITM = tokensRequired.toInt256() - itmAmount;
+        totalTokensRequired = tokensRequired.toInt256() - itmAmount;
+
+        console2.log("X totalTokensRequired", totalTokensRequired);
     }
 
     /// @notice Get the collateral status/margin details of an account/user.
@@ -1531,6 +1575,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         if (positionBalanceArray.length > 0) {
             // get all collateral required for the incoming list of positions
             tokenRequired = _getTotalRequiredCollateral(atTick, positionBalanceArray);
+
+            console2.log("q tokenRequired", tokenRequired);
 
             // If premium is negative, increase the short premium requirement by the maintenance margin ratio
             if (premiumAllPositions < 0) {
@@ -1611,6 +1657,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         bool underlyingIsToken0 = s_underlyingIsToken0;
         uint256 numLegs = tokenId.countLegs();
 
+        console2.log("q underlyingIsToken0", underlyingIsToken0);
+        console2.log("q poolUtilization", poolUtilization);
+
         unchecked {
             for (uint256 index = 0; index < numLegs; ++index) {
                 // revert if the tokenType does not match the current collateral token
@@ -1690,6 +1739,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int64 utilization = tokenType == 0
             ? int64(uint64(poolUtilization))
             : int64(uint64(poolUtilization >> 64));
+
+        console2.log("real utilization", utilization);
 
         // extract the strike of the leg
         int24 strike = tokenId.strike(index);
@@ -2039,6 +2090,19 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             poolUtilization =
                 uint128(uint64(-int64(uint64(poolUtilization)))) +
                 (uint128(uint64(-int64(uint64(poolUtilization >> 64)))) << 64);
+
+            console2.log("strangle poolUtilization", poolUtilization);
+
+            console2.log(
+                "strangleRequired",
+                _getRequiredCollateralSingleLegNoPartner(
+                    tokenId,
+                    index,
+                    positionSize,
+                    atTick,
+                    poolUtilization
+                )
+            );
 
             return
                 strangleRequired = _getRequiredCollateralSingleLegNoPartner(
