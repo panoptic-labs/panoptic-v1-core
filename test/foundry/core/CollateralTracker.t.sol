@@ -7506,7 +7506,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList1.push(tokenId1);
 
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 4);
-            _spreadTokensRequired(tokenId1, positionSize0);
+            _spreadTokensRequired(tokenId1, positionSize0 / 4);
 
             panopticPool.mintOptions(
                 positionIdList1,
@@ -7660,8 +7660,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 0, 0, strike1, width1);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
-            _spreadTokensRequired(tokenId1, positionSize0);
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 4);
+            _spreadTokensRequired(tokenId1, positionSize0 / 4);
 
             panopticPool.mintOptions(
                 positionIdList1,
