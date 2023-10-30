@@ -1293,6 +1293,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             );
             s_inAMM = uint128(uint256(int256(uint256(s_inAMM)) + (shortAmount - longAmount)));
 
+            console.log("swapped Amount", swappedAmount);
+
             {
                 // get the current Panoptic pool utilization
                 // Check if current tick is too far away from median, set to utilization to 10,001 if it is
@@ -1458,6 +1460,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                 : (longAmounts.leftSlot(), shortAmounts.leftSlot());
 
             int256 deltaBalance = shortAmount - longAmount;
+
+            console.log("delta balance", deltaBalance);
 
             int128 newPoolUtilization = int128(
                 currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
