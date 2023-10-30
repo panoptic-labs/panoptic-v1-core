@@ -7361,43 +7361,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
             {
                 uint256[2] memory checkSingle = [uint256(0), uint256(0)];
                 uint128 required = _tokensRequired(
-                    tokenId,
-                    positionSize0,
-                    atTick,
-                    poolUtilizations,
-                    checkSingle
-                );
-
-                (, , uint256[2][] memory posBalanceArray) = panopticPool
-                    .calculateAccumulatedFeesBatch(Bob, positionIdList);
-
-                tokenData0 = collateralToken0.getAccountMarginDetails(
-                    Bob,
-                    atTick,
-                    posBalanceArray,
-                    0
-                );
-                tokenData1 = collateralToken1.getAccountMarginDetails(
-                    Bob,
-                    atTick,
-                    posBalanceArray,
-                    0
-                );
-
-                (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
-                    .getITMPositionCollateralRequirement(Bob, tokenId, positionSize0, atTick);
-                (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
-                    .getITMPositionCollateralRequirement(Bob, tokenId, positionSize0, atTick);
-
-                assertEq(0, tokensRequiredITM0, "0");
-                assertEq(0, tokenData0.leftSlot(), "1");
-                assertApproxEqAbs(int128(required) - itmAmount1, tokensRequiredITM1, 5, "2");
-                assertEq(int128(tokenData1.leftSlot()) - itmAmount1, tokensRequiredITM1, "3");
-            }
-
-            {
-                uint256[2] memory checkSingle = [uint256(0), uint256(0)];
-                uint128 required = _tokensRequired(
                     tokenId1,
                     positionSize0 / 2,
                     atTick,
@@ -7436,10 +7399,10 @@ contract CollateralTrackerTest is Test, PositionUtils {
                         atTick
                     );
 
-                assertEq(0, tokensRequiredITM0);
-                assertEq(0, tokenData0.leftSlot());
-                assertEq(int128(required) - itmAmount1, tokensRequiredITM1);
-                assertEq(int128(tokenData1.leftSlot()) - itmAmount1, tokensRequiredITM1);
+                assertEq(0, tokensRequiredITM1, "0");
+                assertEq(0, tokenData1.leftSlot(), "1");
+                assertEq(int128(required) - itmAmount0, tokensRequiredITM0, "2");
+                assertEq(int128(tokenData0.leftSlot()) - itmAmount0, tokensRequiredITM0, "3");
             }
         }
     }
@@ -7526,12 +7489,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId1 = tokenId1.addLeg(1, 1, 1, 0, 1, 0, strike1, width1);
             positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 4);
             _spreadTokensRequired(tokenId1, positionSize0);
 
             panopticPool.mintOptions(
                 positionIdList1,
-                positionSize0 / 2,
+                positionSize0 / 4,
                 type(uint64).max,
                 TickMath.MIN_TICK,
                 TickMath.MAX_TICK
@@ -7569,16 +7532,16 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
-            uint128 required = _spreadTokensRequired(tokenId1, positionSize0 / 2);
+            uint128 required = _spreadTokensRequired(tokenId1, positionSize0 / 4);
 
             (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
-                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 2, atTick);
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 4, atTick);
             (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
-                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 2, atTick);
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 4, atTick);
 
             // only add premium requirement if there is net premia owed
             premium0 = premium0 < 0 ? int128(13_333 * uint128(-premium0)) / 10_000 : int128(0);
-            premium1 = premium1 < 0 ? ((13_333) * (-premium1)) / 10_000 : int128(0);
+            premium1 = premium1 < 0 ? int128(13_333 * uint128(-premium1)) / 10_000 : int128(0);
             required += uint128(premium1);
             assertEq(premium0, int128(tokenData0.leftSlot()), "0");
             assertEq(0, tokensRequiredITM0, "1");
@@ -7628,7 +7591,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 strikeSeed,
                 uint24(tickSpacing),
                 currentTick,
-                1
+                0
             );
 
             (width1, strike1) = PositionUtils.getITMSW(
@@ -7636,7 +7599,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 strikeSeed2,
                 uint24(tickSpacing),
                 currentTick,
-                1
+                0
             );
 
             tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 0, 0, strike, width);
@@ -7678,7 +7641,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             panopticPool.mintOptions(
                 positionIdList1,
-                positionSize0 / 2,
+                positionSize0 / 4,
                 type(uint64).max,
                 TickMath.MIN_TICK,
                 TickMath.MAX_TICK
@@ -7716,12 +7679,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
-            uint128 required = _spreadTokensRequired(tokenId1, positionSize0 / 2);
+            uint128 required = _spreadTokensRequired(tokenId1, positionSize0 / 4);
 
             (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
-                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 2, atTick);
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 4, atTick);
             (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
-                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 2, atTick);
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 4, atTick);
 
             // only add premium requirement if there is net premia owed
             premium0 = premium0 < 0 ? int128(13_333 * uint128(-premium0)) / 10_000 : int128(0);
@@ -7970,9 +7933,147 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList1.push(tokenId1);
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 4);
 
+            uint256 snapshot = vm.snapshot();
+
             panopticPool.mintOptions(
                 positionIdList1,
                 positionSize0 / 4,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+
+            uint256 inAMMOffset = collateralToken0._inAMM();
+
+            vm.revertTo(snapshot);
+
+            // set utilization before minting
+            // take into account the offsets as states are updated before utilization is checked for the mint
+            uint64 targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
+            setUtilization(collateralToken0, token1, int64(targetUtilization), inAMMOffset, false);
+
+            panopticPool.mintOptions(
+                positionIdList1,
+                positionSize0 / 2,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+        }
+
+        uint128 tokensRequired0;
+        uint128 tokensRequired1;
+        int128 _premium0;
+        int128 _premium1;
+        {
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
+
+            (int128 premium0, int128 premium1, uint256[2][] memory posBalanceArray) = panopticPool
+                .calculateAccumulatedFeesBatch(Alice, positionIdList1);
+            _premium0 = premium0 < 0 ? int128(13_333 * uint128(-premium0)) / 10_000 : int128(0);
+            _premium1 = premium1 < 0 ? ((13_333) * (-premium1)) / 10_000 : int128(0);
+
+            tokenData0 = collateralToken0.getAccountMarginDetails(
+                Alice,
+                atTick,
+                posBalanceArray,
+                premium0
+            );
+            tokenData1 = collateralToken1.getAccountMarginDetails(
+                Alice,
+                atTick,
+                posBalanceArray,
+                premium1
+            );
+
+            (, poolUtilization0, poolUtilization1) = panopticPool.optionPositionBalance(
+                Alice,
+                tokenId1
+            );
+
+            poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
+
+            (tokensRequired0, tokensRequired1) = _strangleTokensRequired(
+                tokenId1,
+                positionSize0 / 4,
+                poolUtilizations,
+                atTick,
+                premium0,
+                premium1
+            );
+
+            // checks tokens required
+            assertEq(tokensRequired0, tokenData0.leftSlot(), "0");
+            assertEq(tokensRequired1, tokenData1.leftSlot(), "1");
+        }
+
+        {
+            (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 4, atTick);
+            (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 4, atTick);
+
+            assertEq(int128(tokensRequired0) - itmAmount0, tokensRequiredITM0 + _premium0, "2");
+            assertEq(int128(tokensRequired1) - itmAmount1, tokensRequiredITM1 + _premium1, "3");
+        }
+    }
+
+    /* utilization test */
+    function test_Success_getPositionCollateralRequirement_CallRandUtilization(
+        uint256 x,
+        uint128 positionSizeSeed,
+        uint256 widthSeed,
+        int256 strikeSeed,
+        uint256 widthSeed2,
+        int256 strikeSeed2,
+        uint64 utilizationSeed,
+        int24 atTick,
+        uint256 swapSizeSeed
+    ) public {
+        vm.assume(strikeSeed != strikeSeed2);
+
+        uint64 targetUtilization;
+        {
+            _initWorld(x);
+
+            // initalize a custom Panoptic pool
+            _deployCustomPanopticPool(token0, token1, pool);
+
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            _mockMaxDeposit(Bob);
+
+            // have Bob sell
+            (width, strike) = PositionUtils.getITMSW(
+                widthSeed,
+                strikeSeed,
+                uint24(tickSpacing),
+                currentTick,
+                0
+            );
+
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 0, 0, strike, width);
+            positionIdList.push(tokenId);
+
+            /// calculate position size
+            (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
+
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
+            _assumePositionValidity(Bob, tokenId, positionSize0);
+
+            panopticPool.mintOptions(
+                positionIdList,
+                positionSize0,
                 type(uint64).max,
                 TickMath.MIN_TICK,
                 TickMath.MAX_TICK
@@ -7982,33 +8083,117 @@ contract CollateralTrackerTest is Test, PositionUtils {
         atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
         atTick = (atTick / tickSpacing) * tickSpacing;
 
-        (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
-            .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 4, atTick);
-
-        (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
-            .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 4, atTick);
-
+        // check requirement at fuzzed tick
         {
-            // console2.log("_premium0", _premium0);
-            // console2.log("_premium1", _premium1);
-            // console2.log("tokensRequiredITM0", tokensRequiredITM0);
-            // console2.log("tokensRequiredITM1", tokensRequiredITM1);
-            // console2.log("itmAmount0", itmAmount0);
-            // console2.log("itmAmount1", itmAmount1);
-            // console2.log("tokensRequired0", tokensRequired0);
-            // console2.log("tokensRequired1", tokensRequired1);
-            // console2.log("(int128(tokensRequired0)", int128(tokensRequired0) );
-            // console2.log("int128(tokensRequired1)", int128(tokensRequired1));
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
+
+            poolUtilization0 = uint128(collateralToken0.poolUtilizationHook());
+            poolUtilization1 = uint128(collateralToken1.poolUtilizationHook());
+
+            poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
+
+            uint256[2] memory checkSingle = [uint256(0), uint256(0)];
+            uint128 required = _tokensRequired(
+                tokenId,
+                positionSize0,
+                atTick,
+                poolUtilizations,
+                checkSingle
+            );
+
+            (, , uint256[2][] memory posBalanceArray) = panopticPool.calculateAccumulatedFeesBatch(
+                Bob,
+                positionIdList
+            );
+
+            tokenData0 = collateralToken0.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
+            tokenData1 = collateralToken1.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
+
+            (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
+                .getITMPositionCollateralRequirement(Bob, tokenId, positionSize0, atTick);
+            (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
+                .getITMPositionCollateralRequirement(Bob, tokenId, positionSize0, atTick);
+
+            assertEq(0, tokensRequiredITM1, "0");
+            assertEq(0, tokenData1.leftSlot(), "1");
+            assertApproxEqAbs(int128(required) - itmAmount0, tokensRequiredITM0, 5, "2");
+            assertEq(int128(tokenData0.leftSlot()) - itmAmount0, tokensRequiredITM0, "3");
         }
 
         {
-            (
-                ,
-                ,
-                /*int128 premium0, int128 premium1,*/ uint256[2][] memory posBalanceArray
-            ) = panopticPool.calculateAccumulatedFeesBatch(Alice, positionIdList1);
-            // premium0 = premium0 < 0 ? int128(13_333 * uint128(-premium0)) / 10_000 : int128(0);
-            // premium1 = premium1 < 0 ? ((13_333) * (-premium1)) / 10_000 : int128(0);
+            // Alice buys
+            changePrank(Alice);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            _mockMaxDeposit(Alice);
+
+            tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
+            positionIdList1.push(tokenId1);
+
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
+
+            uint256 snapshot = vm.snapshot();
+
+            uint256 inAMMBefore = collateralToken0._inAMM();
+
+            panopticPool.mintOptions(
+                positionIdList1,
+                positionSize0 / 2,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+
+            uint256 inAMMOffset = inAMMBefore - collateralToken0._inAMM();
+
+            vm.revertTo(snapshot);
+
+            // set utilization before minting
+            // take into account the offsets as states are updated before utilization is checked for the mint
+            targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
+            setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, true);
+
+            panopticPool.mintOptions(
+                positionIdList1,
+                positionSize0 / 2,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+
+            int128 currentUtilization = collateralToken0.poolUtilizationHook();
+            vm.assume(currentUtilization < 10_000);
+        }
+
+        // mimic pool activity
+        twoWaySwap(swapSizeSeed);
+        {
+            poolUtilization0 = uint128(collateralToken0.poolUtilizationHook());
+            poolUtilization1 = uint128(collateralToken1.poolUtilizationHook());
+
+            poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
+
+            uint256[2] memory checkSingle = [uint256(0), uint256(0)];
+            uint128 required = _tokensRequired(
+                tokenId1,
+                positionSize0 / 2,
+                atTick,
+                poolUtilizations,
+                checkSingle
+            );
+
+            (, , uint256[2][] memory posBalanceArray) = panopticPool.calculateAccumulatedFeesBatch(
+                Alice,
+                positionIdList1
+            );
 
             tokenData0 = collateralToken0.getAccountMarginDetails(
                 Alice,
@@ -8023,29 +8208,229 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 0
             );
 
-            poolUtilizations =
-                uint128(collateralToken0.poolUtilizationHook()) +
-                (uint128(collateralToken1.poolUtilizationHook()) << 64);
+            (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 2, atTick);
+            (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 2, atTick);
 
-            console2.log("poolUtilization0", collateralToken0.poolUtilizationHook());
-            console2.log("poolUtilization1", collateralToken1.poolUtilizationHook());
-            console2.log("test utilizations", poolUtilizations);
+            console2.log("required", required);
+            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
+            console2.log("itmAmount0", itmAmount0);
+            console2.log("itmAmount1", itmAmount1);
+            console2.log("tokensRequiredITM0", tokensRequiredITM0);
+            console2.log("tokensRequiredITM1", tokensRequiredITM1);
 
-            (uint128 tokensRequired0, uint128 tokensRequired1) = _strangleTokensRequired(
-                tokenId1,
-                positionSize0 / 4,
-                poolUtilizations,
+            assertEq(0, tokensRequiredITM1, "0");
+            assertEq(0, tokenData1.leftSlot(), "1");
+            assertApproxEqAbs(int128(required) - itmAmount0, tokensRequiredITM0, 5, "2");
+            assertEq(int128(tokenData0.leftSlot()) - itmAmount0, tokensRequiredITM0, "3");
+        }
+    }
+
+    function test_Success_getPositionCollateralRequirement_PutRandUtilization(
+        uint256 x,
+        uint128 positionSizeSeed,
+        uint256 widthSeed,
+        int256 strikeSeed,
+        uint256 widthSeed2,
+        int256 strikeSeed2,
+        uint64 utilizationSeed,
+        int24 atTick,
+        uint256 swapSizeSeed
+    ) public {
+        vm.assume(strikeSeed != strikeSeed2);
+
+        uint64 targetUtilization;
+        {
+            _initWorld(x);
+
+            // initalize a custom Panoptic pool
+            _deployCustomPanopticPool(token0, token1, pool);
+
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            _mockMaxDeposit(Bob);
+
+            // have Bob sell
+            (width, strike) = PositionUtils.getITMSW(
+                widthSeed,
+                strikeSeed,
+                uint24(tickSpacing),
+                currentTick,
+                1
+            );
+
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
+            positionIdList.push(tokenId);
+
+            /// calculate position size
+            (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
+
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
+            _assumePositionValidity(Bob, tokenId, positionSize0);
+
+            panopticPool.mintOptions(
+                positionIdList,
+                positionSize0,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+        }
+
+        atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+        atTick = (atTick / tickSpacing) * tickSpacing;
+
+        // check requirement at fuzzed tick
+        {
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
+
+            poolUtilization0 = uint128(collateralToken0.poolUtilizationHook());
+            poolUtilization1 = uint128(collateralToken1.poolUtilizationHook());
+
+            poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
+
+            uint256[2] memory checkSingle = [uint256(0), uint256(0)];
+            uint128 required = _tokensRequired(
+                tokenId,
+                positionSize0,
                 atTick,
-                0,
+                poolUtilizations,
+                checkSingle
+            );
+
+            (, , uint256[2][] memory posBalanceArray) = panopticPool.calculateAccumulatedFeesBatch(
+                Bob,
+                positionIdList
+            );
+
+            tokenData0 = collateralToken0.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
+            tokenData1 = collateralToken1.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
+
+            (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
+                .getITMPositionCollateralRequirement(Bob, tokenId, positionSize0, atTick);
+            (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
+                .getITMPositionCollateralRequirement(Bob, tokenId, positionSize0, atTick);
+
+            assertEq(0, tokensRequiredITM0, "0");
+            assertEq(0, tokenData0.leftSlot(), "1");
+            assertApproxEqAbs(int128(required) - itmAmount1, tokensRequiredITM1, 5, "2");
+            assertEq(int128(tokenData1.leftSlot()) - itmAmount1, tokensRequiredITM1, "3");
+        }
+
+        {
+            // Alice buys
+            changePrank(Alice);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            _mockMaxDeposit(Alice);
+
+            tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
+            positionIdList1.push(tokenId1);
+
+            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
+
+            uint256 snapshot = vm.snapshot();
+
+            uint256 inAMMBefore = collateralToken1._inAMM();
+
+            panopticPool.mintOptions(
+                positionIdList1,
+                positionSize0 / 2,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+
+            uint256 inAMMOffset = inAMMBefore - collateralToken1._inAMM();
+
+            vm.revertTo(snapshot);
+
+            // set utilization before minting
+            // take into account the offsets as states are updated before utilization is checked for the mint
+            targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
+            setUtilization(collateralToken1, token1, int64(targetUtilization), inAMMOffset, true);
+
+            panopticPool.mintOptions(
+                positionIdList1,
+                positionSize0 / 2,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+
+            int128 currentUtilization = collateralToken1.poolUtilizationHook();
+            vm.assume(currentUtilization < 10_000);
+        }
+
+        // mimic pool activity
+        twoWaySwap(swapSizeSeed);
+        {
+            poolUtilization0 = uint128(collateralToken0.poolUtilizationHook());
+            poolUtilization1 = uint128(collateralToken1.poolUtilizationHook());
+
+            poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
+
+            uint256[2] memory checkSingle = [uint256(0), uint256(0)];
+            uint128 required = _tokensRequired(
+                tokenId1,
+                positionSize0 / 2,
+                atTick,
+                poolUtilizations,
+                checkSingle
+            );
+
+            (, , uint256[2][] memory posBalanceArray) = panopticPool.calculateAccumulatedFeesBatch(
+                Alice,
+                positionIdList1
+            );
+
+            tokenData0 = collateralToken0.getAccountMarginDetails(
+                Alice,
+                atTick,
+                posBalanceArray,
+                0
+            );
+            tokenData1 = collateralToken1.getAccountMarginDetails(
+                Alice,
+                atTick,
+                posBalanceArray,
                 0
             );
 
-            // checks tokens required
-            assertEq(tokensRequired0, tokenData0.leftSlot(), "required token0");
-            assertEq(tokensRequired1, tokenData1.leftSlot(), "required token1");
+            (int256 tokensRequiredITM0, int256 itmAmount0) = collateralToken0
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 2, atTick);
+            (int256 tokensRequiredITM1, int256 itmAmount1) = collateralToken1
+                .getITMPositionCollateralRequirement(Alice, tokenId1, positionSize0 / 2, atTick);
 
-            assertEq(int128(tokensRequired0) - itmAmount0, tokensRequiredITM0, "2");
-            assertEq(int128(tokensRequired1) - itmAmount1, tokensRequiredITM1, "3");
+            console2.log("required", required);
+            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
+            console2.log("itmAmount0", itmAmount0);
+            console2.log("itmAmount1", itmAmount1);
+            console2.log("tokensRequiredITM0", tokensRequiredITM0);
+            console2.log("tokensRequiredITM1", tokensRequiredITM1);
+
+            assertEq(0, tokensRequiredITM0, "0");
+            assertEq(0, tokenData0.leftSlot(), "1");
+            assertApproxEqAbs(int128(required) - itmAmount1, tokensRequiredITM1, 5, "2");
+            assertEq(int128(tokenData1.leftSlot()) - itmAmount1, tokensRequiredITM1, "3");
         }
     }
 
