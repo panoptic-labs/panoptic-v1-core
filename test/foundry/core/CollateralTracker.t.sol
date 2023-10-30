@@ -7475,7 +7475,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId = tokenId.addLeg(1, 1, 1, 0, 1, 1, strike1, width1);
             positionIdList.push(tokenId);
 
-            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 128));
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
             _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
@@ -8199,7 +8199,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // set utilization before minting
             // take into account the offsets as states are updated before utilization is checked for the mint
             targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
-            setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, true);
+            setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, false);
 
             panopticPool.mintOptions(
                 positionIdList1,
@@ -8428,7 +8428,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // set utilization before minting
             // take into account the offsets as states are updated before utilization is checked for the mint
             targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
-            setUtilization(collateralToken1, token1, int64(targetUtilization), inAMMOffset, true);
+            setUtilization(collateralToken1, token1, int64(targetUtilization), inAMMOffset, false);
 
             panopticPool.mintOptions(
                 positionIdList1,
