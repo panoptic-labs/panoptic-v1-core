@@ -1293,7 +1293,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             );
             s_inAMM = uint128(uint256(int256(uint256(s_inAMM)) + (shortAmount - longAmount)));
 
-            console.log("swapped Amount", swappedAmount);
+            console2.log("swapped Amount", swappedAmount);
 
             {
                 // get the current Panoptic pool utilization
