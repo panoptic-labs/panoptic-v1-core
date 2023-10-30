@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
-// Foundry
-import "forge-std/Test.sol";
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Libraries
@@ -287,10 +285,6 @@ library PanopticMath {
                     tickSpacing,
                     atTick
                 );
-
-                console2.log("x amount0", amount0);
-
-                console2.log("x amount1", amount1);
 
                 bool isLong = tokenId.isLong(leg) == 1;
                 netAmount0 = isLong

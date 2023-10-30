@@ -1432,11 +1432,19 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // update pool utilization, taking new inAMM amounts into account
         uint128 poolUtilization;
         unchecked {
-            (, uint128 poolUtilization0, uint128 poolUtilization1) = PanopticPool(s_panopticPool)
-                .optionPositionBalance(account, tokenId);
+            (, , int128 poolUtilization0) = PanopticPool(s_panopticPool)
+                .collateralToken0()
+                .getPoolData();
+            (, , int128 poolUtilization1) = PanopticPool(s_panopticPool)
+                .collateralToken1()
+                .getPoolData();
+
             int128 currentPoolUtilization = s_underlyingIsToken0
                 ? int128(poolUtilization0)
                 : int128(poolUtilization1);
+
+            console2.log("poolUtilization0", poolUtilization0);
+            console2.log("poolUtilization1", poolUtilization1);
 
             (int256 longAmounts, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
                 tokenId,
@@ -1451,17 +1459,17 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             int256 deltaBalance = shortAmount - longAmount;
 
-            uint128 newPoolUtilization = uint128(
-                uint256(
-                    currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
-                )
+            int128 newPoolUtilization = int128(
+                currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
             );
+
+            console2.log("newPoolUtilization", newPoolUtilization);
 
             s_underlyingIsToken0
                 ? poolUtilization0 = newPoolUtilization
                 : poolUtilization1 = newPoolUtilization;
 
-            poolUtilization = poolUtilization0 + (poolUtilization1 << 64);
+            poolUtilization = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
         }
 
         // Compute the tokens required using new pool utilization
@@ -1709,6 +1717,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int64 utilization = tokenType == 0
             ? int64(uint64(poolUtilization))
             : int64(uint64(poolUtilization >> 64));
+
+        console2.log("real utilization", utilization);
 
         // extract the strike of the leg
         int24 strike = tokenId.strike(index);
