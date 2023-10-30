@@ -7942,9 +7942,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId = tokenId.addLeg(1, 1, 1, 0, 0, 1, strike1, width1);
             positionIdList.push(tokenId);
 
-            /// calculate position size
-            (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
-
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
             _assumePositionValidity(Bob, tokenId, positionSize0);
 
@@ -8023,6 +8020,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 tokenId1
             );
 
+            console2.log("poolUtilization0", poolUtilization0);
+            console2.log("poolUtilization1", poolUtilization1);
+
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
             (uint128 tokensRequired0, uint128 tokensRequired1) = _strangleTokensRequired(
@@ -8033,6 +8033,14 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 0,
                 0
             );
+
+            console2.log("tokensRequired0", tokensRequired0);
+            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
+            console2.log("tokenData1.leftSlot()", tokenData1.leftSlot());
+            console2.log("itmAmount0", itmAmount0);
+            console2.log("itmAmount1", itmAmount1);
+            console2.log("tokensRequiredITM0", tokensRequiredITM0);
+            console2.log("tokensRequiredITM1", tokensRequiredITM1);
 
             // checks tokens required
             assertEq(tokensRequired0, tokenData0.leftSlot(), "required token0");
