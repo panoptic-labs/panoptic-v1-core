@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
-// Foundry
-import "forge-std/Test.sol";
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
@@ -1424,7 +1422,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param atTick Tick to convert values at.
     /// @return tokensRequired Required tokens for that new position
     function getPositionCollateralRequirement(
-        address account,
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
@@ -1432,11 +1429,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // update pool utilization, taking new inAMM amounts into account
         uint128 poolUtilization;
         unchecked {
-            (, uint128 poolUtilization0, uint128 poolUtilization1) = PanopticPool(s_panopticPool)
-                .optionPositionBalance(account, tokenId);
-            int128 currentPoolUtilization = s_underlyingIsToken0
-                ? int128(poolUtilization0)
-                : int128(poolUtilization1);
+            int128 currentPoolUtilization = _poolUtilization();
 
             (int256 longAmounts, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
                 tokenId,
@@ -1451,17 +1444,13 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             int256 deltaBalance = shortAmount - longAmount;
 
-            uint128 newPoolUtilization = uint128(
-                uint256(
-                    currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
-                )
+            int128 newPoolUtilization = int128(
+                currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
             );
 
             s_underlyingIsToken0
-                ? poolUtilization0 = newPoolUtilization
-                : poolUtilization1 = newPoolUtilization;
-
-            poolUtilization = poolUtilization0 + (poolUtilization1 << 64);
+                ? poolUtilization = uint128(newPoolUtilization)
+                : poolUtilization = (uint128(newPoolUtilization) << 64);
         }
 
         // Compute the tokens required using new pool utilization
@@ -1482,18 +1471,12 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @return totalTokensRequired Required tokens for that new position
     /// @return itmAmount Amount of tokens that are ITM
     function getITMPositionCollateralRequirement(
-        address account,
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
     ) public view returns (int256 totalTokensRequired, int256 itmAmount) {
         // get tokens required for the current tokenId position
-        uint256 tokensRequired = getPositionCollateralRequirement(
-            account,
-            tokenId,
-            positionSize,
-            atTick
-        );
+        uint256 tokensRequired = getPositionCollateralRequirement(tokenId, positionSize, atTick);
 
         // compute ITM amounts
         (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
