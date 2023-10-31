@@ -7714,6 +7714,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
+            vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
+
             uint128 required = _spreadTokensRequired(tokenId1, positionSize0 / 4);
 
             // only add premium requirement if there is net premia owed
@@ -7870,6 +7872,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
+
+            vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
 
             (tokensRequired0, tokensRequired1) = _strangleTokensRequired(
                 tokenId1,
@@ -8046,6 +8050,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
+            vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
+
             (uint128 tokensRequired0, uint128 tokensRequired1) = _strangleTokensRequired(
                 tokenId1,
                 positionSize0 / 4,
@@ -8120,9 +8126,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 0, 0, strike, width);
             positionIdList.push(tokenId);
 
-            /// calculate position size
-            (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
-
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
             _assumePositionValidity(Bob, tokenId, positionSize0);
 
@@ -8133,14 +8136,14 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 Bob,
                 tokenId,
                 positionSize0,
-                currentTick
+                atTick
             );
 
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
                 Bob,
                 tokenId,
                 positionSize0,
-                currentTick
+                atTick
             );
 
             panopticPool.mintOptions(
@@ -8161,11 +8164,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
+            vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
+
             uint256[2] memory checkSingle = [uint256(0), uint256(0)];
             uint128 required = _tokensRequired(
                 tokenId,
                 positionSize0,
-                currentTick,
+                atTick,
                 poolUtilizations,
                 checkSingle
             );
@@ -8175,23 +8180,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList
             );
 
-            tokenData0 = collateralToken0.getAccountMarginDetails(
-                Bob,
-                currentTick,
-                posBalanceArray,
-                0
-            );
-            tokenData1 = collateralToken1.getAccountMarginDetails(
-                Bob,
-                currentTick,
-                posBalanceArray,
-                0
-            );
+            tokenData0 = collateralToken0.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
+            tokenData1 = collateralToken1.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
 
-            // assertEq(0, tokensRequiredITM1, "0");
-            // assertEq(0, tokenData1.leftSlot(), "1");
-            // assertApproxEqAbs(int128(required) - itmAmount0, tokensRequiredITM0, 5, "2");
-            // assertEq(int128(tokenData0.leftSlot()) - itmAmount0, tokensRequiredITM0, "3");
+            console2.log("required", required);
+            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
+            console2.log("tokenData1.leftSlot()", tokenData1.leftSlot());
+            console2.log("itmAmount0", itmAmount0);
+            console2.log("itmAmount1", itmAmount1);
+            console2.log("tokensRequiredITM0", tokensRequiredITM0);
+            console2.log("tokensRequiredITM1", tokensRequiredITM1);
+
+            assertEq(0, tokensRequiredITM1, "0");
+            assertEq(0, tokenData1.leftSlot(), "1");
+            assertApproxEqAbs(int128(required) - itmAmount0, tokensRequiredITM0, 5, "2");
+            assertEq(int128(tokenData0.leftSlot()) - itmAmount0, tokensRequiredITM0, "3");
         }
 
         {
@@ -8271,6 +8274,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             console2.log("test utilization 1", poolUtilization1);
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
+
+            vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
 
             uint256[2] memory checkSingle = [uint256(0), uint256(0)];
             uint128 required = _tokensRequired(
@@ -8402,6 +8407,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
+            vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
+
             uint256[2] memory checkSingle = [uint256(0), uint256(0)];
             uint128 required = _tokensRequired(
                 tokenId,
@@ -8510,6 +8517,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
+            vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
+
             uint256[2] memory checkSingle = [uint256(0), uint256(0)];
             uint128 required = _tokensRequired(
                 tokenId1,
@@ -8593,17 +8602,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
                 console2.log("test utilization", utilization);
 
-                if (utilization < 10_001) {
-                    sellCollateralRatio = uint256(
-                        int256(collateralToken0.sellCollateralRatio(utilization))
-                    );
-                    buyCollateralRatio = uint256(
-                        int256(collateralToken0.buyCollateralRatio(utilization))
-                    );
-                } else {
-                    sellCollateralRatio = 10_000;
-                    buyCollateralRatio = 10_000;
-                }
+                sellCollateralRatio = uint256(
+                    int256(collateralToken0.sellCollateralRatio(utilization))
+                );
+                buyCollateralRatio = uint256(
+                    int256(collateralToken0.buyCollateralRatio(utilization))
+                );
             }
 
             if (isLong == 0) {
