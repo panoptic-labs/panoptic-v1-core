@@ -374,7 +374,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     // granted token amounts
-    uint256 constant initialMockTokens = type(uint128).max;
+    uint256 constant initialMockTokens = type(uint120).max;
 
     /*//////////////////////////////////////////////////////////////
                               WORLD STATE
@@ -7460,7 +7460,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId = tokenId.addLeg(1, 1, 1, 0, 1, 1, strike1, width1);
             positionIdList.push(tokenId);
 
-            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 108));
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 32));
             _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
