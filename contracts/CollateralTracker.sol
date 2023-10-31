@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
-// Foundry
-import "forge-std/Test.sol";
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
@@ -1293,8 +1291,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             );
             s_inAMM = uint128(uint256(int256(uint256(s_inAMM)) + (shortAmount - longAmount)));
 
-            console2.log("swapped Amount", swappedAmount);
-
             {
                 // get the current Panoptic pool utilization
                 // Check if current tick is too far away from median, set to utilization to 10,001 if it is
@@ -1436,8 +1432,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         unchecked {
             int128 currentPoolUtilization = _poolUtilization();
 
-            console2.log("currentPoolUtilization", currentPoolUtilization);
-
             (int256 longAmounts, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
                 tokenId,
                 0,
@@ -1451,14 +1445,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             int256 deltaBalance = shortAmount - longAmount;
 
-            console2.log("delta balance", deltaBalance);
-            console2.log("totalAssets()", totalAssets());
-
             int128 newPoolUtilization = int128(
                 currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
             );
-
-            console2.log("newPoolUtilization", newPoolUtilization);
 
             s_underlyingIsToken0
                 ? poolUtilization = uint128(newPoolUtilization)
@@ -1710,8 +1699,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int64 utilization = tokenType == 0
             ? int64(uint64(poolUtilization))
             : int64(uint64(poolUtilization >> 64));
-
-        console2.log("real utilization", utilization);
 
         // extract the strike of the leg
         int24 strike = tokenId.strike(index);

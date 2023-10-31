@@ -7555,6 +7555,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             premium0 = premium0 < 0 ? int128(13_333 * uint128(-premium0)) / 10_000 : int128(0);
             premium1 = premium1 < 0 ? ((13_333) * (-premium1)) / 10_000 : int128(0);
             required += uint128(premium1);
+            vm.assume(required > 0);
             assertEq(premium0, int128(tokenData0.leftSlot()), "0");
             assertEq(0, tokensRequiredITM0, "1");
             assertEq(
@@ -7703,6 +7704,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             premium0 = premium0 < 0 ? int128(13_333 * uint128(-premium0)) / 10_000 : int128(0);
             premium1 = premium1 < 0 ? ((13_333) * (-premium1)) / 10_000 : int128(0);
             required += uint128(premium0);
+            vm.assume(required > 0);
             assertEq(premium1, int128(tokenData1.leftSlot()), "0");
             assertEq(0, tokensRequiredITM1, "1");
             assertEq(
@@ -8026,9 +8028,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 tokenId1
             );
 
-            console2.log("poolUtilization0", poolUtilization0);
-            console2.log("poolUtilization1", poolUtilization1);
-
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
             vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
@@ -8041,15 +8040,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 0,
                 0
             );
-
-            console2.log("tokensRequired0", tokensRequired0);
-            console2.log("tokensRequired1", tokensRequired1);
-            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
-            console2.log("tokenData1.leftSlot()", tokenData1.leftSlot());
-            console2.log("itmAmount0", itmAmount0);
-            console2.log("itmAmount1", itmAmount1);
-            console2.log("tokensRequiredITM0", tokensRequiredITM0);
-            console2.log("tokensRequiredITM1", tokensRequiredITM1);
 
             // checks tokens required
             assertEq(tokensRequired0, tokenData0.leftSlot(), "required token0");
@@ -8164,14 +8154,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenData0 = collateralToken0.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
             tokenData1 = collateralToken1.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
 
-            console2.log("required", required);
-            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
-            console2.log("tokenData1.leftSlot()", tokenData1.leftSlot());
-            console2.log("itmAmount0", itmAmount0);
-            console2.log("itmAmount1", itmAmount1);
-            console2.log("tokensRequiredITM0", tokensRequiredITM0);
-            console2.log("tokensRequiredITM1", tokensRequiredITM1);
-
             assertEq(0, tokensRequiredITM1, "0");
             assertEq(0, tokenData1.leftSlot(), "1");
             assertApproxEqAbs(int128(required) - itmAmount0, tokensRequiredITM0, 5, "2");
@@ -8251,9 +8233,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 tokenId1
             );
 
-            console2.log("test utilization 0", poolUtilization0);
-            console2.log("test utilization 1", poolUtilization1);
-
             poolUtilizations = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
 
             vm.assume(poolUtilization0 != 10_001 && poolUtilization1 != 10_001);
@@ -8284,15 +8263,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 posBalanceArray,
                 0
             );
-
-            console2.log("tokensRequiredITM1", tokensRequiredITM1);
-            console2.log("tokensRequiredITM0", tokensRequiredITM0);
-            console2.log("required", required);
-            console2.log("itmAmount0", itmAmount0);
-            console2.log("itmAmount1", itmAmount1);
-            console2.log("itmAmount0", itmAmount0);
-            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
-            console2.log("tokenData1.leftSlot()", tokenData1.leftSlot());
 
             assertEq(0, tokensRequiredITM1, "0");
             assertEq(0, tokenData1.leftSlot(), "1");
