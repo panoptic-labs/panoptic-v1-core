@@ -1462,6 +1462,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             int256 deltaBalance = shortAmount - longAmount;
 
             console2.log("delta balance", deltaBalance);
+            console2.log("totalAssets()", totalAssets());
 
             int128 newPoolUtilization = int128(
                 currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())

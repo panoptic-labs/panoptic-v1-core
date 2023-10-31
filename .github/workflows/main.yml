@@ -90,5 +90,5 @@ jobs:
           SFPM: "0x562A05400b793461F85DB478Cf0fcbBC30811217"
           PANOPTIC_FACTORY: "0xE15EB47eA8A8f88A6204a90D3FC6a5a0372F1731"
         run: |
-          forge script scripts/DeployTestPool.s.sol:DeployTestPool --rpc-url sepolia -vvvv
+          forge script scripts/DeployTestPool.s.sol:DeployTestPool --rpc-url sepolia -vvvvv
         id: deploy-pool-sepolia

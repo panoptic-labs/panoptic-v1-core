@@ -7014,9 +7014,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 0, 0, strike, width);
             positionIdList.push(tokenId);
 
-            /// calculate position size
-            (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
-
             positionSize0 = uint128(bound(positionSizeSeed, 10 ** 15, 10 ** 20));
             _assumePositionValidity(Bob, tokenId, positionSize0);
 
@@ -7972,13 +7969,33 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList1.push(tokenId1);
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 4);
 
+            uint256 snapshot = vm.snapshot();
+
+            uint256 inAMMBefore = collateralToken1._inAMM();
+
+            panopticPool.mintOptions(
+                positionIdList1,
+                positionSize0 / 4,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+
+            uint256 inAMMOffset = inAMMBefore - collateralToken1._inAMM();
+
+            vm.revertTo(snapshot);
+
+            // set utilization before minting
+            // take into account the offsets as states are updated before utilization is checked for the mint
+            uint64 targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
+            setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, true);
+
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
                 Alice,
                 tokenId1,
                 positionSize0 / 4,
                 atTick
             );
-
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
                 Alice,
                 tokenId1,
@@ -7993,6 +8010,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 TickMath.MIN_TICK,
                 TickMath.MAX_TICK
             );
+
+            int128 currentUtilization = collateralToken1.poolUtilizationHook();
+            vm.assume(currentUtilization < 10_000 && currentUtilization > 1);
         }
 
         {
@@ -8233,7 +8253,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             int128 currentUtilization = collateralToken0.poolUtilizationHook();
-            vm.assume(currentUtilization < 10_000);
+            vm.assume(currentUtilization < 10_000 && currentUtilization > 1);
         }
 
         // mimic pool activity
