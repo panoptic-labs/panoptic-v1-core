@@ -1450,6 +1450,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                 currentPoolUtilization + (deltaBalance * DECIMALS_128) / int256(totalAssets())
             );
 
+            console2.log("newPoolUtilization", newPoolUtilization);
+
             s_underlyingIsToken0
                 ? poolUtilization = uint128(newPoolUtilization)
                 : poolUtilization = (uint128(newPoolUtilization) << 64);
@@ -1462,6 +1464,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             atTick,
             poolUtilization
         );
+
+        console2.log("view tokensRequired", tokensRequired);
     }
 
     /// @notice Get the collateral status/margin details for a single position, includes offsetting effect of ITM positions.
@@ -1487,6 +1491,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             s_tickSpacing,
             atTick
         );
+
+        console2.log("itmAmount0", itmAmount0);
+        onsole2.log("itmAmount1", itmAmount1);
 
         // use the ITM amount for the current collateral token
         itmAmount = s_underlyingIsToken0 ? itmAmount0 : itmAmount1;
