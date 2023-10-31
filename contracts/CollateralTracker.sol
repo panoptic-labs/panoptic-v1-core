@@ -1434,19 +1434,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // update pool utilization, taking new inAMM amounts into account
         uint128 poolUtilization;
         unchecked {
-            (, , int128 poolUtilization0) = PanopticPool(s_panopticPool)
-                .collateralToken0()
-                .getPoolData();
-            (, , int128 poolUtilization1) = PanopticPool(s_panopticPool)
-                .collateralToken1()
-                .getPoolData();
+            int128 currentPoolUtilization = _poolUtilization();
 
-            int128 currentPoolUtilization = s_underlyingIsToken0
-                ? int128(poolUtilization0)
-                : int128(poolUtilization1);
-
-            console2.log("poolUtilization0", poolUtilization0);
-            console2.log("poolUtilization1", poolUtilization1);
+            console2.log("currentPoolUtilization", currentPoolUtilization);
 
             (int256 longAmounts, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
                 tokenId,
@@ -1471,10 +1461,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             console2.log("newPoolUtilization", newPoolUtilization);
 
             s_underlyingIsToken0
-                ? poolUtilization0 = newPoolUtilization
-                : poolUtilization1 = newPoolUtilization;
-
-            poolUtilization = uint128(poolUtilization0) + (uint128(poolUtilization1) << 64);
+                ? poolUtilization = uint128(newPoolUtilization)
+                : poolUtilization = (uint128(newPoolUtilization) << 64);
         }
 
         // Compute the tokens required using new pool utilization
