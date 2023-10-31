@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
+// Foundry
+import "forge-std/Test.sol";
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
@@ -1692,6 +1694,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int64 utilization = tokenType == 0
             ? int64(uint64(poolUtilization))
             : int64(uint64(poolUtilization >> 64));
+
+        console2.log("real utilization", utilization);
 
         // extract the strike of the leg
         int24 strike = tokenId.strike(index);
