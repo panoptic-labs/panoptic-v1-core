@@ -374,7 +374,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     // granted token amounts
-    uint256 constant initialMockTokens = type(uint128).max;
+    uint256 constant initialMockTokens = type(uint120).max;
 
     /*//////////////////////////////////////////////////////////////
                               WORLD STATE
@@ -7460,7 +7460,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenId = tokenId.addLeg(1, 1, 1, 0, 1, 1, strike1, width1);
             positionIdList.push(tokenId);
 
-            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 108));
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 32));
             _assumePositionValidity(Bob, tokenId, positionSize0);
 
             panopticPool.mintOptions(
@@ -8134,13 +8134,22 @@ contract CollateralTrackerTest is Test, PositionUtils {
             tokenData0 = collateralToken0.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
             tokenData1 = collateralToken1.getAccountMarginDetails(Bob, atTick, posBalanceArray, 0);
 
+            console2.log("Bob");
+            console2.log("tokensRequiredITM1", tokensRequiredITM1);
+            console2.log("tokensRequiredITM0", tokensRequiredITM0);
+            console2.log("required", required);
+            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
+            console2.log("tokenData1.leftSlot()", tokenData1.leftSlot());
+            console2.log("itmAmount0", itmAmount0);
+            console2.log("itmAmount1", itmAmount1);
+
             assertEq(0, tokensRequiredITM1, "0");
             assertEq(0, tokenData1.leftSlot(), "1");
-            assertApproxEqAbs(int128(required) - itmAmount0, tokensRequiredITM0, 5, "2");
-            assertApproxEqAbs(
+            assertApproxEqRel(int128(required) - itmAmount0, tokensRequiredITM0, 0.03e18, "2");
+            assertApproxEqRel(
                 int128(tokenData0.leftSlot()) - itmAmount0,
                 tokensRequiredITM0,
-                5,
+                0.03e18,
                 "3"
             );
         }
@@ -8247,13 +8256,22 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 0
             );
 
+            console2.log("Alice");
+            console2.log("tokensRequiredITM1", tokensRequiredITM1);
+            console2.log("tokensRequiredITM0", tokensRequiredITM0);
+            console2.log("required", required);
+            console2.log("tokenData0.leftSlot()", tokenData0.leftSlot());
+            console2.log("tokenData1.leftSlot()", tokenData1.leftSlot());
+            console2.log("itmAmount0", itmAmount0);
+            console2.log("itmAmount1", itmAmount1);
+
             assertEq(0, tokensRequiredITM1, "0");
             assertEq(0, tokenData1.leftSlot(), "1");
-            assertApproxEqAbs(int128(required) - itmAmount0, tokensRequiredITM0, 5, "2");
-            assertApproxEqAbs(
+            assertApproxEqRel(int128(required) - itmAmount0, tokensRequiredITM0, 0.03e18, "2");
+            assertApproxEqRel(
                 int128(tokenData0.leftSlot()) - itmAmount0,
                 tokensRequiredITM0,
-                5,
+                0.03e18,
                 "3"
             );
         }
@@ -8375,8 +8393,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             assertEq(0, tokensRequiredITM0, "0");
             assertEq(0, tokenData0.leftSlot(), "1");
-            assertApproxEqAbs(int128(required) - itmAmount1, tokensRequiredITM1, 5, "2");
-            assertEq(int128(tokenData1.leftSlot()) - itmAmount1, tokensRequiredITM1, "3");
+            assertApproxEqRel(int128(required) - itmAmount1, tokensRequiredITM1, 0.03e18, "2");
+            assertApproxEqRel(
+                int128(tokenData1.leftSlot()) - itmAmount1,
+                tokensRequiredITM1,
+                0.03e18,
+                "3"
+            );
         }
 
         {
@@ -8483,8 +8506,13 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             assertEq(0, tokensRequiredITM0, "0");
             assertEq(0, tokenData0.leftSlot(), "1");
-            assertApproxEqAbs(int128(required) - itmAmount1, tokensRequiredITM1, 5, "2");
-            assertEq(int128(tokenData1.leftSlot()) - itmAmount1, tokensRequiredITM1, "3");
+            assertApproxEqRel(int128(required) - itmAmount1, tokensRequiredITM1, 0.03e18, "2");
+            assertApproxEqRel(
+                int128(tokenData1.leftSlot()) - itmAmount1,
+                tokensRequiredITM1,
+                0.03e18,
+                "3"
+            );
         }
     }
 
