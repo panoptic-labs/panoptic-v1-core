@@ -1422,7 +1422,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param atTick Tick to convert values at.
     /// @return tokensRequired Required tokens for that new position
     function getPositionCollateralRequirement(
-        address account,
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
@@ -1472,18 +1471,12 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @return totalTokensRequired Required tokens for that new position
     /// @return itmAmount Amount of tokens that are ITM
     function getITMPositionCollateralRequirement(
-        address account,
         uint256 tokenId,
         uint128 positionSize,
         int24 atTick
     ) public view returns (int256 totalTokensRequired, int256 itmAmount) {
         // get tokens required for the current tokenId position
-        uint256 tokensRequired = getPositionCollateralRequirement(
-            account,
-            tokenId,
-            positionSize,
-            atTick
-        );
+        uint256 tokensRequired = getPositionCollateralRequirement(tokenId, positionSize, atTick);
 
         // compute ITM amounts
         (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(

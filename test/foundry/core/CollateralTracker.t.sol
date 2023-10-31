@@ -6901,13 +6901,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             testRequired0 = collateralToken0.getPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 atTick
             );
             testRequired1 = collateralToken1.getPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 atTick
@@ -7020,13 +7018,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             testRequired0 = collateralToken0.getPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 atTick
             );
             testRequired1 = collateralToken1.getPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 atTick
@@ -7142,13 +7138,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 atTick
@@ -7214,13 +7208,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
@@ -7354,13 +7346,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
@@ -7507,13 +7497,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             _spreadTokensRequired(tokenId1, positionSize0 / 8);
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 8,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 8,
                 atTick
@@ -7656,13 +7644,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             _spreadTokensRequired(tokenId1, positionSize0 / 4);
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 4,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 4,
                 atTick
@@ -7805,13 +7791,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
@@ -7980,13 +7964,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, true);
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 4,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 4,
                 atTick
@@ -8104,14 +8086,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 atTick
             );
 
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 atTick
@@ -8206,13 +8186,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, true);
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
@@ -8337,14 +8315,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = (atTick / tickSpacing) * tickSpacing;
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 currentTick
             );
 
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Bob,
                 tokenId,
                 positionSize0,
                 currentTick
@@ -8444,13 +8420,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             setUtilization(collateralToken1, token1, int64(targetUtilization), inAMMOffset, true);
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
             );
             (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
-                Alice,
                 tokenId1,
                 positionSize0 / 2,
                 atTick
