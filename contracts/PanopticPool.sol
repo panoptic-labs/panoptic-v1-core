@@ -1275,7 +1275,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 revert Errors.StaleTWAP();
 
             (int256 premia, uint256[2][] memory positionBalanceArray) = _calculateAccumulatedPremia(
-                msg.sender,
+                liquidatee,
                 positionIdList,
                 COMPUTE_ALL_PREMIA,
                 currentTick
