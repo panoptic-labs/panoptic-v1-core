@@ -1493,7 +1493,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         );
 
         console2.log("itmAmount0", itmAmount0);
-        onsole2.log("itmAmount1", itmAmount1);
+        console2.log("itmAmount1", itmAmount1);
 
         // use the ITM amount for the current collateral token
         itmAmount = s_underlyingIsToken0 ? itmAmount0 : itmAmount1;
