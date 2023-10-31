@@ -6860,8 +6860,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         int24 atTick
     ) public {
         uint64 targetUtilization;
-        atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
-        atTick = (atTick / tickSpacing) * tickSpacing;
         {
             _initWorld(x);
 
@@ -6898,6 +6896,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             positionSize0 = uint128(bound(positionSizeSeed, 10 ** 15, 10 ** 20));
             _assumePositionValidity(Bob, tokenId, positionSize0);
+
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
 
             testRequired0 = collateralToken0.getPositionCollateralRequirement(
                 Bob,
@@ -6981,8 +6982,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         int24 atTick
     ) public {
         uint64 targetUtilization;
-        atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
-        atTick = (atTick / tickSpacing) * tickSpacing;
         {
             _initWorld(x);
 
@@ -7016,6 +7015,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             positionSize0 = uint128(bound(positionSizeSeed, 10 ** 15, 10 ** 20));
             _assumePositionValidity(Bob, tokenId, positionSize0);
+
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
 
             testRequired0 = collateralToken0.getPositionCollateralRequirement(
                 Bob,
@@ -8086,8 +8088,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         vm.assume(strikeSeed != strikeSeed2);
 
         uint64 targetUtilization;
-        atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
-        atTick = (atTick / tickSpacing) * tickSpacing;
 
         {
             _initWorld(x);
@@ -8125,6 +8125,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
             _assumePositionValidity(Bob, tokenId, positionSize0);
+
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
                 Bob,
@@ -8326,8 +8329,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         vm.assume(strikeSeed != strikeSeed2);
 
         uint64 targetUtilization;
-        atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
-        atTick = (atTick / tickSpacing) * tickSpacing;
 
         {
             _initWorld(x);
@@ -8365,6 +8366,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
             _assumePositionValidity(Bob, tokenId, positionSize0);
+
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
 
             (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
                 Bob,
