@@ -935,6 +935,54 @@ contract PanopticPool is ERC1155Holder, Multicall {
         }
     }
 
+    /// @notice Check that the account is liquidatable, get the split of bonus0 and bonus1 amounts.
+    /// @param tokenData0 Leftright encoded word with balance of token0 in the right slot, and required balance in left slot.
+    /// @param tokenData1 Leftright encoded word with balance of token1 in the right slot, and required balance in left slot.
+    /// @param sqrtPriceX96 The current sqrt(price) of the AMM.
+    /// @return bonus0 bonus amount for token0
+    /// @return bonus1 bonus amount for token1
+    function _getBonusSplit(
+        uint256 tokenData0,
+        uint256 tokenData1,
+        uint160 sqrtPriceX96
+    ) internal pure returns (uint256 bonus0, uint256 bonus1) {
+        (uint256 balanceCross, uint256 thresholdCross) = _getSolvencyBalances(
+            tokenData0,
+            tokenData1,
+            sqrtPriceX96
+        );
+
+        if (balanceCross >= thresholdCross) revert Errors.NotMarginCalled();
+
+        unchecked {
+            // compute bonus as min(collateralBalance/2, required-collateralBalance)
+            uint256 diffCross = thresholdCross - balanceCross;
+            uint256 bonusCross = diffCross < balanceCross / 2 ? diffCross : balanceCross / 2;
+
+            // convert that bonus to tokens 0 and 1
+            bonus0 = Math.mulDiv(bonusCross, 2 ** 96, sqrtPriceX96) / 2;
+            bonus1 = Math.mulDiv96(bonusCross, sqrtPriceX96) / 2;
+
+            // cache balances
+            uint256 balance0 = tokenData0.rightSlot();
+            uint256 balance1 = tokenData1.rightSlot();
+
+            if (bonus0 > balance0) {
+                // not enough balance of token0 to cover bonus. bonus1 = bonusCross*sqrtPriceX96 - bonus0*sqrtPriceX96**2
+                // Use bonusCross = 2*bonus0*sqrtPriceX96
+                bonus1 = PanopticMath.convert0to1(2 * bonus0 - balance0, sqrtPriceX96);
+                bonus0 = balance0;
+            } else if (bonus1 > balance1) {
+                // not enough balance of token1 to cover bonus. bonus0 = bonusCross/sqrtPriceX96 - bonus1/sqrtPriceX96**2
+                // Use bonusCross = 2*bonus1/sqrtPriceX96
+                bonus0 = PanopticMath.convert1to0(2 * bonus1 - balance1, sqrtPriceX96);
+                bonus1 = balance1;
+            }
+
+            return (bonus0, bonus1);
+        }
+    }
+
     /*//////////////////////////////////////////////////////////////
                          POSITION BURNING LOGIC
     //////////////////////////////////////////////////////////////*/
@@ -1294,16 +1342,11 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 premia.leftSlot()
             );
 
-            (uint256 balanceCross, uint256 thresholdCross) = _getSolvencyBalances(
+            (basalBonus0, basalBonus1) = _getBonusSplit(
                 tokenData0,
                 tokenData1,
                 Math.getSqrtRatioAtTick(twapTick)
             );
-
-            if (balanceCross >= thresholdCross) revert Errors.NotMarginCalled();
-
-            basalBonus0 = tokenData0.leftSlot() / 100;
-            basalBonus1 = tokenData1.leftSlot() / 100;
         }
 
         // Perform the specified delegation from `msg.sender` to `liquidatee`
