@@ -8,6 +8,7 @@ import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManage
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
+import {Math} from "@libraries/Math.sol";
 // Custom types
 import {TokenId} from "@types/TokenId.sol";
 
@@ -17,6 +18,9 @@ contract PanopticHelper {
     using TokenId for uint256;
 
     SemiFungiblePositionManager immutable SFPM;
+
+    uint256 internal constant DECIMALS = 10_000;
+
     struct Leg {
         uint64 poolId;
         address UniswapV3Pool;
@@ -123,6 +127,166 @@ contract PanopticHelper {
             positionSize,
             atTick
         );
+    }
+
+    /// @notice Compute the max position size given a tokenId using the bisection method.
+    /// @param pool The PanopticPool instance to check collateral on
+    /// @param account Address of the user that owns the positions
+    /// @param positionIdList List of positions. Written as [tokenId1, tokenId2, ...]
+    /// @param tokenId The tokenId to check collateral requirement for
+    /// @param atTick At what price is the collateral requirement evaluated at
+    /// @param tokenType whether to return the values in term of token0 or token1
+    /// @param maintenanceMarginRatio minimum ratio of actual-to-required collateral that must be maintained to mint a new position (decimals=10000).
+    /// @return maxPositionSizes the array of max position sizes in order of sizing percentage [1, 5, 10, 15, 25, 50, 75, 100]
+    function computeMaxPositionSize(
+        PanopticPool pool,
+        address account,
+        uint256[] calldata positionIdList,
+        uint256 tokenId,
+        int24 atTick,
+        uint256 tokenType,
+        uint256 maintenanceMarginRatio
+    ) public view returns (int256[] memory maxPositionSizes) {
+        // collateral balance and required collateral depending on token type
+        (uint256 collateralBalance, uint256 requiredCollateral) = checkCollateral(
+            pool,
+            account,
+            atTick,
+            tokenType,
+            positionIdList
+        );
+
+        // available collateral being the user's collateral balance less the base requirement for the position minus the
+        // minting margin multiplier
+        uint256 availableCollateral = collateralBalance -
+            (requiredCollateral * maintenanceMarginRatio) /
+            DECIMALS;
+
+        // 1, 5, 10, 25, 50, 75, 100
+        int256[7] memory sizingPercentages = [
+            int256(1),
+            int256(5),
+            int256(10),
+            int256(25),
+            int256(50),
+            int256(75),
+            int256(100)
+        ];
+
+        // stores the corresponding max position sizes
+        maxPositionSizes = new int[](7);
+
+        // upper and lower bounds
+        int128 a = 1;
+        int128 b = type(int128).max;
+
+        // max room for error in tokens
+        int256 epsilon = 10;
+
+        // populate max position sizes
+        for (uint i; i <= 7; i++) {
+            // Ensure a and b have opposite signs
+            require(
+                _bisectionBaseCase(
+                    pool,
+                    tokenId,
+                    atTick,
+                    tokenType,
+                    uint128(a),
+                    availableCollateral,
+                    sizingPercentages[i]
+                ) *
+                    _bisectionBaseCase(
+                        pool,
+                        tokenId,
+                        atTick,
+                        tokenType,
+                        uint128(b),
+                        availableCollateral,
+                        sizingPercentages[i]
+                    ) <
+                    0,
+                "func(a) and func(b) must have opposite signs"
+            );
+
+            int128 c = a;
+            while (b - a >= epsilon) {
+                // Find middle point
+                c = (a + b) / 2;
+
+                // Check if middle point is root
+                if (
+                    _bisectionBaseCase(
+                        pool,
+                        tokenId,
+                        atTick,
+                        tokenType,
+                        uint128(c),
+                        availableCollateral,
+                        sizingPercentages[i]
+                    ) == 0
+                ) break;
+
+                // Decide the side to repeat the steps
+                if (
+                    _bisectionBaseCase(
+                        pool,
+                        tokenId,
+                        atTick,
+                        tokenType,
+                        uint128(c),
+                        availableCollateral,
+                        sizingPercentages[i]
+                    ) *
+                        _bisectionBaseCase(
+                            pool,
+                            tokenId,
+                            atTick,
+                            tokenType,
+                            uint128(a),
+                            availableCollateral,
+                            sizingPercentages[i]
+                        ) <
+                    0
+                ) {
+                    b = c;
+                } else {
+                    a = c;
+                }
+            }
+            maxPositionSizes[i] = c;
+        }
+    }
+
+    function _bisectionBaseCase(
+        PanopticPool pool,
+        uint256 tokenId,
+        int24 atTick,
+        uint256 tokenType,
+        uint128 positionSize,
+        uint256 availableCollateral,
+        int256 sizingPercentage
+    ) internal view returns (int256 solution) {
+        // Query the required collateral amounts for the two tokens
+        (int256 requiredCollateralITM0, ) = pool
+            .collateralToken0()
+            .getITMPositionCollateralRequirement(tokenId, positionSize, atTick);
+        // Query the required collateral amounts for the two tokens
+        (int256 requiredCollateralITM1, ) = pool
+            .collateralToken1()
+            .getITMPositionCollateralRequirement(tokenId, positionSize, atTick);
+
+        // get current price
+        uint160 sqrtPriceX96 = Math.getSqrtRatioAtTick(atTick);
+
+        // convert to get all in token0 or token1
+        int256 totalRequirement = tokenType == 0
+            ? requiredCollateralITM0 +
+                PanopticMath.convert1to0(requiredCollateralITM1, sqrtPriceX96)
+            : requiredCollateralITM1 +
+                PanopticMath.convert0to1(requiredCollateralITM0, sqrtPriceX96);
+
+        return (int256(availableCollateral) * sizingPercentage) / 100 - totalRequirement;
     }
 
     /// @notice Returns the net assets (balance - maintenance margin) of a given account on a given pool.
