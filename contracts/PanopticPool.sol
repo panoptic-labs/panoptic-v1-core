@@ -1363,16 +1363,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
             positionIdList
         );
 
-        (int256 refund0, int256 refund1) = s_collateralToken0.getLiquidationRefund(
-            liquidatee,
-            delegation0 + basalBonus0,
-            delegation1 + basalBonus1,
-            twapTick,
-            s_collateralToken1
-        );
-
-        s_collateralToken0.revoke(msg.sender, liquidatee, uint256(Math.abs(refund0)));
-        s_collateralToken1.revoke(msg.sender, liquidatee, uint256(Math.abs(refund1)));
+        s_collateralToken0.revoke(msg.sender, liquidatee, delegation0 + basalBonus0);
+        s_collateralToken1.revoke(msg.sender, liquidatee, delegation1 + basalBonus1);
     }
 
     /// @notice Force the exercise of a single position. Exercisor will have to pay a small fee do force exercise.
