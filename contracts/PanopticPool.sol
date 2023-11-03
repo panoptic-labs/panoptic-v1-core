@@ -939,20 +939,20 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param tokenData0 Leftright encoded word with balance of token0 in the right slot, and required balance in left slot.
     /// @param tokenData1 Leftright encoded word with balance of token1 in the right slot, and required balance in left slot.
     /// @param sqrtPriceX96 The current sqrt(price) of the AMM.
+    /// @param netIntrinsic The net intrinsic value of the close portfolio
     /// @return bonus0 bonus amount for token0
     /// @return bonus1 bonus amount for token1
     function _getBonusSplit(
         uint256 tokenData0,
         uint256 tokenData1,
-        uint160 sqrtPriceX96
-    ) internal pure returns (uint256 bonus0, uint256 bonus1) {
+        uint160 sqrtPriceX96,
+        int256 netIntrinsic
+    ) internal pure returns (int256 bonus0, int256 bonus1) {
         (uint256 balanceCross, uint256 thresholdCross) = _getSolvencyBalances(
             tokenData0,
             tokenData1,
             sqrtPriceX96
         );
-
-        if (balanceCross >= thresholdCross) revert Errors.NotMarginCalled();
 
         unchecked {
             // compute bonus as min(collateralBalance/2, required-collateralBalance)
@@ -960,23 +960,32 @@ contract PanopticPool is ERC1155Holder, Multicall {
             uint256 bonusCross = diffCross < balanceCross / 2 ? diffCross : balanceCross / 2;
 
             // convert that bonus to tokens 0 and 1
-            bonus0 = Math.mulDiv(bonusCross, 2 ** 96, sqrtPriceX96) / 2;
-            bonus1 = Math.mulDiv96(bonusCross, sqrtPriceX96) / 2;
+            bonus0 = int256(Math.mulDiv(bonusCross, 2 ** 96, sqrtPriceX96) / 2);
+            bonus1 = int256(Math.mulDiv96(bonusCross, sqrtPriceX96) / 2);
 
             // cache balances
-            uint256 balance0 = tokenData0.rightSlot();
-            uint256 balance1 = tokenData1.rightSlot();
+            int256 balance0 = int256(uint256(tokenData0.rightSlot()));
+            int256 balance1 = int256(uint256(tokenData1.rightSlot()));
 
-            if (bonus0 > balance0) {
-                // not enough balance of token0 to cover bonus. bonus1 = bonusCross*sqrtPriceX96 - bonus0*sqrtPriceX96**2
-                // Use bonusCross = 2*bonus0*sqrtPriceX96
-                bonus1 = PanopticMath.convert0to1(2 * bonus0 - balance0, sqrtPriceX96);
-                bonus0 = balance0;
-            } else if (bonus1 > balance1) {
-                // not enough balance of token1 to cover bonus. bonus0 = bonusCross/sqrtPriceX96 - bonus1/sqrtPriceX96**2
-                // Use bonusCross = 2*bonus1/sqrtPriceX96
-                bonus0 = PanopticMath.convert1to0(2 * bonus1 - balance1, sqrtPriceX96);
-                bonus1 = balance1;
+            int256 intrinsic0 = int256(netIntrinsic.rightSlot());
+            int256 intrinsic1 = int256(netIntrinsic.leftSlot());
+
+            if (bonus0 + intrinsic0 > balance0) {
+                // bonus of token 0 cannot cover (balance - intrinsic value of exercise)
+                // New bonuses:
+                //  - bonus0 = balance0 - intrinsic0 <- may be negative
+                //  - bonus1 = bonusCross*sqrtPriceX96 - bonus0*sqrtPriceX96**2 + intrinsic0*sqrtPriceX96**2
+                /// @dev Use bonusCross = 2*bonus0*sqrtPriceX96
+                bonus1 = PanopticMath.convert0to1(2 * bonus0 - balance0 + intrinsic0, sqrtPriceX96);
+                bonus0 = balance0 - intrinsic0;
+            } else if (bonus1 + intrinsic1 > balance1) {
+                // bonus of token 1 cannot cover (balance - intrinsic value of exercise)
+                // New bonuses:
+                //  - bonus0 = bonusCross/sqrtPriceX96 - bonus1/sqrtPriceX96**2 + intrinsic1/sqrtPriceX96**2
+                //  - bonus1 = balance1 - intrinsic1 <- may be negative
+                /// @dev Use bonusCross = 2*bonus1/sqrtPriceX96
+                bonus0 = PanopticMath.convert1to0(2 * bonus1 - balance1 + intrinsic1, sqrtPriceX96);
+                bonus1 = balance1 - intrinsic1;
             }
 
             return (bonus0, bonus1);
@@ -997,9 +1006,11 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int24 tickLimitLow,
         int24 tickLimitHigh,
         uint256[] calldata positionIdList
-    ) internal {
+    ) internal returns (int256 netIntrinsic) {
         for (uint256 i = 0; i < positionIdList.length; ) {
-            _burnOptions(positionIdList[i], owner, tickLimitLow, tickLimitHigh);
+            netIntrinsic = netIntrinsic.add(
+                _burnOptions(positionIdList[i], owner, tickLimitLow, tickLimitHigh)
+            );
             unchecked {
                 ++i;
             }
@@ -1016,7 +1027,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal {
+    ) internal returns (int256 intrinsicAmounts) {
         // Ensure that the current price is within the tick limits
         int24 currentTick;
         (currentTick, , tickLimitLow, tickLimitHigh) = _getPriceAndCheckSlippageViolation(
@@ -1027,7 +1038,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
         uint128 positionSize = s_positionBalance[owner][tokenId].rightSlot();
 
         // burn position and do exercise checks
-        int256 premiaOwed = _burnAndHandleExercise(
+        int256 premiaOwed;
+        (premiaOwed, intrinsicAmounts) = _burnAndHandleExercise(
             tokenId,
             positionSize,
             owner,
@@ -1077,7 +1089,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal returns (int256 currentPositionPremia) {
+    ) internal returns (int256 currentPositionPremia, int256 intrinsicAmounts) {
         // burn the option in sfpm, switch order of tickLimits to create "swapAtMint" flag
         (, int256 totalSwapped, int24 newTick) = sfpm.burnTokenizedPosition(
             tokenId,
@@ -1105,6 +1117,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
             s_tickSpacing
         );
 
+        intrinsicAmounts = totalSwapped.add(shortAmounts).sub(longAmounts);
         // exercise the option and take the commission and addData
         s_collateralToken0.exercise(
             owner,
@@ -1309,12 +1322,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
         // Assert the account we are liquidating is actually insolvent
         int24 twapTick = getUniV3TWAP();
 
-        // While the liquidation bonus is based on the amount of tokens the liquidator was forced to convert,
-        // they also receive a basal bonus (1% of col. req. for liquidated positions)
-        // in exchange for completing a valid liquidation, even if they did not have to convert any tokens
-        // and their variable bonus is 0
-        uint256 liquidationBonus0; // 1% of collateral requirement
-        uint256 liquidationBonus1; // 1% of collateral requirement
+        uint256 tokenData0;
+        uint256 tokenData1;
         {
             (, int24 currentTick, , , , , ) = s_univ3pool.slot0();
 
@@ -1328,25 +1337,27 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 COMPUTE_ALL_PREMIA,
                 currentTick
             );
-            uint256 tokenData0 = s_collateralToken0.getAccountMarginDetails(
+            tokenData0 = s_collateralToken0.getAccountMarginDetails(
                 liquidatee,
                 twapTick,
                 positionBalanceArray,
                 premia.rightSlot()
             );
 
-            uint256 tokenData1 = s_collateralToken1.getAccountMarginDetails(
+            tokenData1 = s_collateralToken1.getAccountMarginDetails(
                 liquidatee,
                 twapTick,
                 positionBalanceArray,
                 premia.leftSlot()
             );
 
-            (liquidationBonus0, liquidationBonus1) = _getBonusSplit(
+            (uint256 balanceCross, uint256 thresholdCross) = _getSolvencyBalances(
                 tokenData0,
                 tokenData1,
                 Math.getSqrtRatioAtTick(twapTick)
             );
+
+            if (balanceCross >= thresholdCross) revert Errors.NotMarginCalled();
         }
 
         // Perform the specified delegation from `msg.sender` to `liquidatee`
@@ -1356,15 +1367,33 @@ contract PanopticPool is ERC1155Holder, Multicall {
         s_collateralToken1.delegate(msg.sender, liquidatee, delegation1);
 
         // burn all options from the liquidatee
-        _burnAllOptionsFrom(
+        int256 netIntrinsic = _burnAllOptionsFrom(
             liquidatee,
             Constants.MIN_V3POOL_TICK,
             Constants.MAX_V3POOL_TICK,
             positionIdList
         );
 
-        s_collateralToken0.revoke(msg.sender, liquidatee, delegation0 + liquidationBonus0);
-        s_collateralToken1.revoke(msg.sender, liquidatee, delegation1 + liquidationBonus1);
+        // compute bonus amounts
+        (int256 liquidationBonus0, int256 liquidationBonus1) = _getBonusSplit(
+            tokenData0,
+            tokenData1,
+            Math.getSqrtRatioAtTick(twapTick),
+            netIntrinsic
+        );
+
+        // revoke the delegated amount plus the bonus amount.
+
+        s_collateralToken0.revoke(
+            msg.sender,
+            liquidatee,
+            uint256(int256(delegation0) + liquidationBonus0)
+        );
+        s_collateralToken1.revoke(
+            msg.sender,
+            liquidatee,
+            uint256(int256(delegation1) + liquidationBonus1)
+        );
     }
 
     /// @notice Force the exercise of a single position. Exercisor will have to pay a small fee do force exercise.
