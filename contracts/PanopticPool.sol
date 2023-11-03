@@ -1313,8 +1313,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
         // they also receive a basal bonus (1% of col. req. for liquidated positions)
         // in exchange for completing a valid liquidation, even if they did not have to convert any tokens
         // and their variable bonus is 0
-        uint256 basalBonus0; // 1% of collateral requirement
-        uint256 basalBonus1; // 1% of collateral requirement
+        uint256 liquidationBonus0; // 1% of collateral requirement
+        uint256 liquidationBonus1; // 1% of collateral requirement
         {
             (, int24 currentTick, , , , , ) = s_univ3pool.slot0();
 
@@ -1342,7 +1342,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 premia.leftSlot()
             );
 
-            (basalBonus0, basalBonus1) = _getBonusSplit(
+            (liquidationBonus0, liquidationBonus1) = _getBonusSplit(
                 tokenData0,
                 tokenData1,
                 Math.getSqrtRatioAtTick(twapTick)
@@ -1363,8 +1363,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
             positionIdList
         );
 
-        s_collateralToken0.revoke(msg.sender, liquidatee, delegation0 + basalBonus0);
-        s_collateralToken1.revoke(msg.sender, liquidatee, delegation1 + basalBonus1);
+        s_collateralToken0.revoke(msg.sender, liquidatee, delegation0 + liquidationBonus0);
+        s_collateralToken1.revoke(msg.sender, liquidatee, delegation1 + liquidationBonus1);
     }
 
     /// @notice Force the exercise of a single position. Exercisor will have to pay a small fee do force exercise.
