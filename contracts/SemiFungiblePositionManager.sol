@@ -255,7 +255,7 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
 
         And the accumulator is computed from the amount of collected fees according to:
              
-             s_accountLiquidityOwed += feesCollected * T/N^2 * (1 - R/T + ν*R/T)          (Eqn 3)     
+             s_accountPremiumOwed += feesCollected * T/N^2 * (1 - R/T + ν*R/T)          (Eqn 3)     
 
         So, the amount of owed premia for a position of size r minted at time t1 and burnt at 
         time t2 is:
@@ -616,7 +616,6 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
     }
 
     /// @notice Create a new position `tokenId` containing up to 4 legs.
-    /// @dev Revert if the position is not unique.
     /// @param tokenId The tokenId of the minted position, which encodes information for up to 4 legs
     /// @param positionSize The number of contracts minted, expressed in terms of the asset
     /// @param slippageTickLimitLow The lower price slippage limit when minting an ITM position (set to larger than slippageTickLimitHigh for swapping when minting)
@@ -1370,8 +1369,8 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
     /// @notice Function that updates the Owed and Gross account liquidities.
     /// @param currentLiquidity netLiquidity (right) and removedLiquidity (left) at the start of the transaction
     /// @param collectedAmounts total amount of tokens (token0 and token1) collected from Uniswap.
-    /// @return deltaPremiumOwed The extra premium to be added to the owed accumulator for token0 (right) and token1 (right)
-    /// @return deltaPremiumGross The extra premium to be added to the gross accumulator for token0 (right) and token1 (right)
+    /// @return deltaPremiumOwed The extra premium (per liquidity X64) to be added to the owed accumulator for token0 (right) and token1 (right)
+    /// @return deltaPremiumGross The extra premium (per liquidity X64) to be added to the gross accumulator for token0 (right) and token1 (right)
     function _getPremiaDeltas(
         uint256 currentLiquidity,
         int256 collectedAmounts
@@ -1532,8 +1531,8 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
     /// @param tickUpper The upper end of the tick range for the position (int24)
     /// @param atTick The current tick. Set atTick < type(int24).max = 8388608 to get latest premium up to the current block
     /// @param isLong whether the position is long (=1) or short (=0)
-    /// @return premiumToken0 The amount of premium for token0 = sum (feeGrowthLast0X128) over every block where the position has been touched
-    /// @return premiumToken1 The amount of premium for token1 = sum (feeGrowthLast0X128) over every block where the position has been touched
+    /// @return premiumToken0 The amount of premium (per liquidity X64) for token0 = sum (feeGrowthLast0X128) over every block where the position has been touched
+    /// @return premiumToken1 The amount of premium (per liquidity X64) for token1 = sum (feeGrowthLast0X128) over every block where the position has been touched
     function getAccountPremium(
         address univ3pool,
         address owner,

@@ -16,7 +16,7 @@ import {TokenId} from "@types/TokenId.sol";
 contract PanopticHelper {
     using TokenId for uint256;
 
-    SemiFungiblePositionManager immutable SFPM;
+    SemiFungiblePositionManager internal immutable SFPM;
 
     struct Leg {
         uint64 poolId;
