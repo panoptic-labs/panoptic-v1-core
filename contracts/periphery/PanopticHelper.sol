@@ -676,7 +676,7 @@ contract PanopticHelper {
         // 2. a long call
 
         // short strangle
-        tokenId = createStrangle(univ3pool, width, shortCallStrike, shortPutStrike, 0, asset, 1, 1);
+        tokenId = createStrangle(univ3pool, width, shortCallStrike, shortPutStrike, asset, 0, 1, 1);
 
         // long call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 1, 0, longCallStrike, width);
@@ -702,7 +702,7 @@ contract PanopticHelper {
         // 2. a long call
 
         // short straddle
-        tokenId = createStraddle(univ3pool, width, straddleStrike, 0, asset, 1, 1);
+        tokenId = createStraddle(univ3pool, width, straddleStrike, asset, 0, 1, 1);
 
         // long call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 1, 0, longCallStrike, width);
