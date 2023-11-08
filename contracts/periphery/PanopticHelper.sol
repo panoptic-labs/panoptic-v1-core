@@ -365,19 +365,10 @@ contract PanopticHelper {
         // 2. a put with an identical strike price
 
         // call
-        tokenId = addCallLeg(tokenId, start, optionRatio, asset, isLong, start, strike, width);
+        tokenId = addCallLeg(tokenId, start, optionRatio, asset, isLong, start + 1, strike, width);
 
         // put
-        tokenId = addPutLeg(
-            tokenId,
-            start + 1,
-            optionRatio,
-            asset,
-            isLong,
-            start + 1,
-            strike,
-            width
-        );
+        tokenId = addPutLeg(tokenId, start + 1, optionRatio, asset, isLong, start, strike, width);
     }
 
     /// @notice creates a call spread with 1 long leg and 1 short leg.
