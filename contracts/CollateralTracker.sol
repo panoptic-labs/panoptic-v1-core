@@ -1276,7 +1276,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             oldPositionPremia = int128(
                 Math.min(
                     oldPositionPremia,
-                    int256(IERC20Partial(s_underlyingToken).balanceOf(address(this))) -
+                    int256(IERC20Partial(s_underlyingToken).balanceOf(address(s_panopticPool))) -
                         updatedAssets
                 )
             );
@@ -1371,7 +1371,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             currentPositionPremium = int128(
                 Math.min(
                     currentPositionPremium,
-                    int256(IERC20Partial(s_underlyingToken).balanceOf(address(this))) -
+                    int256(IERC20Partial(s_underlyingToken).balanceOf(address(s_panopticPool))) -
                         updatedAssets
                 )
             );
