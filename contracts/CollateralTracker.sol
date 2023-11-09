@@ -522,7 +522,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @return maxShares The maximum amount of shares that can be minted.
     function maxMint(address) external view returns (uint256 maxShares) {
         unchecked {
-            return (convertToShares(type(uint104).max) * 1000) / 1001;
+            return
+                (convertToShares(type(uint104).max) * DECIMALS) /
+                (DECIMALS + uint128(s_commissionFee));
         }
     }
 
@@ -1274,7 +1276,11 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // mint or burn tokens due to minting in-the-money
             if (tokenToPay > 0) {
                 // if user must pay tokens, burn them from user balance
-                uint256 sharesToBurn = convertToShares(uint256(tokenToPay));
+                uint256 sharesToBurn = Math.mulDivUp(
+                    uint256(tokenToPay),
+                    totalSupply,
+                    totalAssets()
+                );
                 _burn(environmentContext.caller(), sharesToBurn);
             } else if (tokenToPay < 0) {
                 // if user must receive tokens, mint them
@@ -1362,7 +1368,11 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             if (tokenToPay > 0) {
                 // if user must pay tokens, burn them from user balance (revert if balance too small)
-                uint256 sharesToBurn = convertToShares(uint256(tokenToPay));
+                uint256 sharesToBurn = Math.mulDivUp(
+                    uint256(tokenToPay),
+                    totalSupply,
+                    totalAssets()
+                );
                 _burn(optionOwner, sharesToBurn);
             } else if (tokenToPay < 0) {
                 // if user must receive tokens, mint them
