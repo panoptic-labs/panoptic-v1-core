@@ -4890,12 +4890,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //         _assumePositionValidity(bob, tokenId, positionSize0);
 
     //         int24 deltaStrike = 1000;
-    //         uint256 tokensRequired0 = collateralToken0.getPositionCollateralRequirement(
+    //         uint256 tokensRequired0 = panopticHelper.getPositionCollateralRequirement(
     //             tokenId,
     //             positionSize0,
     //             strike - deltaStrike
     //         );
-    //         uint256 tokensRequired1 = collateralToken1.getPositionCollateralRequirement(
+    //         uint256 tokensRequired1 = panopticHelper.getPositionCollateralRequirement(
     //             tokenId,
     //             positionSize0,
     //             strike - deltaStrike
@@ -4909,12 +4909,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //             .getITMPositionCollateralRequirement(tokenId, positionSize0, strike - deltaStrike);
 
     //         // ITM
-    //         (tokensRequired0) = collateralToken0.getPositionCollateralRequirement(
+    //         (tokensRequired0) = panopticHelper.getPositionCollateralRequirement(
     //             tokenId,
     //             positionSize0,
     //             strike + deltaStrike
     //         );
-    //         (tokensRequired1) = collateralToken1.getPositionCollateralRequirement(
+    //         (tokensRequired1) = panopticHelper.getPositionCollateralRequirement(
     //             tokenId,
     //             positionSize0,
     //             strike + deltaStrike
@@ -4958,12 +4958,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //             console2.log("");
     //             console2.log("strike", strike);
     //             console2.log("atTick", strike - deltaStrike);
-    //             tokensRequired0 = collateralToken0.getPositionCollateralRequirement(
+    //             tokensRequired0 = panopticHelper.getPositionCollateralRequirement(
     //                 tokenId1,
     //                 positionSize1,
     //                 strike - deltaStrike
     //             );
-    //             tokensRequired1 = collateralToken1.getPositionCollateralRequirement(
+    //             tokensRequired1 = panopticHelper.getPositionCollateralRequirement(
     //                 tokenId1,
     //                 positionSize1,
     //                 strike - deltaStrike
@@ -4982,12 +4982,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     //             deltaStrike = 1000;
     //             console2.log("atTick", strike + deltaStrike);
-    //             (tokensRequired0) = collateralToken0.getPositionCollateralRequirement(
+    //             (tokensRequired0) = panopticHelper.getPositionCollateralRequirement(
     //                 tokenId1,
     //                 positionSize1,
     //                 strike + deltaStrike
     //             );
-    //             (tokensRequired1) = collateralToken1.getPositionCollateralRequirement(
+    //             (tokensRequired1) = panopticHelper.getPositionCollateralRequirement(
     //                 tokenId1,
     //                 positionSize1,
     //                 strike + deltaStrike
@@ -6900,13 +6900,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
             atTick = (atTick / tickSpacing) * tickSpacing;
 
-            testRequired0 = collateralToken0.getPositionCollateralRequirement(
+            testRequired0 = panopticHelper.getPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                0,
                 positionSize0,
                 atTick
             );
-            testRequired1 = collateralToken1.getPositionCollateralRequirement(
+            testRequired1 = panopticHelper.getPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                1,
                 positionSize0,
                 atTick
             );
@@ -7017,13 +7021,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
             atTick = (atTick / tickSpacing) * tickSpacing;
 
-            testRequired0 = collateralToken0.getPositionCollateralRequirement(
+            testRequired0 = panopticHelper.getPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                0,
                 positionSize0,
                 atTick
             );
-            testRequired1 = collateralToken1.getPositionCollateralRequirement(
+            testRequired1 = panopticHelper.getPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                1,
                 positionSize0,
                 atTick
             );
@@ -7137,13 +7145,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
             atTick = (atTick / tickSpacing) * tickSpacing;
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                0,
                 positionSize0,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                1,
                 positionSize0,
                 atTick
             );
@@ -7207,13 +7219,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                0,
                 positionSize0 / 2,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                1,
                 positionSize0 / 2,
                 atTick
             );
@@ -7345,13 +7361,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                0,
                 positionSize0 / 2,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                1,
                 positionSize0 / 2,
                 atTick
             );
@@ -7496,13 +7516,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 8);
             _spreadTokensRequired(tokenId1, positionSize0 / 8);
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                0,
                 positionSize0 / 8,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                1,
                 positionSize0 / 8,
                 atTick
             );
@@ -7643,13 +7667,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 4);
             _spreadTokensRequired(tokenId1, positionSize0 / 4);
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                0,
                 positionSize0 / 4,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                1,
                 positionSize0 / 4,
                 atTick
             );
@@ -7790,13 +7818,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                0,
                 positionSize0 / 2,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                1,
                 positionSize0 / 2,
                 atTick
             );
@@ -7963,13 +7995,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             uint64 targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
             setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, true);
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                0,
                 positionSize0 / 4,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                1,
                 positionSize0 / 4,
                 atTick
             );
@@ -8085,14 +8121,18 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
             atTick = (atTick / tickSpacing) * tickSpacing;
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                0,
                 positionSize0,
                 atTick
             );
 
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                1,
                 positionSize0,
                 atTick
             );
@@ -8185,13 +8225,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
             setUtilization(collateralToken0, token0, int64(targetUtilization), inAMMOffset, true);
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                0,
                 positionSize0 / 2,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                1,
                 positionSize0 / 2,
                 atTick
             );
@@ -8314,14 +8358,18 @@ contract CollateralTrackerTest is Test, PositionUtils {
             atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
             atTick = (atTick / tickSpacing) * tickSpacing;
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                0,
                 positionSize0,
                 currentTick
             );
 
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId,
+                1,
                 positionSize0,
                 currentTick
             );
@@ -8424,13 +8472,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             targetUtilization = uint64(bound(utilizationSeed, 1, 9_999));
             setUtilization(collateralToken1, token1, int64(targetUtilization), inAMMOffset, true);
 
-            (tokensRequiredITM0, itmAmount0) = collateralToken0.getITMPositionCollateralRequirement(
+            (tokensRequiredITM0, itmAmount0) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                0,
                 positionSize0 / 2,
                 atTick
             );
-            (tokensRequiredITM1, itmAmount1) = collateralToken1.getITMPositionCollateralRequirement(
+            (tokensRequiredITM1, itmAmount1) = panopticHelper.getITMPositionCollateralRequirement(
+                panopticPool,
                 tokenId1,
+                1,
                 positionSize0 / 2,
                 atTick
             );
@@ -8546,8 +8598,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 utilization = tokenType == 0
                     ? int64(uint64(poolUtilization))
                     : int64(uint64(poolUtilization >> 64));
-
-                console2.log("test utilization", utilization);
 
                 sellCollateralRatio = uint256(
                     int256(collateralToken0.sellCollateralRatio(utilization))
@@ -8761,8 +8811,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                     ? int64(uint64(poolUtilization))
                     : int64(uint64(poolUtilization >> 64));
 
-                console2.log("strangle utilization", utilization);
-
                 int128 baseCollateralRatio;
                 int128 targetPoolUtilization = 5_000;
                 int128 saturatedPoolUtilization = 9_000;
@@ -8775,8 +8823,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                     buyCollateralRatio = utilization != 0
                         ? buyCollateralRatio / 2
                         : buyCollateralRatio; // 2x efficiency (doesn't compound at 0)
-
-                    console2.log("buyCollateralRatio", buyCollateralRatio);
 
                     if (utilization < targetPoolUtilization) {
                         baseCollateralRatio = int128(int256(buyCollateralRatio));
