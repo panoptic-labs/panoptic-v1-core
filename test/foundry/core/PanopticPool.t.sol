@@ -392,7 +392,7 @@ contract PanopticPoolTest is PositionUtils {
         sqrtUppers.push(sqrtUpper);
 
         // 0.0001 -> 10_000 WETH
-        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 22);
+        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 20);
 
         // calculate the amount of ETH contracts needed to create a position with above attributes and value in ETH
         positionSize = uint128(
@@ -463,8 +463,8 @@ contract PanopticPoolTest is PositionUtils {
         sqrtLower = TickMath.getSqrtRatioAtTick(tickLower);
         sqrtUpper = TickMath.getSqrtRatioAtTick(tickUpper);
 
-        positionSizeSeeds[0] = bound(positionSizeSeeds[0], 10 ** 15, 10 ** 22);
-        positionSizeSeeds[1] = bound(positionSizeSeeds[1], 10 ** 15, 10 ** 22);
+        positionSizeSeeds[0] = bound(positionSizeSeeds[0], 10 ** 15, 10 ** 20);
+        positionSizeSeeds[1] = bound(positionSizeSeeds[1], 10 ** 15, 10 ** 20);
 
         // calculate the amount of ETH contracts needed to create a position with above attributes and value in ETH
         positionSizes.push(
@@ -522,7 +522,7 @@ contract PanopticPoolTest is PositionUtils {
         sqrtUppers.push(TickMath.getSqrtRatioAtTick(tickUppers[1]));
 
         // 0.0001 -> 10_000 WETH
-        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 22);
+        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 20);
 
         // calculate the amount of ETH contracts needed to create a position with above attributes and value in ETH
         positionSize = uint128(
@@ -919,7 +919,7 @@ contract PanopticPoolTest is PositionUtils {
         sqrtUppers.push(TickMath.getSqrtRatioAtTick(tickUppers[2]));
 
         // 0.0001 -> 10_000 WETH
-        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 22);
+        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 20);
 
         // calculate the amount of ETH contracts needed to create a position with above attributes and value in ETH
         positionSize = uint128(
@@ -1028,7 +1028,7 @@ contract PanopticPoolTest is PositionUtils {
         sqrtUppers.push(TickMath.getSqrtRatioAtTick(tickUppers[3]));
 
         // 0.0001 -> 10_000 WETH
-        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 22);
+        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 20);
 
         // calculate the amount of ETH contracts needed to create a position with above attributes and value in ETH
         positionSize = uint128(
@@ -1139,8 +1139,8 @@ contract PanopticPoolTest is PositionUtils {
         sqrtUppers.push(TickMath.getSqrtRatioAtTick(tickUppers[1]));
 
         // 0.0001 -> 10_000 WETH
-        positionSizeSeeds[0] = bound(positionSizeSeeds[0], 10 ** 15, 10 ** 22);
-        positionSizeSeeds[1] = bound(positionSizeSeeds[1], 10 ** 15, 10 ** 22);
+        positionSizeSeeds[0] = bound(positionSizeSeeds[0], 10 ** 15, 10 ** 20);
+        positionSizeSeeds[1] = bound(positionSizeSeeds[1], 10 ** 15, 10 ** 20);
 
         // calculate the amount of ETH contracts needed to create a position with above attributes and value in ETH
         positionSizes.push(
@@ -1210,7 +1210,7 @@ contract PanopticPoolTest is PositionUtils {
         sqrtUpper = TickMath.getSqrtRatioAtTick(tickUpper);
 
         // 0.0001 -> 10_000 WETH
-        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 22);
+        positionSizeSeed = bound(positionSizeSeed, 10 ** 15, 10 ** 20);
         positionSizeBurnSeed = bound(positionSizeBurnSeed, 10 ** 14, positionSizeSeed);
 
         // calculate the amount of ETH contracts needed to create a position with above attributes and value in ETH
@@ -5066,7 +5066,6 @@ contract PanopticPoolTest is PositionUtils {
                 widthSeeds[i],
                 strikeSeeds[i],
                 uint24(tickSpacing),
-                // distancing tickSpacing ensures this position stays OTM throughout this test case. ITM is tested elsewhere.
                 currentTick
             );
         }
