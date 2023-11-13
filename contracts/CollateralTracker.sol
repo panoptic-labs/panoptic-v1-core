@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
-// Foundry
-import "forge-std/Test.sol";
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
@@ -1496,8 +1494,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             // read the position size and the pool utilization at mint
             uint128 positionSize = positionBalanceArray[i][1].rightSlot();
-
-            console2.log("margin position size", positionSize);
 
             // read the pool utilization at mint
             uint128 poolUtilization = positionBalanceArray[i][1].leftSlot();

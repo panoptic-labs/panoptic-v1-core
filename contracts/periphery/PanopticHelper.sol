@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
-// Foundry
-import "forge-std/Test.sol";
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
@@ -184,12 +182,6 @@ contract PanopticHelper {
             atTick
         );
 
-        // if position size is too small then the requirement may be 0
-        // as the amounts moved are 0
-        if (tokensRequired == 0) {
-            return (0, 0);
-        }
-
         // compute ITM amounts
         (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
             tokenId,
@@ -306,8 +298,6 @@ contract PanopticHelper {
                 DECIMALS;
         }
 
-        console2.log("available collateral", availableCollateral);
-
         // populate max position sizes
         for (uint i; i < 7; ) {
             // upper and lower bounds
@@ -316,7 +306,6 @@ contract PanopticHelper {
             int256 c = a;
 
             while (b - a >= epsilon) {
-                console2.log("b - a", b - a);
                 // Find middle point
                 c = (a + b) / 2;
 
@@ -379,8 +368,8 @@ contract PanopticHelper {
 
         for (uint i; i < 4; i++) {
             // validate the lower bounds of the amount moved
-            // if any of the amounts moved(s) are 0 then the solution for this position size is solely...
-            // ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100)
+            // if any of the amounts moved(s) are 0 then the solution for this position size is set to 0
+            // this forces the bounds of a to be increased in the convergance function
             // as the total requirement of a position with an amount moved of 0, is 0
             {
                 uint256[4] memory amountsMoved = totalAmountsMoved(
@@ -443,7 +432,7 @@ contract PanopticHelper {
     }
 
     /// @notice this function returns the amounts moved for a legs of a tokenId without revert
-    /// if the initial position size passed into a position is too small or surpasses 127 bits, it reverts due to the notional value being too small
+    /// if the initial position size passed into a position is too small, it reverts due to the notional value being insufficient
     /// this helper returns the amounts without restriction
     /// @param tokenId The tokenId to check collateral requirement for
     /// @param positionSize the number of option contracts held in this position (each contract can control multiple tokens)

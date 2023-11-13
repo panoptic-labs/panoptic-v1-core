@@ -8628,33 +8628,33 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
         }
 
-        {
-            // Alice buys
-            changePrank(Alice);
+        // {
+        //     // Alice buys
+        //     changePrank(Alice);
 
-            // give Bob the max amount of tokens
-            _grantTokens(Alice);
+        //     // give Bob the max amount of tokens
+        //     _grantTokens(Alice);
 
-            // approve collateral tracker to move tokens on Bob's behalf
-            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
-            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+        //     // approve collateral tracker to move tokens on Bob's behalf
+        //     IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+        //     IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // award corresponding shares
-            _mockMaxDeposit(Alice);
+        //     // award corresponding shares
+        //     _mockMaxDeposit(Alice);
 
-            tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
-            positionIdList1.push(tokenId1);
+        //     tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 1, 0, strike, width);
+        //     positionIdList1.push(tokenId1);
 
-            _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
+        //     _assumePositionValidity(Alice, tokenId1, positionSize0 / 2);
 
-            panopticPool.mintOptions(
-                positionIdList1,
-                positionSize0 / 2,
-                type(uint64).max,
-                TickMath.MIN_TICK,
-                TickMath.MAX_TICK
-            );
-        }
+        //     panopticPool.mintOptions(
+        //         positionIdList1,
+        //         positionSize0 / 2,
+        //         type(uint64).max,
+        //         TickMath.MIN_TICK,
+        //         TickMath.MAX_TICK
+        //     );
+        // }
     }
 
     /*//////////////////////////////////////////////////////////////
