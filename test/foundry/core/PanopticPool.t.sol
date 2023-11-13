@@ -3380,6 +3380,7 @@ contract PanopticPoolTest is PositionUtils {
             uint256(int256(shortAmounts.rightSlot()) / 1_000_000 + 10)
         );
 
+        console.log("tokensOwed1", tokensOwed1);
         assertEq(balanceBefores[1] + tokensOwed1, uint256(type(uint104).max));
     }
 
