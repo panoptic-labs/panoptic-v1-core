@@ -1260,31 +1260,33 @@ contract PanopticPoolTest is PositionUtils {
         changePrank(Swapper);
 
         swapSize = bound(swapSize, 10 ** 18, 10 ** 20);
-        router.exactInputSingle(
-            ISwapRouter.ExactInputSingleParams(
-                isWETH == 0 ? token0 : token1,
-                isWETH == 1 ? token0 : token1,
-                fee,
-                Bob,
-                block.timestamp,
-                swapSize,
-                0,
-                0
-            )
-        );
+        for (uint256 i = 0; i < 10; ++i) {
+            router.exactInputSingle(
+                ISwapRouter.ExactInputSingleParams(
+                    isWETH == 0 ? token0 : token1,
+                    isWETH == 1 ? token0 : token1,
+                    fee,
+                    Bob,
+                    block.timestamp,
+                    swapSize,
+                    0,
+                    0
+                )
+            );
 
-        router.exactOutputSingle(
-            ISwapRouter.ExactOutputSingleParams(
-                isWETH == 1 ? token0 : token1,
-                isWETH == 0 ? token0 : token1,
-                fee,
-                Bob,
-                block.timestamp,
-                (swapSize * (1_000_000 - fee)) / 1_000_000,
-                type(uint256).max,
-                0
-            )
-        );
+            router.exactOutputSingle(
+                ISwapRouter.ExactOutputSingleParams(
+                    isWETH == 1 ? token0 : token1,
+                    isWETH == 0 ? token0 : token1,
+                    fee,
+                    Bob,
+                    block.timestamp,
+                    (swapSize * (1_000_000 - fee)) / 1_000_000,
+                    type(uint256).max,
+                    0
+                )
+            );
+        }
 
         (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
     }
@@ -3382,8 +3384,8 @@ contract PanopticPoolTest is PositionUtils {
 
         console.log("tokensOwed1", tokensOwed1);
         assertApproxEqAbs(
-            balanceBefores[1] + tokensOwed1,
-            uint256(type(uint104).max),
+            balanceBefores[1],
+            uint256(type(uint104).max) + tokensOwed1,
             tokensOwed1 / 1_000_000 + 10
         );
     }
