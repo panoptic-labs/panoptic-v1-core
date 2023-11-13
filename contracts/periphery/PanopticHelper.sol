@@ -15,6 +15,7 @@ import {Math} from "@libraries/Math.sol";
 // Custom types
 import {TokenId} from "@types/TokenId.sol";
 import {LeftRight} from "@types/LeftRight.sol";
+import {Errors} from "@libraries/Errors.sol";
 
 /// @title Utility contract for token ID construction and advanced queries.
 /// @author Axicon Labs Limited
@@ -174,6 +175,7 @@ contract PanopticHelper {
         int24 atTick
     ) public view returns (int256 totalTokensRequired, int256 itmAmount) {
         // get tokens required for the current tokenId position
+        // if the amount moved is 0 the required tokens are 0
         uint256 tokensRequired = getPositionCollateralRequirement(
             pool,
             tokenId,
@@ -181,6 +183,12 @@ contract PanopticHelper {
             positionSize,
             atTick
         );
+
+        // if position size is too small then the requirement may be 0
+        // as the amounts moved are 0
+        if (tokensRequired == 0) {
+            return (0, 0);
+        }
 
         // compute ITM amounts
         (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
@@ -298,31 +306,34 @@ contract PanopticHelper {
                 DECIMALS;
         }
 
+        console2.log("available collateral", availableCollateral);
+
         // populate max position sizes
-        for (uint i; i <= 7; ) {
+        for (uint i; i < 7; ) {
             // upper and lower bounds
-            int128 a = 1;
-            int128 b = type(int128).max;
-            int128 c = a;
-
-            int256[3] memory solutions = _bisectionBaseCase(
-                _pool,
-                tokenId,
-                atTick,
-                tokenType,
-                [a, b, c],
-                availableCollateral,
-                i // sizing index
-            );
-
-            // returns undefined if solution doesn't reside in the bounds of (a,b)
-            // if (solutions[0] * solutions[1] >= 0) {
-            //     return maxPositionSizes;
-            // }
+            int256 a = 1;
+            int256 b = type(int128).max;
+            int256 c = a;
 
             while (b - a >= epsilon) {
+                console2.log("b - a", b - a);
                 // Find middle point
                 c = (a + b) / 2;
+
+                int256[3] memory solutions = _bisectionBaseCase(
+                    _pool,
+                    tokenId,
+                    atTick,
+                    tokenType,
+                    [a, b, c],
+                    availableCollateral,
+                    i // sizing index
+                );
+
+                // reverts if solution doesn't reside in the bounds of (a,b)
+                if (solutions[0] * solutions[1] >= 0) {
+                    revert();
+                }
 
                 // Check if middle point is root
                 {
@@ -345,19 +356,55 @@ contract PanopticHelper {
         }
     }
 
+    /// @notice Compute the max position size given a tokenId using the bisection method.
+    /// @param pool The PanopticPool instance to check collateral on
+    /// @param tokenId The tokenId to check collateral requirement for
+    /// @param atTick At what price is the collateral requirement evaluated at
+    /// @param tokenType whether to return the values in term of token0 or token1
+    /// @param positionSizes The position sizes to evaluate the collateral requirement passed in
+    /// @param availableCollateral the interacting user's free collateral balances (total balancde - total requirements for open positions)
+    /// @param sizingIndex The ratio of the available collateral being used to determine the maximum position size for
+    /// @return solutions the collateral requirements for the corresponding position details passed in
     function _bisectionBaseCase(
         PanopticPool pool,
         uint256 tokenId,
         int24 atTick,
         uint256 tokenType,
-        int128[3] memory positionSizes,
+        int256[3] memory positionSizes,
         uint256 availableCollateral,
         uint256 sizingIndex
     ) internal view returns (int256[3] memory solutions) {
         // stack rolling
         int24 _atTick = atTick;
 
-        for (uint i; i <= 3; ) {
+        for (uint i; i < 4; i++) {
+            // validate the lower bounds of the amount moved
+            // if any of the amounts moved(s) are 0 then the solution for this position size is solely...
+            // ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100)
+            // as the total requirement of a position with an amount moved of 0, is 0
+            {
+                uint256[4] memory amountsMoved = totalAmountsMoved(
+                    tokenId,
+                    uint128(uint256(positionSizes[i])),
+                    pool.univ3pool().tickSpacing()
+                );
+
+                for (uint i; i < 4; ) {
+                    uint256 currAmountMoved = amountsMoved[i];
+                    if (currAmountMoved.leftSlot() == 0 || currAmountMoved.rightSlot() == 0) {
+                        // solutions[i] =
+                        //     ((int256(availableCollateral) * sizingPercentages[sizingIndex]) /
+                        //     100);
+                        solutions[i] = 0;
+                        continue;
+                    }
+
+                    unchecked {
+                        i++;
+                    }
+                }
+            }
+
             int256 requiredCollateralITM0;
             int256 requiredCollateralITM1;
             {
@@ -366,7 +413,7 @@ contract PanopticHelper {
                     pool,
                     tokenId,
                     0,
-                    uint128(positionSizes[i]),
+                    uint128(uint256(positionSizes[i])),
                     _atTick
                 );
                 // Query the required collateral amounts for token1
@@ -374,7 +421,7 @@ contract PanopticHelper {
                     pool,
                     tokenId,
                     1,
-                    uint128(positionSizes[i]),
+                    uint128(uint256(positionSizes[i])),
                     _atTick
                 );
             }
@@ -390,9 +437,54 @@ contract PanopticHelper {
                     PanopticMath.convert0to1(requiredCollateralITM0, sqrtPriceX96);
 
             solutions[i] =
-                (int256(availableCollateral) * sizingPercentages[sizingIndex]) /
-                100 -
+                ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100) -
                 totalRequirement;
+        }
+    }
+
+    /// @notice this function returns the amounts moved for a legs of a tokenId without revert
+    /// if the initial position size passed into a position is too small or surpasses 127 bits, it reverts due to the notional value being too small
+    /// this helper returns the amounts without restriction
+    /// @param tokenId The tokenId to check collateral requirement for
+    /// @param positionSize the number of option contracts held in this position (each contract can control multiple tokens)
+    /// @param tickSpacing the tick spacing of the underlying UniV3 pool
+    /// @return amountsMoved the total amounts moved for all legs with each value being a LeftRight encoded variable containing the amount0 and the amount1 value controlled by this option position's leg
+    function totalAmountsMoved(
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 tickSpacing
+    ) public view returns (uint256[4] memory amountsMoved) {
+        uint256 totalLegs = tokenId.countLegs();
+        for (uint i; i < totalLegs; ) {
+            // get the tick range for this leg in order to get the strike price (the underlying price)
+            (int24 tickLower, int24 tickUpper) = tokenId.asTicks(i, tickSpacing);
+
+            // positionSize: how many option contracts we have.
+
+            uint128 amount0;
+            uint128 amount1;
+            unchecked {
+                if (tokenId.asset(i) == 0) {
+                    // contractSize: is then the product of how many option contracts we have and the amount of underlying controlled per contract
+                    amount0 = positionSize * uint128(tokenId.optionRatio(i)); // in terms of the underlying tokens/shares
+                    // notional is then "how many underlying tokens are controlled (contractSize) * (the price for each token -- strike price):
+                    amount1 = (
+                        PanopticMath.convert0to1(
+                            amount0,
+                            Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2)
+                        )
+                    ).toUint128(); // how many tokens are controlled by this option position
+                } else {
+                    amount1 = positionSize * uint128(tokenId.optionRatio(i));
+                    amount0 = (
+                        PanopticMath.convert1to0(
+                            amount1,
+                            Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2)
+                        )
+                    ).toUint128();
+                }
+            }
+            amountsMoved[i] = uint256(0).toRightSlot(amount0).toLeftSlot(amount1);
 
             unchecked {
                 i++;

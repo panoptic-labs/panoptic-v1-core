@@ -1497,6 +1497,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // read the position size and the pool utilization at mint
             uint128 positionSize = positionBalanceArray[i][1].rightSlot();
 
+            console2.log("margin position size", positionSize);
+
             // read the pool utilization at mint
             uint128 poolUtilization = positionBalanceArray[i][1].leftSlot();
 
@@ -1532,7 +1534,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         uint128 positionSize,
         int24 atTick,
         uint128 poolUtilization
-    ) public view returns (uint256 tokenRequired) {
+    ) external view returns (uint256 tokenRequired) {
         return
             _getRequiredCollateralAtTickSinglePosition(
                 tokenId,

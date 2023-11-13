@@ -411,7 +411,8 @@ library PanopticMath {
                 ? convert0to1(contractSize, Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2))
                 : convert1to0(contractSize, Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2));
 
-            if (notional == 0 || notional > type(uint128).max) revert Errors.InvalidNotionalValue();
+            if (notional == 0 || notional > uint128(type(int128).max))
+                revert Errors.InvalidNotionalValue();
 
             return uint128(notional);
         }
