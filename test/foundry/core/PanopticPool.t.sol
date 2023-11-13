@@ -3176,59 +3176,50 @@ contract PanopticPoolTest is PositionUtils {
 
         vm.revertTo(0);
 
-        uint256 expectedSwap0;
-        uint256 expectedSwap1;
-        {
-            (uint256[2] memory amount0, ) = PositionUtils.simulateSwap(
-                pool,
-                tickLower,
-                tickUpper,
-                expectedLiq,
-                router,
-                token0,
-                token1,
-                fee,
-                [true, false],
-                amount1Moveds
-            );
+        (uint256[2] memory expectedSwaps, ) = PositionUtils.simulateSwap(
+            pool,
+            tickLower,
+            tickUpper,
+            expectedLiq,
+            router,
+            token0,
+            token1,
+            fee,
+            [true, false],
+            amount1Moveds
+        );
 
-            expectedSwap0 = amount0[0];
-            expectedSwap1 = amount0[1];
-        }
+        (, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
+            tokenId,
+            0,
+            uint128(positionSize),
+            tickSpacing
+        );
 
-        {
-            (, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
-                tokenId,
-                0,
-                uint128(positionSize),
-                tickSpacing
-            );
+        int256[2] memory notionalVals = [
+            int256(expectedSwaps[0]) + amount0Moveds[0] - shortAmounts.rightSlot(),
+            -int256(expectedSwaps[1]) - amount0Moveds[1] + shortAmounts.rightSlot()
+        ];
 
-            int256[2] memory notionalVals = [
-                int256(expectedSwap0) + amount0Moveds[0] - shortAmounts.rightSlot(),
-                -int256(expectedSwap1) - amount0Moveds[1] + shortAmounts.rightSlot()
-            ];
+        int256 ITMSpread = notionalVals[0] > 0
+            ? (notionalVals[0] * tickSpacing) / 10_000
+            : -((notionalVals[0] * tickSpacing) / 10_000);
 
-            int256 ITMSpread = notionalVals[0] > 0
-                ? (notionalVals[0] * tickSpacing) / 10_000
-                : -((notionalVals[0] * tickSpacing) / 10_000);
+        assertApproxEqAbs(
+            balanceBefores[0],
+            uint256(
+                int256(uint256(type(uint104).max)) -
+                    ITMSpread -
+                    notionalVals[0] -
+                    notionalVals[1] -
+                    (shortAmounts.rightSlot() * 10) /
+                    10_000 +
+                    int128(tokensOwed0)
+            ),
+            uint256(int256(shortAmounts.rightSlot()) / 1_000_000 + 10)
+        );
 
-            assertApproxEqAbs(
-                balanceBefores[0],
-                uint256(
-                    int256(uint256(type(uint104).max)) -
-                        ITMSpread -
-                        notionalVals[0] -
-                        notionalVals[1] -
-                        (shortAmounts.rightSlot() * 10) /
-                        10_000 +
-                        int128(tokensOwed0)
-                ),
-                uint256(int256(shortAmounts.rightSlot()) / 1_000_000 + 10)
-            );
-
-            assertEq(balanceBefores[1], uint256(type(uint104).max));
-        }
+        assertEq(balanceBefores[1], uint256(type(uint104).max));
     }
 
     function test_Success_burnOptions_ITMShortCall_premia_sufficientLocked(
@@ -3346,59 +3337,50 @@ contract PanopticPoolTest is PositionUtils {
 
         vm.revertTo(0);
 
-        uint256 expectedSwap0;
-        uint256 expectedSwap1;
-        {
-            (uint256[2] memory amount0, ) = PositionUtils.simulateSwap(
-                pool,
-                tickLower,
-                tickUpper,
-                expectedLiq,
-                router,
-                token0,
-                token1,
-                fee,
-                [true, false],
-                amount1Moveds
-            );
+        (uint256[2] memory expectedSwaps, ) = PositionUtils.simulateSwap(
+            pool,
+            tickLower,
+            tickUpper,
+            expectedLiq,
+            router,
+            token0,
+            token1,
+            fee,
+            [true, false],
+            amount1Moveds
+        );
 
-            expectedSwap0 = amount0[0];
-            expectedSwap1 = amount0[1];
-        }
+        (, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
+            tokenId,
+            0,
+            uint128(positionSize),
+            tickSpacing
+        );
 
-        {
-            (, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
-                tokenId,
-                0,
-                uint128(positionSize),
-                tickSpacing
-            );
+        int256[2] memory notionalVals = [
+            int256(expectedSwaps[0]) + amount0Moveds[0] - shortAmounts.rightSlot(),
+            -int256(expectedSwaps[1]) - amount0Moveds[1] + shortAmounts.rightSlot()
+        ];
 
-            int256[2] memory notionalVals = [
-                int256(expectedSwap0) + amount0Moveds[0] - shortAmounts.rightSlot(),
-                -int256(expectedSwap1) - amount0Moveds[1] + shortAmounts.rightSlot()
-            ];
+        int256 ITMSpread = notionalVals[0] > 0
+            ? (notionalVals[0] * tickSpacing) / 10_000
+            : -((notionalVals[0] * tickSpacing) / 10_000);
 
-            int256 ITMSpread = notionalVals[0] > 0
-                ? (notionalVals[0] * tickSpacing) / 10_000
-                : -((notionalVals[0] * tickSpacing) / 10_000);
+        assertApproxEqAbs(
+            balanceBefores[0],
+            uint256(
+                int256(uint256(type(uint104).max)) -
+                    ITMSpread -
+                    notionalVals[0] -
+                    notionalVals[1] -
+                    (shortAmounts.rightSlot() * 10) /
+                    10_000 +
+                    int128(tokensOwed0)
+            ),
+            uint256(int256(shortAmounts.rightSlot()) / 1_000_000 + 10)
+        );
 
-            assertApproxEqAbs(
-                balanceBefores[0],
-                uint256(
-                    int256(uint256(type(uint104).max)) -
-                        ITMSpread -
-                        notionalVals[0] -
-                        notionalVals[1] -
-                        (shortAmounts.rightSlot() * 10) /
-                        10_000 +
-                        int128(tokensOwed0)
-                ),
-                uint256(int256(shortAmounts.rightSlot()) / 1_000_000 + 10)
-            );
-
-            assertEq(balanceBefores[1] + tokensOwed1, uint256(type(uint104).max));
-        }
+        assertEq(balanceBefores[1] + tokensOwed1, uint256(type(uint104).max));
     }
 
     function test_Success_burnOptions_burnAllOptionsFrom(
