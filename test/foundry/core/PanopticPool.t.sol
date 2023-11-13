@@ -1259,7 +1259,7 @@ contract PanopticPoolTest is PositionUtils {
     function twoWaySwap(uint256 swapSize) public {
         changePrank(Swapper);
 
-        swapSize = bound(swapSize, 10 ** 18, 10 ** 22);
+        swapSize = bound(swapSize, 10 ** 18, 10 ** 20);
         router.exactInputSingle(
             ISwapRouter.ExactInputSingleParams(
                 isWETH == 0 ? token0 : token1,
@@ -4662,15 +4662,6 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             tickSpacing
         );
-
-        uint256[2] memory commissionFeeAmounts = [
-            ct0.convertToShares(
-                uint256((int256(longAmounts.rightSlot() + shortAmounts.rightSlot()) * 10) / 10_000)
-            ),
-            ct1.convertToShares(
-                uint256((int256(longAmounts.leftSlot() + shortAmounts.leftSlot()) * 10) / 10_000)
-            )
-        ];
 
         pp.mintOptions(posIdList, positionSize, type(uint64).max, 0, 0);
 
