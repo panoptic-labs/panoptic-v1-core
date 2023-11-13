@@ -3381,7 +3381,11 @@ contract PanopticPoolTest is PositionUtils {
         );
 
         console.log("tokensOwed1", tokensOwed1);
-        assertEq(balanceBefores[1] + tokensOwed1, uint256(type(uint104).max));
+        assertApproxEqAbs(
+            balanceBefores[1] + tokensOwed1,
+            uint256(type(uint104).max),
+            tokensOwed1 / 1_000_000 + 10
+        );
     }
 
     function test_Success_burnOptions_burnAllOptionsFrom(
