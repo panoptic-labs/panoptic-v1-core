@@ -369,7 +369,7 @@ contract PanopticHelper {
         for (uint i; i < 4; i++) {
             // validate the lower bounds of the amount moved
             // if any of the amounts moved(s) are 0 then the solution for this position size is set to 0
-            // this forces the bounds of a to be increased in the convergance function
+            // this forces the bounds of 'a' to be increased in the convergance function
             // as the total requirement of a position with an amount moved of 0, is 0
             {
                 uint256[4] memory amountsMoved = totalAmountsMoved(
@@ -378,18 +378,11 @@ contract PanopticHelper {
                     pool.univ3pool().tickSpacing()
                 );
 
-                for (uint i; i < 4; ) {
+                for (uint i; i < 4; i++) {
                     uint256 currAmountMoved = amountsMoved[i];
                     if (currAmountMoved.leftSlot() == 0 || currAmountMoved.rightSlot() == 0) {
-                        // solutions[i] =
-                        //     ((int256(availableCollateral) * sizingPercentages[sizingIndex]) /
-                        //     100);
                         solutions[i] = 0;
                         continue;
-                    }
-
-                    unchecked {
-                        i++;
                     }
                 }
             }
