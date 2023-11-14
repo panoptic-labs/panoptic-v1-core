@@ -3525,6 +3525,7 @@ contract PanopticPoolTest is PositionUtils {
             int128(expectedLiq)
         );
 
+        changePrank(Alice);
         pp.burnOptions(tokenIds[0], 0, 0);
 
         //snapshot balances and revert to old snapshot
