@@ -3566,7 +3566,7 @@ contract PanopticPoolTest is PositionUtils {
             : -((notionalVals[0] * tickSpacing) / 10_000);
 
         console2.log(tokensOwed0, tokensOwed1);
-        vm.assume(tokensOwed0 + tokensOwed1 > 0);
+
         assertApproxEqAbs(
             balanceBefores[0],
             uint256(
@@ -3578,7 +3578,7 @@ contract PanopticPoolTest is PositionUtils {
                     10_000 +
                     int128(tokensOwed0)
             ),
-            uint256(int256(shortAmounts.rightSlot()) / 1_000_000 + 10)
+            (uint256(int256(shortAmounts.rightSlot()) + tokensOwed0)) / 1_000_000 + 10
         );
 
         assertApproxEqAbs(
