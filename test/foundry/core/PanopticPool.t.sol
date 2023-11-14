@@ -3410,13 +3410,12 @@ contract PanopticPoolTest is PositionUtils {
 
         populatePositionData(width, strike, positionSizeSeed);
 
+        tokenIds.push(uint256(0).addUniv3pool(poolId).addLeg(0, 1, isWETH, 0, 0, 0, strike, width));
+
+        tokenIds.push(uint256(0).addUniv3pool(poolId).addLeg(0, 1, isWETH, 1, 0, 0, strike, width));
+
         // take snapshot for swap simulation
         vm.snapshot();
-
-        uint256[2] memory tokenIds = [
-            uint256(0).addUniv3pool(poolId).addLeg(0, 1, isWETH, 0, 0, 0, strike, width),
-            uint256(0).addUniv3pool(poolId).addLeg(0, 1, isWETH, 1, 0, 0, strike, width)
-        ];
 
         int256[2] memory amount0Moveds;
         int256[2] memory amount1Moveds;
@@ -3449,7 +3448,7 @@ contract PanopticPoolTest is PositionUtils {
             pp.mintOptions(
                 posIdList,
                 (positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000,
-                0,
+                type(uint64).max,
                 0,
                 0
             );
@@ -3457,7 +3456,6 @@ contract PanopticPoolTest is PositionUtils {
             twoWaySwap(swapSizeSeed);
 
             // sell enough liquidity for alice to exit
-
             changePrank(Charlie);
 
             posIdList[0] = tokenIds[0];
