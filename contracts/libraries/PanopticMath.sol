@@ -338,21 +338,28 @@ library PanopticMath {
     /// @param sqrtPriceX96 the sqrt price at which to convert between token0/token1
     /// @return collateralBalance the total combined balance of token0 and token1 for a user in terms of tokenType
     /// @return requiredCollateral The combined collateral requirement for a user in terms of tokenType
+    /// @return oneIsLarger boolean flag that is true when the balance of token1 has more value than the balance of token0
     function convertCollateralData(
         uint256 tokenData0,
         uint256 tokenData1,
         uint256 tokenType,
         uint160 sqrtPriceX96
-    ) internal pure returns (uint256, uint256) {
+    ) internal pure returns (uint256, uint256, bool) {
         if (tokenType == 0) {
+            uint256 balance0 = tokenData0.rightSlot();
+            uint256 balance1 = convert1to0(tokenData1.rightSlot(), sqrtPriceX96);
             return (
-                tokenData0.rightSlot() + convert1to0(tokenData1.rightSlot(), sqrtPriceX96),
-                tokenData0.leftSlot() + convert1to0(tokenData1.leftSlot(), sqrtPriceX96)
+                balance0 + balance1,
+                tokenData0.leftSlot() + convert1to0(tokenData1.leftSlot(), sqrtPriceX96),
+                balance1 > balance0
             );
         } else {
+            uint256 balance0 = convert0to1(tokenData0.rightSlot(), sqrtPriceX96);
+            uint256 balance1 = tokenData1.rightSlot();
             return (
                 tokenData1.rightSlot() + convert0to1(tokenData0.rightSlot(), sqrtPriceX96),
-                tokenData1.leftSlot() + convert0to1(tokenData0.leftSlot(), sqrtPriceX96)
+                tokenData1.leftSlot() + convert0to1(tokenData0.leftSlot(), sqrtPriceX96),
+                balance1 > balance0
             );
         }
     }
@@ -364,12 +371,13 @@ library PanopticMath {
     /// @param tick the tick at which to convert between token0/token1
     /// @return collateralBalance the total combined balance of token0 and token1 for a user in terms of tokenType
     /// @return requiredCollateral The combined collateral requirement for a user in terms of tokenType
+    /// @return oneIsLarger boolean flag that is true when the balance of token1 has more value than the balance of token0
     function convertCollateralData(
         uint256 tokenData0,
         uint256 tokenData1,
         uint256 tokenType,
         int24 tick
-    ) internal pure returns (uint256, uint256) {
+    ) internal pure returns (uint256, uint256, bool) {
         return
             convertCollateralData(tokenData0, tokenData1, tokenType, Math.getSqrtRatioAtTick(tick));
     }

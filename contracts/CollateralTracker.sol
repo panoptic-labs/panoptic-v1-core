@@ -1433,10 +1433,10 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 shortAmount,
         int128 swappedAmount,
         int128 currentPositionPremium
-    ) external onlyPanopticPool {
+    ) external onlyPanopticPool returns (int256 tokenToPay) {
         unchecked {
             // add premium to be paid/collected on position close
-            int256 tokenToPay = -currentPositionPremium;
+            tokenToPay = -currentPositionPremium;
 
             // if burning ITM and swap occurred, compute tokens to be paid through exercise and add swap fees
             int256 intrinsicValue = swappedAmount - (longAmount - shortAmount);
