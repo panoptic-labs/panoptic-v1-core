@@ -3437,10 +3437,23 @@ contract PanopticPoolTest is PositionUtils {
         uint128 tokensOwed0;
         uint128 tokensOwed1;
         {
+            uint128[] memory tokensOwedTemp = new uint128[](2);
             uint256[] memory posIdList = new uint256[](1);
             posIdList[0] = tokenIds[0];
 
             pp.mintOptions(posIdList, positionSize, 0, 0, 0);
+
+            // poke uniswap pool to update tokens owed - needed because swap happens after mint
+            changePrank(address(sfpm));
+            pool.burn(tickLower, tickUpper, 0);
+
+            // calculate additional fees owed to position
+            (, , , tokensOwed0, tokensOwed1) = pool.positions(
+                PositionKey.compute(address(sfpm), tickLower, tickUpper)
+            );
+
+            tokensOwedTemp[0] = tokensOwed0;
+            tokensOwedTemp[1] = tokensOwed1;
 
             // mint a long option at some percentage of Alice's liquidity so the premium is reduced
             changePrank(Bob);
@@ -3466,6 +3479,9 @@ contract PanopticPoolTest is PositionUtils {
                 PositionKey.compute(address(sfpm), tickLower, tickUpper)
             );
 
+            tokensOwedTemp[0] += tokensOwed0;
+            tokensOwedTemp[1] += tokensOwed1;
+
             // sell enough liquidity for alice to exit
             changePrank(Seller);
 
@@ -3478,6 +3494,18 @@ contract PanopticPoolTest is PositionUtils {
                 0,
                 0
             );
+
+            // poke uniswap pool to update tokens owed - needed because swap happens after mint
+            changePrank(address(sfpm));
+            pool.burn(tickLower, tickUpper, 0);
+
+            // calculate additional fees owed to position
+            (, , , tokensOwed0, tokensOwed1) = pool.positions(
+                PositionKey.compute(address(sfpm), tickLower, tickUpper)
+            );
+
+            tokensOwed0 += tokensOwedTemp[0];
+            tokensOwed1 += tokensOwedTemp[1];
         }
 
         // price changes afters swap at mint so we need to update the price
