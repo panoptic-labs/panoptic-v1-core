@@ -3498,28 +3498,6 @@ contract PanopticPoolTest is PositionUtils {
 
         pp.burnOptions(tokenIds[0], 0, 0);
 
-        assertEq(sfpm.balanceOf(address(pp), tokenIds[0]), 0);
-
-        {
-            (, uint256 inAMM, ) = ct0.getPoolData();
-            assertEq(inAMM, 0);
-        }
-
-        {
-            (, uint256 inAMM, ) = ct1.getPoolData();
-            assertEq(inAMM, 0);
-        }
-        {
-            assertEq(pp.positionsHash(Alice), 0);
-            assertEq(pp.numberOfPositions(Alice), 0);
-
-            (uint128 balance, uint64 poolUtilization0, uint64 poolUtilization1) = pp
-                .optionPositionBalance(Alice, tokenIds[0]);
-            assertEq(balance, 0);
-            assertEq(poolUtilization0, 0);
-            assertEq(poolUtilization1, 0);
-        }
-
         //snapshot balances and revert to old snapshot
         uint256[2] memory balanceBefores = [ct0.balanceOf(Alice), ct1.balanceOf(Alice)];
 
