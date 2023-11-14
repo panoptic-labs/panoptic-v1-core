@@ -3434,6 +3434,8 @@ contract PanopticPoolTest is PositionUtils {
             int128(expectedLiq)
         );
 
+        uint128 tokensOwed0;
+        uint128 tokensOwed1;
         {
             uint256[] memory posIdList = new uint256[](1);
             posIdList[0] = tokenIds[0];
@@ -3455,6 +3457,15 @@ contract PanopticPoolTest is PositionUtils {
 
             twoWaySwap(swapSizeSeed);
 
+            // poke uniswap pool to update tokens owed - needed because swap happens after mint
+            changePrank(address(sfpm));
+            pool.burn(tickLower, tickUpper, 0);
+
+            // calculate additional fees owed to position
+            (, , , tokensOwed0, tokensOwed1) = pool.positions(
+                PositionKey.compute(address(sfpm), tickLower, tickUpper)
+            );
+
             // sell enough liquidity for alice to exit
             changePrank(Seller);
 
@@ -3468,16 +3479,6 @@ contract PanopticPoolTest is PositionUtils {
                 0
             );
         }
-
-        // poke uniswap pool to update tokens owed - needed because swap happens after mint
-        changePrank(address(sfpm));
-        pool.burn(tickLower, tickUpper, 0);
-        changePrank(Alice);
-
-        // calculate additional fees owed to position
-        (, , , uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(
-            PositionKey.compute(address(sfpm), tickLower, tickUpper)
-        );
 
         // price changes afters swap at mint so we need to update the price
         (currentSqrtPriceX96, , , , , , ) = pool.slot0();
