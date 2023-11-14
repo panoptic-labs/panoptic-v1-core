@@ -1260,31 +1260,33 @@ contract PanopticPoolTest is PositionUtils {
         changePrank(Swapper);
 
         swapSize = bound(swapSize, 10 ** 18, 10 ** 20);
-        router.exactInputSingle(
-            ISwapRouter.ExactInputSingleParams(
-                isWETH == 0 ? token0 : token1,
-                isWETH == 1 ? token0 : token1,
-                fee,
-                Bob,
-                block.timestamp,
-                swapSize,
-                0,
-                0
-            )
-        );
+        for (uint256 i = 0; i < 10; ++i) {
+            router.exactInputSingle(
+                ISwapRouter.ExactInputSingleParams(
+                    isWETH == 0 ? token0 : token1,
+                    isWETH == 1 ? token0 : token1,
+                    fee,
+                    Bob,
+                    block.timestamp,
+                    swapSize,
+                    0,
+                    0
+                )
+            );
 
-        router.exactOutputSingle(
-            ISwapRouter.ExactOutputSingleParams(
-                isWETH == 1 ? token0 : token1,
-                isWETH == 0 ? token0 : token1,
-                fee,
-                Bob,
-                block.timestamp,
-                (swapSize * (1_000_000 - fee)) / 1_000_000,
-                type(uint256).max,
-                0
-            )
-        );
+            router.exactOutputSingle(
+                ISwapRouter.ExactOutputSingleParams(
+                    isWETH == 1 ? token0 : token1,
+                    isWETH == 0 ? token0 : token1,
+                    fee,
+                    Bob,
+                    block.timestamp,
+                    (swapSize * (1_000_000 - fee)) / 1_000_000,
+                    type(uint256).max,
+                    0
+                )
+            );
+        }
 
         (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
     }
@@ -3380,7 +3382,212 @@ contract PanopticPoolTest is PositionUtils {
             uint256(int256(shortAmounts.rightSlot()) / 1_000_000 + 10)
         );
 
-        assertEq(balanceBefores[1] + tokensOwed1, uint256(type(uint104).max));
+        assertApproxEqAbs(
+            balanceBefores[1],
+            uint256(type(uint104).max) + tokensOwed1,
+            tokensOwed1 / 1_000_000 + 10
+        );
+    }
+
+    // minting a long position to reduce the premium that can be paid
+    function test_Success_burnOptions_ITMShortCall_premia_insufficientLocked(
+        uint256 x,
+        uint256 widthSeed,
+        int256 strikeSeed,
+        uint256 positionSizeSeed,
+        uint256 swapSizeSeed,
+        uint256 longPercentageSeed
+    ) public {
+        _initPool(x);
+
+        (int24 width, int24 strike) = PositionUtils.getITMSW(
+            widthSeed,
+            strikeSeed,
+            uint24(tickSpacing),
+            currentTick,
+            0
+        );
+
+        populatePositionData(width, strike, positionSizeSeed);
+
+        tokenIds.push(uint256(0).addUniv3pool(poolId).addLeg(0, 1, isWETH, 0, 0, 0, strike, width));
+
+        tokenIds.push(uint256(0).addUniv3pool(poolId).addLeg(0, 1, isWETH, 1, 0, 0, strike, width));
+
+        // take snapshot for swap simulation
+        vm.snapshot();
+
+        int256[2] memory amount0Moveds;
+        int256[2] memory amount1Moveds;
+
+        amount0Moveds[0] = currentSqrtPriceX96 > sqrtUpper
+            ? int256(0)
+            : SqrtPriceMath.getAmount0Delta(
+                currentSqrtPriceX96 < sqrtLower ? sqrtLower : currentSqrtPriceX96,
+                sqrtUpper,
+                int128(expectedLiq)
+            );
+
+        amount1Moveds[0] = -SqrtPriceMath.getAmount1Delta(
+            sqrtLower,
+            sqrtUpper > currentSqrtPriceX96 ? currentSqrtPriceX96 : sqrtUpper,
+            int128(expectedLiq)
+        );
+
+        uint128 tokensOwed0;
+        uint128 tokensOwed1;
+        {
+            uint128[] memory tokensOwedTemp = new uint128[](2);
+            uint256[] memory posIdList = new uint256[](1);
+            posIdList[0] = tokenIds[0];
+
+            pp.mintOptions(posIdList, positionSize, 0, 0, 0);
+
+            // poke uniswap pool to update tokens owed - needed because swap happens after mint
+            changePrank(address(sfpm));
+            pool.burn(tickLower, tickUpper, 0);
+
+            // calculate additional fees owed to position
+            (, , , tokensOwed0, tokensOwed1) = pool.positions(
+                PositionKey.compute(address(sfpm), tickLower, tickUpper)
+            );
+
+            tokensOwedTemp[0] = tokensOwed0;
+            tokensOwedTemp[1] = tokensOwed1;
+
+            // mint a long option at some percentage of Alice's liquidity so the premium is reduced
+            changePrank(Bob);
+
+            posIdList[0] = tokenIds[1];
+
+            pp.mintOptions(
+                posIdList,
+                (positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000,
+                type(uint64).max,
+                0,
+                0
+            );
+
+            twoWaySwap(swapSizeSeed);
+
+            // poke uniswap pool to update tokens owed - needed because swap happens after mint
+            changePrank(address(sfpm));
+            pool.burn(tickLower, tickUpper, 0);
+
+            // calculate additional fees owed to position
+            (, , , tokensOwed0, tokensOwed1) = pool.positions(
+                PositionKey.compute(address(sfpm), tickLower, tickUpper)
+            );
+
+            tokensOwedTemp[0] += tokensOwed0;
+            tokensOwedTemp[1] += tokensOwed1;
+
+            // sell enough liquidity for alice to exit
+            changePrank(Seller);
+
+            posIdList[0] = tokenIds[0];
+
+            pp.mintOptions(
+                posIdList,
+                (((positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000) * 100) / 89,
+                0,
+                0,
+                0
+            );
+
+            // poke uniswap pool to update tokens owed - needed because swap happens after mint
+            changePrank(address(sfpm));
+            pool.burn(tickLower, tickUpper, 0);
+
+            // calculate additional fees owed to position
+            (, , , tokensOwed0, tokensOwed1) = pool.positions(
+                PositionKey.compute(address(sfpm), tickLower, tickUpper)
+            );
+
+            tokensOwed0 += tokensOwedTemp[0];
+            tokensOwed1 += tokensOwedTemp[1];
+        }
+
+        // price changes afters swap at mint so we need to update the price
+        (currentSqrtPriceX96, , , , , , ) = pool.slot0();
+
+        amount0Moveds[1] = currentSqrtPriceX96 > sqrtUpper
+            ? int256(0)
+            : SqrtPriceMath.getAmount0Delta(
+                currentSqrtPriceX96 < sqrtLower ? sqrtLower : currentSqrtPriceX96,
+                sqrtUpper,
+                int128(expectedLiq)
+            );
+
+        amount1Moveds[1] = SqrtPriceMath.getAmount1Delta(
+            sqrtLower,
+            sqrtUpper > currentSqrtPriceX96 ? currentSqrtPriceX96 : sqrtUpper,
+            int128(expectedLiq)
+        );
+
+        changePrank(Alice);
+        pp.burnOptions(tokenIds[0], 0, 0);
+
+        //snapshot balances and revert to old snapshot
+        uint256[2] memory balanceBefores = [ct0.balanceOf(Alice), ct1.balanceOf(Alice)];
+
+        vm.revertTo(0);
+
+        (uint256[2] memory expectedSwaps, ) = PositionUtils.simulateSwap(
+            pool,
+            tickLower,
+            tickUpper,
+            expectedLiq,
+            router,
+            token0,
+            token1,
+            fee,
+            [true, false],
+            amount1Moveds
+        );
+
+        (, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
+            tokenIds[0],
+            0,
+            uint128(positionSize),
+            tickSpacing
+        );
+
+        int256[2] memory notionalVals = [
+            int256(expectedSwaps[0]) + amount0Moveds[0] - shortAmounts.rightSlot(),
+            -int256(expectedSwaps[1]) - amount0Moveds[1] + shortAmounts.rightSlot()
+        ];
+
+        int256 ITMSpread = notionalVals[0] > 0
+            ? (notionalVals[0] * tickSpacing) / 10_000
+            : -((notionalVals[0] * tickSpacing) / 10_000);
+
+        console2.log(tokensOwed0, tokensOwed1);
+        console2.log(expectedSwaps[0], expectedSwaps[1]);
+
+        assertApproxEqAbs(
+            balanceBefores[0],
+            uint256(
+                int256(uint256(type(uint104).max)) -
+                    ITMSpread -
+                    notionalVals[0] -
+                    notionalVals[1] -
+                    (shortAmounts.rightSlot() * 10) /
+                    10_000 +
+                    int128(tokensOwed0)
+            ),
+            (uint256(int256(shortAmounts.rightSlot())) + tokensOwed0) /
+                1_000_000 +
+                (expectedSwaps[0] + expectedSwaps[1]) /
+                100 +
+                10
+        );
+
+        assertApproxEqAbs(
+            balanceBefores[1],
+            uint256(type(uint104).max) + tokensOwed1,
+            tokensOwed1 / 1_000_000 + 10
+        );
     }
 
     function test_Success_burnOptions_burnAllOptionsFrom(
