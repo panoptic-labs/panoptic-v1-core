@@ -3448,7 +3448,7 @@ contract PanopticPoolTest is PositionUtils {
 
             pp.mintOptions(
                 posIdList,
-                (positionSize * 1000) / uint128(bound(longPercentageSeed, 1, 899)),
+                (positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000,
                 0,
                 0,
                 0
@@ -3464,7 +3464,7 @@ contract PanopticPoolTest is PositionUtils {
 
             pp.mintOptions(
                 posIdList,
-                (((positionSize * 1000) / uint128(bound(longPercentageSeed, 1, 899))) * 100) / 89,
+                (((positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000) * 100) / 89,
                 0,
                 0,
                 0
