@@ -549,7 +549,7 @@ contract PanopticMathTest is Test, PositionUtils {
         int24 atTick = int24(bound(atTickSeed, TickMath.MIN_TICK, TickMath.MAX_TICK));
         uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(atTick);
 
-        (uint256 collateralBalance, uint256 requiredCollateral) = harness.convertCollateralData(
+        (uint256 collateralBalance, uint256 requiredCollateral, ) = harness.convertCollateralData(
             uint256(0).toRightSlot(balance0).toLeftSlot(required0),
             uint256(0).toRightSlot(balance1).toLeftSlot(required1),
             0,
@@ -569,7 +569,7 @@ contract PanopticMathTest is Test, PositionUtils {
         int24 atTick = int24(bound(atTickSeed, TickMath.MIN_TICK, TickMath.MAX_TICK));
         uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(atTick);
 
-        (uint256 collateralBalance, uint256 requiredCollateral) = harness.convertCollateralData(
+        (uint256 collateralBalance, uint256 requiredCollateral, ) = harness.convertCollateralData(
             uint256(0).toRightSlot(balance0).toLeftSlot(required0),
             uint256(0).toRightSlot(balance1).toLeftSlot(required1),
             1,
@@ -590,7 +590,7 @@ contract PanopticMathTest is Test, PositionUtils {
             bound(sqrtPriceSeed, TickMath.MIN_SQRT_RATIO, TickMath.MAX_SQRT_RATIO)
         );
 
-        (uint256 collateralBalance, uint256 requiredCollateral) = harness.convertCollateralData(
+        (uint256 collateralBalance, uint256 requiredCollateral, ) = harness.convertCollateralData(
             uint256(0).toRightSlot(balance0).toLeftSlot(required0),
             uint256(0).toRightSlot(balance1).toLeftSlot(required1),
             0,
@@ -611,7 +611,7 @@ contract PanopticMathTest is Test, PositionUtils {
             bound(sqrtPriceSeed, TickMath.MIN_SQRT_RATIO, TickMath.MAX_SQRT_RATIO)
         );
 
-        (uint256 collateralBalance, uint256 requiredCollateral) = harness.convertCollateralData(
+        (uint256 collateralBalance, uint256 requiredCollateral, ) = harness.convertCollateralData(
             uint256(0).toRightSlot(balance0).toLeftSlot(required0),
             uint256(0).toRightSlot(balance1).toLeftSlot(required1),
             1,

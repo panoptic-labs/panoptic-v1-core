@@ -456,8 +456,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     function _initWorld(uint256 seed) internal {
         // Pick a pool from the seed and cache initial state
-        //_cacheWorldState(pools[bound(seed, 0, pools.length - 1)]);
-        _cacheWorldState(pools[0]);
+        _cacheWorldState(pools[seed == 0 ? 0 : bound(seed, 0, pools.length - 1)]);
+        //_cacheWorldState(pools[0]);
 
         _deployCustomPanopticPool(token0, token1, pool);
     }
@@ -556,7 +556,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token0).approve(address(router), type(uint256).max);
         IERC20Partial(token1).approve(address(router), type(uint256).max);
 
-        swapSize = bound(swapSize, 10 ** 18, 10 ** 22);
+        swapSize = bound(swapSize, 10 ** 10, 10 ** 12);
         router.exactInputSingle(
             ISwapRouter.ExactInputSingleParams(
                 isWETH == 0 ? token0 : token1,
@@ -583,6 +583,46 @@ contract CollateralTrackerTest is Test, PositionUtils {
             )
         );
 
+        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+    }
+
+    // used to push price
+    function oneWaySwapRnd(int256 swapSize) public {
+        changePrank(Swapper);
+
+        // give Swapper the max amount of tokens
+        _grantTokens(Swapper);
+
+        IERC20Partial(token0).approve(address(router), type(uint256).max);
+        IERC20Partial(token1).approve(address(router), type(uint256).max);
+
+        if (swapSize < 0) {
+            router.exactInputSingle(
+                ISwapRouter.ExactInputSingleParams(
+                    isWETH == 0 ? token0 : token1,
+                    isWETH == 1 ? token0 : token1,
+                    fee,
+                    address(0x23),
+                    block.timestamp,
+                    uint256(-swapSize),
+                    0,
+                    0
+                )
+            );
+        } else {
+            router.exactOutputSingle(
+                ISwapRouter.ExactOutputSingleParams(
+                    isWETH == 1 ? token0 : token1,
+                    isWETH == 0 ? token0 : token1,
+                    fee,
+                    address(0x23),
+                    block.timestamp,
+                    (uint256(swapSize) * (1_000_000 - fee)) / 1_000_000,
+                    type(uint256).max,
+                    0
+                )
+            );
+        }
         (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
     }
 
@@ -1427,19 +1467,21 @@ contract CollateralTrackerTest is Test, PositionUtils {
     //////////////////////////////////////////////////////////////*/
 
     // pos starts OTM then gets flipped ITM
-    function test_Success_liquidate_ITM_noLoss(
+    function test_Success_liquidate_ITM_noLoss_noCross(
         uint256 x,
-        uint128 positionSizeSeed,
+        uint256 seed,
         int24 tickSeed
     ) public {
         {
             // fuzz
-            _initWorld(x);
+            _initWorld(0);
 
             // initalize a custom Panoptic pool
             _deployCustomPanopticPool(token0, token1, pool);
             console2.log("pool", address(pool));
-            // Invoke all interactions with the Collateral Tracker from user Bob
+
+            // Diana: Passive Liquidity Provider (PLP)
+            // Invoke all interactions with the Collateral Tracker from user Diana.
             vm.startPrank(Diana);
 
             // give Bob the max amount of tokens
@@ -1454,8 +1496,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             collateralToken1.deposit(type(uint96).max, Diana);
         }
 
+        uint256 tokenType;
+        uint256 asset;
         {
-            // Invoke all interactions with the Collateral Tracker from user Bob
+            // Bob: Trader / price manipulator
+            // Invoke all interactions with the Collateral Tracker from user Bob/
             vm.startPrank(Bob);
 
             // give Bob the max amount of tokens
@@ -1466,33 +1511,65 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint96).max, Bob);
-            collateralToken1.deposit(type(uint96).max, Bob);
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
             // sell an OTM call as Bob
-            strike = (currentTick / tickSpacing) * tickSpacing - 2 * tickSpacing;
-            width = 2;
-            tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
+
+            (tokenType, asset) = (seed >> 25) % 2 == 0 ? (1, 1) : (0, 0);
+
+            strike = asset == 1
+                ? ((currentTick - int24(uint24(seed) % 1024)) / tickSpacing) *
+                    tickSpacing -
+                    2 *
+                    tickSpacing
+                : ((currentTick + int24(uint24(seed) % 1024)) / tickSpacing) *
+                    tickSpacing -
+                    2 *
+                    tickSpacing;
+            width = (int24((uint24(seed >> 24) % 6) + 2) / 2) * 2;
+
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+                0,
+                1,
+                tokenType,
+                0,
+                asset,
+                0,
+                strike,
+                width
+            );
             positionIdList.push(tokenId);
 
             /// calculate position size
             //(legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
-            positionSize0 = uint128(bound(positionSizeSeed, 1 ether, 1 ether));
+            positionSize0 = asset == 1
+                ? uint128(bound(seed, 0.1 ether, 1 ether))
+                : uint128(bound(seed, 10 ** 8, 10 ** 10));
 
             panopticPool.mintOptions(positionIdList, uint128(positionSize0), 0, 0, 0);
             (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
                 panopticPool,
                 Bob,
                 currentTick,
-                1,
+                asset,
                 positionIdList
             );
-            assertApproxEqAbs(positionSize0 / 5, requiredBalance, 1000, "collateral requirement");
+            console2.log("data", positionSize0, collateralBalance, requiredBalance);
+            console2.log("tokenId data", strike);
+            console2.log("tokenId data", asset, tokenType);
+            assertApproxEqAbs(
+                positionSize0 / 5,
+                requiredBalance,
+                positionSize0 / 20,
+                "collateral requirement"
+            );
 
             panopticPool.burnOptions(positionIdList, 0, 0);
         }
 
         {
+            // Alice: Liquidatee
             // sell as Alice
             changePrank(Alice);
 
@@ -1505,9 +1582,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             // deposit only the token that is moved to avoid cross collateralization
             // only deposit the token which is WETH
-            //collateralToken0.deposit(0, Alice);
-            collateralToken1.deposit((100 * positionSize0) / 370, Alice);
-
+            if (asset == 1) {
+                collateralToken1.deposit((100 * positionSize0) / 250, Alice);
+            } else {
+                collateralToken0.deposit((100 * positionSize0) / 250, Alice);
+            }
             // sell a put as Alice
             //tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 0, 0, 1, 0, strike, width);
             panopticPool.mintOptions(
@@ -1521,40 +1600,19 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 panopticPool,
                 Alice,
                 strike,
-                1,
+                asset,
                 positionIdList
             );
         }
+        uint160 sqrtPriceX96;
 
         {
-            //UniswapV3PoolMock uniswapV3PoolMock = new UniswapV3PoolMock(int24(10));
-            //bytes memory replacementCode = address(uniswapV3PoolMock).code;
-            //vm.etch(address(pool), replacementCode);
-
-            //console2.log('jaw');
-            //UniswapV3PoolMock(address(pool)).setSlot0(int24(strike-1000));
-            changePrank(Bob);
-
-            // large trade that pushes the price down
-            tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(
-                0,
-                1,
-                1,
-                0,
-                0,
-                0,
-                strike - 10000,
-                width
-            );
-
-            positionIdList1.push(tokenId1);
-
             (, currentTick, , , , , ) = pool.slot0();
             console2.log("before", currentTick);
 
-            panopticPool.mintOptions(positionIdList1, uint128(100 * positionSize0), 0, 0, 0);
-            (, currentTick, , , , , ) = pool.slot0();
-            console2.log("after", currentTick);
+            // mimic pool activity
+            //twoWaySwap(10 * positionSize0);
+            //twoWaySwap(10 * positionSize0);
 
             // check that Alice is insolvent:
 
@@ -1562,20 +1620,37 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 panopticPool,
                 Alice,
                 currentTick,
-                1,
+                asset,
                 positionIdList
             );
             // account is liquidatable
-            if (requiredBalance <= collateralBalance) {
-                return;
+            uint256 k;
+            while (requiredBalance <= collateralBalance) {
+                oneWaySwapRnd(
+                    asset == 1
+                        ? int256(uint256((k + 1) * 10 ** 17))
+                        : -int256(uint256((k + 1) * 10 ** 17))
+                );
+                (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+                (collateralBalance, requiredBalance) = panopticHelper.checkCollateral(
+                    panopticPool,
+                    Alice,
+                    currentTick,
+                    asset,
+                    positionIdList
+                );
+                k += 1;
             }
+            (, currentTick, , , , , ) = pool.slot0();
+            console2.log("after", currentTick);
 
-            console2.log("pass");
+            console2.log("pass. N steps = ", k);
             assertTrue(requiredBalance > collateralBalance);
         }
 
         {
-            // Invoke all interactions with the Collateral Tracker from user Bob
+            // Charlie: Liquidator
+            // Invoke all interactions with the Collateral Tracker from user Charlie
             vm.startPrank(Charlie);
 
             // give Charlie the max amount of tokens
@@ -1584,226 +1659,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
-        }
-
-        {
-            uint256 balance0BeforeA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
-            uint256 balance0BeforeC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1BeforeC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0BeforeD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1BeforeD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
-
-            vm.warp(block.timestamp + 1000000);
-
-            panopticPool.liquidate(Alice, positionIdList, 0, 0);
-
-            uint256 balance0AfterA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
-            uint256 balance0AfterC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1AfterC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0AfterD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1AfterD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
-
-            console2.log("Alice lost money");
-            console2.log(balance0AfterA, balance0BeforeA);
-            assertTrue(balance0AfterA < balance0BeforeA);
-
-            console2.log(
-                "all amounts are the same of lower for Diana (lower if there is some protocol loss)"
-            );
-            console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-            assertTrue(balance0AfterD <= balance0BeforeD);
-            assertTrue(balance1AfterD <= balance1BeforeD);
-            console2.log("the liquidator made money");
-            console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
-            assertTrue(balance0AfterC >= balance0BeforeC);
-            assertTrue(balance1AfterC >= balance1BeforeC);
-            assertTrue(false);
-        }
-    }
-
-    // pos starts OTM then gets flipped ITM
-    function test_Success_liquidate_ITM_noLoss_cross(
-        uint256 x,
-        uint128 positionSizeSeed,
-        int24 tickSeed
-    ) public {
-        {
-            // fuzz
-            _initWorld(x);
-
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-            console2.log("pool", address(pool));
-            // Invoke all interactions with the Collateral Tracker from user Bob
-            vm.startPrank(Diana);
-
-            // give Bob the max amount of tokens
-            _grantTokens(Diana);
-
-            // approve collateral tracker to move tokens on Bob's behalf
-            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
-            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
-
-            // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint96).max, Diana);
-            collateralToken1.deposit(type(uint96).max, Diana);
-        }
-
-        {
-            // Invoke all interactions with the Collateral Tracker from user Bob
-            vm.startPrank(Bob);
-
-            // give Bob the max amount of tokens
-            _grantTokens(Bob);
-
-            // approve collateral tracker to move tokens on Bob's behalf
-            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
-            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
-
-            // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(type(uint96).max, Bob);
-            collateralToken1.deposit(type(uint96).max, Bob);
-            // sell an OTM call as Bob
-            strike = (currentTick / tickSpacing) * tickSpacing - 2 * tickSpacing;
-            width = 2;
-            tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 1, 0, strike, width);
-            positionIdList.push(tokenId);
-
-            /// calculate position size
-            //(legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
-
-            positionSize0 = uint128(bound(positionSizeSeed, 1 ether, 1 ether));
-
-            panopticPool.mintOptions(positionIdList, uint128(positionSize0), 0, 0, 0);
-            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
-                panopticPool,
-                Bob,
-                currentTick,
-                1,
-                positionIdList
-            );
-            assertApproxEqAbs(positionSize0 / 5, requiredBalance, 1000, "collateral requirement");
-
-            panopticPool.burnOptions(positionIdList, 0, 0);
-        }
-
-        {
-            // sell as Alice
-            changePrank(Alice);
-
-            // approve collateral tracker to move tokens on Alice's behalf
-            IERC20Partial(token0).approve(address(collateralToken0), positionSize0);
-            IERC20Partial(token1).approve(address(collateralToken1), positionSize0);
-
-            // give Alice the max amount of tokens
-            _grantTokens(Alice);
-
-            // deposit only the token that is moved to avoid cross collateralization
-            // only deposit the token which is WETH
-            collateralToken0.deposit(530600000, Alice);
-            collateralToken1.deposit(positionSize0 / 100, Alice);
-
-            // sell a put as Alice
-            //tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 0, 0, 1, 0, strike, width);
-            panopticPool.mintOptions(
-                positionIdList,
-                uint128(positionSize0),
-                type(uint64).max,
-                0,
-                0
-            );
-            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
-                panopticPool,
-                Alice,
-                strike,
-                0,
-                positionIdList
-            );
-
-            console2.log("req", requiredBalance);
-        }
-
-        {
-            //UniswapV3PoolMock uniswapV3PoolMock = new UniswapV3PoolMock(int24(10));
-            //bytes memory replacementCode = address(uniswapV3PoolMock).code;
-            //vm.etch(address(pool), replacementCode);
-
-            //console2.log('jaw');
-            //UniswapV3PoolMock(address(pool)).setSlot0(int24(strike-1000));
-            changePrank(Bob);
-
-            // large trade that pushes the price down
-            tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(
-                0,
-                1,
-                1,
-                0,
-                0,
-                0,
-                strike - 10000,
-                width
-            );
-
-            positionIdList1.push(tokenId1);
-
-            (, currentTick, , , , , ) = pool.slot0();
-            console2.log("before", currentTick);
-
-            panopticPool.mintOptions(positionIdList1, uint128(100 * positionSize0), 0, 0, 0);
-            (, currentTick, , , , , ) = pool.slot0();
-            console2.log("after", currentTick);
-
-            // check that Alice is insolvent:
-
-            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
-                panopticPool,
-                Alice,
-                currentTick,
-                1,
-                positionIdList
-            );
-            // account is liquidatable
-            if (requiredBalance <= collateralBalance) {
-                revert();
-            }
-
-            console2.log("pass");
-            assertTrue(requiredBalance > collateralBalance);
-        }
-
-        {
-            // Invoke all interactions with the Collateral Tracker from user Bob
-            vm.startPrank(Charlie);
-
-            // give Charlie the max amount of tokens
-            _grantTokens(Charlie);
-
-            // approve collateral tracker to move tokens on Charlie's behalf
-            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
-            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
-
-            collateralToken0.deposit(2e9, Charlie);
-            collateralToken1.deposit(1e18, Charlie);
         }
 
         {
@@ -1828,7 +1683,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             vm.warp(block.timestamp + 1000000);
 
-            panopticPool.liquidate(Alice, positionIdList, 1e9, 9e17);
+            panopticPool.liquidate(Alice, positionIdList, 0, 0);
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
                 collateralToken0.balanceOf(Alice)
@@ -1836,6 +1691,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             uint256 balance1AfterA = collateralToken1.previewRedeem(
                 collateralToken1.balanceOf(Alice)
             );
+
             uint256 balance0AfterC = collateralToken0.previewRedeem(
                 collateralToken0.balanceOf(Charlie)
             );
@@ -1850,21 +1706,341 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             console2.log("Alice lost money");
-            console2.log(balance0AfterA, balance0BeforeA, balance1AfterA, balance1BeforeA);
-            assertTrue(balance0AfterA < balance0BeforeA);
-            assertTrue(balance1AfterA < balance1BeforeA);
+            {
+                uint256 crossBeforeA = (balance1BeforeA << 96) /
+                    sqrtPriceX96 +
+                    (balance0BeforeA * sqrtPriceX96) /
+                    2 ** 96;
+                uint256 crossAfterA = (balance1AfterA << 96) /
+                    sqrtPriceX96 +
+                    (balance0AfterA * sqrtPriceX96) /
+                    2 ** 96;
+                console2.log(balance0BeforeA, balance0AfterA, balance1BeforeA, balance1AfterA);
 
-            console2.log(
-                "all amounts are the same of lower for Diana (lower if there is some protocol loss)"
+                console2.log(crossBeforeA, crossAfterA);
+                assertTrue(crossBeforeA > crossAfterA);
+            }
+            {
+                console2.log("all amounts are the same for Diana (no protocol loss)");
+                console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
+                assertTrue(balance0AfterD <= balance0BeforeD);
+                assertTrue(balance1AfterD <= balance1BeforeD);
+            }
+            {
+                console2.log("the liquidator made money");
+                console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
+                uint256 crossBeforeC = (balance1BeforeC << 96) /
+                    sqrtPriceX96 +
+                    (balance0BeforeC * sqrtPriceX96) /
+                    2 ** 96;
+                uint256 crossAfterC = (balance1AfterC << 96) /
+                    sqrtPriceX96 +
+                    (balance0AfterC * sqrtPriceX96) /
+                    2 ** 96;
+                console2.log(crossBeforeC, crossAfterC);
+                assertTrue(crossBeforeC < crossAfterC);
+            }
+        }
+    }
+
+    // pos starts OTM then gets flipped ITM
+    function test_Success_liquidate_ITM_noLoss_cross(
+        uint256 x,
+        uint256 seed,
+        int24 tickSeed
+    ) public {
+        {
+            // fuzz
+            _initWorld(0);
+
+            // initalize a custom Panoptic pool
+            _deployCustomPanopticPool(token0, token1, pool);
+            console2.log("pool", address(pool));
+
+            // Diana: Passive Liquidity Provider (PLP)
+            // Invoke all interactions with the Collateral Tracker from user Diana.
+            vm.startPrank(Diana);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Diana);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(type(uint96).max, Diana);
+            collateralToken1.deposit(type(uint96).max, Diana);
+        }
+
+        uint256 tokenType;
+        uint256 asset;
+        uint160 sqrtPriceX96;
+        {
+            // Bob: Trader / price manipulator
+            // Invoke all interactions with the Collateral Tracker from user Bob/
+            vm.startPrank(Bob);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
+            // sell an OTM call as Bob
+
+            (tokenType, asset) = (seed >> 25) % 2 == 0 ? (1, 1) : (0, 0);
+
+            strike = asset == 1
+                ? ((currentTick - int24(uint24(seed) % 1024)) / tickSpacing) *
+                    tickSpacing -
+                    2 *
+                    tickSpacing
+                : ((currentTick + int24(uint24(seed) % 1024)) / tickSpacing) *
+                    tickSpacing -
+                    2 *
+                    tickSpacing;
+            width = (int24((uint24(seed >> 24) % 6) + 2) / 2) * 2;
+
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+                0,
+                1,
+                tokenType,
+                0,
+                asset,
+                0,
+                strike,
+                width
             );
-            console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-            assertTrue(balance0AfterD <= balance0BeforeD);
-            assertTrue(balance1AfterD <= balance1BeforeD);
-            console2.log("the liquidator made money");
-            console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
-            assertTrue(balance0AfterC >= balance0BeforeC);
-            assertTrue(balance1AfterC >= balance1BeforeC);
-            assertTrue(false);
+            positionIdList.push(tokenId);
+
+            /// calculate position size
+            //(legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
+
+            positionSize0 = asset == 1
+                ? uint128(bound(seed, 0.1 ether, 1 ether))
+                : uint128(bound(seed, 10 ** 8, 10 ** 10));
+
+            panopticPool.mintOptions(positionIdList, uint128(positionSize0), 0, 0, 0);
+            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
+                panopticPool,
+                Bob,
+                currentTick,
+                asset,
+                positionIdList
+            );
+            console2.log("data", positionSize0, collateralBalance, requiredBalance);
+            console2.log("tokenId data", strike);
+            console2.log("tokenId data", asset, tokenType);
+            assertApproxEqAbs(
+                positionSize0 / 5,
+                requiredBalance,
+                positionSize0 / 20,
+                "collateral requirement"
+            );
+
+            panopticPool.burnOptions(positionIdList, 0, 0);
+        }
+
+        {
+            // Alice: Liquidatee
+            // sell as Alice
+            changePrank(Alice);
+
+            // approve collateral tracker to move tokens on Alice's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // give Alice the max amount of tokens
+            _grantTokens(Alice);
+
+            (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+
+            // deposit only the token that is moved to avoid cross collateralization
+            // only deposit the token which is WETH
+            console2.log(
+                "positionSize",
+                positionSize0,
+                (uint256(positionSize0) * 2 ** 96) / uint256(sqrtPriceX96)
+            );
+            console2.log(
+                "positionSize",
+                positionSize0,
+                asset,
+                (((uint256(positionSize0) * 2 ** 96) / sqrtPriceX96) * 2 ** 96) / sqrtPriceX96
+            );
+            if (asset == 1) {
+                uint256 collateralAmount = (((uint256(positionSize0) * 2 ** 96) / sqrtPriceX96) *
+                    2 ** 96) / sqrtPriceX96;
+                console2.log("collateral1", collateralAmount, positionSize0, sqrtPriceX96);
+                collateralToken0.deposit((collateralAmount) / 4, Alice);
+                collateralToken1.deposit((positionSize0) / 20, Alice);
+            } else {
+                uint256 collateralAmount = (((uint256(positionSize0) * sqrtPriceX96) / 2 ** 96) *
+                    sqrtPriceX96) / 2 ** 96;
+                console2.log("collateral0", collateralAmount, positionSize0, sqrtPriceX96);
+                collateralToken1.deposit((collateralAmount) / 4, Alice);
+                collateralToken0.deposit((positionSize0) / 20, Alice);
+            }
+            // sell a put as Alice
+            panopticPool.mintOptions(
+                positionIdList,
+                uint128(positionSize0),
+                type(uint64).max,
+                0,
+                0
+            );
+            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
+                panopticPool,
+                Alice,
+                strike,
+                asset,
+                positionIdList
+            );
+        }
+
+        {
+            (, currentTick, , , , , ) = pool.slot0();
+            console2.log("before", currentTick);
+
+            // mimic pool activity
+            //twoWaySwap(10 * positionSize0);
+            //twoWaySwap(10 * positionSize0);
+
+            // check that Alice is insolvent:
+
+            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
+                panopticPool,
+                Alice,
+                currentTick,
+                asset,
+                positionIdList
+            );
+            // account is liquidatable
+            uint256 k;
+            while (requiredBalance <= collateralBalance) {
+                oneWaySwapRnd(
+                    asset == 1
+                        ? int256(uint256((k + 1) * 10 ** 17))
+                        : -int256(uint256((k + 1) * 10 ** 17))
+                );
+                (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+                (collateralBalance, requiredBalance) = panopticHelper.checkCollateral(
+                    panopticPool,
+                    Alice,
+                    currentTick,
+                    asset,
+                    positionIdList
+                );
+                k += 1;
+            }
+            (, currentTick, , , , , ) = pool.slot0();
+            console2.log("after", currentTick);
+
+            console2.log("pass. N steps = ", k);
+            assertTrue(requiredBalance > collateralBalance);
+        }
+
+        {
+            // Charlie: Liquidator
+            // Invoke all interactions with the Collateral Tracker from user Charlie
+            vm.startPrank(Charlie);
+
+            // give Charlie the max amount of tokens
+            _grantTokens(Charlie);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(1e12, Charlie);
+            collateralToken1.deposit(1e21, Charlie);
+        }
+
+        {
+            uint256 balance0BeforeA = collateralToken0.previewRedeem(
+                collateralToken0.balanceOf(Alice)
+            );
+            uint256 balance1BeforeA = collateralToken1.previewRedeem(
+                collateralToken1.balanceOf(Alice)
+            );
+            uint256 balance0BeforeC = collateralToken0.previewRedeem(
+                collateralToken0.balanceOf(Charlie)
+            );
+            uint256 balance1BeforeC = collateralToken1.previewRedeem(
+                collateralToken1.balanceOf(Charlie)
+            );
+            uint256 balance0BeforeD = collateralToken0.previewRedeem(
+                collateralToken0.balanceOf(Diana)
+            );
+            uint256 balance1BeforeD = collateralToken1.previewRedeem(
+                collateralToken1.balanceOf(Diana)
+            );
+
+            vm.warp(block.timestamp + 1000000);
+
+            panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
+
+            uint256 balance0AfterA = collateralToken0.previewRedeem(
+                collateralToken0.balanceOf(Alice)
+            );
+            uint256 balance1AfterA = collateralToken1.previewRedeem(
+                collateralToken1.balanceOf(Alice)
+            );
+
+            uint256 balance0AfterC = collateralToken0.previewRedeem(
+                collateralToken0.balanceOf(Charlie)
+            );
+            uint256 balance1AfterC = collateralToken1.previewRedeem(
+                collateralToken1.balanceOf(Charlie)
+            );
+            uint256 balance0AfterD = collateralToken0.previewRedeem(
+                collateralToken0.balanceOf(Diana)
+            );
+            uint256 balance1AfterD = collateralToken1.previewRedeem(
+                collateralToken1.balanceOf(Diana)
+            );
+
+            console2.log("Alice lost money");
+            {
+                uint256 crossBeforeA = (balance1BeforeA << 96) /
+                    sqrtPriceX96 +
+                    (balance0BeforeA * sqrtPriceX96) /
+                    2 ** 96;
+                uint256 crossAfterA = (balance1AfterA << 96) /
+                    sqrtPriceX96 +
+                    (balance0AfterA * sqrtPriceX96) /
+                    2 ** 96;
+                console2.log(balance0BeforeA, balance0AfterA, balance1BeforeA, balance1AfterA);
+
+                console2.log(crossBeforeA, crossAfterA);
+                assertTrue(crossBeforeA > crossAfterA);
+            }
+            {
+                console2.log("all amounts are the same for Diana (no protocol loss)");
+                console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
+                assertTrue(balance0AfterD <= balance0BeforeD);
+                assertTrue(balance1AfterD <= balance1BeforeD);
+            }
+            {
+                console2.log("the liquidator made money");
+                console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
+                uint256 crossBeforeC = (balance1BeforeC << 96) /
+                    sqrtPriceX96 +
+                    (balance0BeforeC * sqrtPriceX96) /
+                    2 ** 96;
+                uint256 crossAfterC = (balance1AfterC << 96) /
+                    sqrtPriceX96 +
+                    (balance0AfterC * sqrtPriceX96) /
+                    2 ** 96;
+                console2.log(crossBeforeC, crossAfterC);
+                assertTrue(crossBeforeC < crossAfterC);
+            }
         }
     }
 
@@ -2246,8 +2422,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
             // equal deposits for both collateral token pairs for testing purposes
-            collateralToken0.deposit(2e9, Charlie);
-            collateralToken1.deposit(1e18, Charlie);
+            collateralToken0.deposit(4e9, Charlie);
+            collateralToken1.deposit(2e18, Charlie);
         }
 
         {
@@ -2272,7 +2448,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             vm.warp(block.timestamp + 1000000);
 
-            panopticPool.liquidate(Alice, positionIdList, 1e9, 9e17);
+            panopticPool.liquidate(Alice, positionIdList, 2e9, 1e18);
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
                 collateralToken0.balanceOf(Alice)
@@ -2931,7 +3107,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3095,7 +3271,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3265,7 +3441,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3433,7 +3609,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3602,7 +3778,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3771,7 +3947,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3940,7 +4116,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4103,7 +4279,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4267,7 +4443,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4468,7 +4644,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4671,7 +4847,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4861,7 +5037,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5032,7 +5208,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5201,7 +5377,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5365,7 +5541,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5528,7 +5704,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5687,7 +5863,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5845,7 +6021,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5992,7 +6168,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
