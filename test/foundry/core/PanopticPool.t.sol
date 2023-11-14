@@ -3563,6 +3563,7 @@ contract PanopticPoolTest is PositionUtils {
             : -((notionalVals[0] * tickSpacing) / 10_000);
 
         console2.log(tokensOwed0, tokensOwed1);
+        console2.log(expectedSwaps[0], expectedSwaps[1]);
 
         assertApproxEqAbs(
             balanceBefores[0],
