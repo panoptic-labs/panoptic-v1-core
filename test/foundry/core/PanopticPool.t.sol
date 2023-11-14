@@ -3456,7 +3456,7 @@ contract PanopticPoolTest is PositionUtils {
             twoWaySwap(swapSizeSeed);
 
             // sell enough liquidity for alice to exit
-            changePrank(Charlie);
+            changePrank(Seller);
 
             posIdList[0] = tokenIds[0];
 
