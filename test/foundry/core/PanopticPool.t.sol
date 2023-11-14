@@ -3529,10 +3529,7 @@ contract PanopticPoolTest is PositionUtils {
         pp.burnOptions(tokenIds[0], 0, 0);
 
         //snapshot balances and revert to old snapshot
-        uint256[2] memory balanceBefores = [
-            ct0.convertToAssets(ct0.balanceOf(Alice)),
-            ct1.convertToAssets(ct1.balanceOf(Alice))
-        ];
+        uint256[2] memory balanceBefores = [ct0.balanceOf(Alice), ct1.balanceOf(Alice)];
 
         vm.revertTo(0);
 
