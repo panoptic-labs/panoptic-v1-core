@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
+// Foundry
+import "forge-std/Test.sol";
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
@@ -193,6 +195,8 @@ contract PanopticHelper {
         // use the ITM amount for the current collateral token
         itmAmount = tokenType == 0 ? itmAmount0 : itmAmount1;
 
+        // * estimate swapped amounts based on ITM amounts
+
         // deduct ITM amounts from tokens required
         // final requirement can be negative due to an off by ~1-5 token precision loss error
         totalTokensRequired = tokensRequired.toInt256() - itmAmount;
@@ -302,8 +306,25 @@ contract PanopticHelper {
         for (uint i; i < 7; ) {
             // upper and lower bounds
             int256 a = 1;
-            int256 b = type(int128).max;
-            int256 c = a;
+            int256 b = type(int80).max;
+            int256 c; // 0 by default
+
+            // check if initial solution resides within bounds of 'a' and 'b'
+            {
+                int256[3] memory solutions = _bisectionBaseCase(
+                    _pool,
+                    tokenId,
+                    atTick,
+                    tokenType,
+                    [a, b, c],
+                    availableCollateral,
+                    i // sizing index
+                );
+
+                if (solutions[0] * solutions[1] >= 0) {
+                    revert("failure, invalid bounds");
+                }
+            }
 
             while (b - a >= epsilon) {
                 // Find middle point
@@ -319,21 +340,24 @@ contract PanopticHelper {
                     i // sizing index
                 );
 
-                // reverts if solution doesn't reside in the bounds of (a,b)
-                if (solutions[0] * solutions[1] >= 0) {
-                    revert();
-                }
+                console2.log("solution 1", solutions[0]);
+                console2.log("solution 2", solutions[1]);
+                console2.log("solution 3", solutions[2]);
 
                 // Check if middle point is root
-                {
-                    if (solutions[2] == 0) break;
-                }
-
-                // Decide the side to repeat the steps
-                if ((solutions[2] * solutions[0]) < 0) {
+                if (solutions[2] == 0) {
+                    break;
+                    // preforms (a * b) < 0 without multiplication to avoid an overflow
+                    // max constraint of 256 bits
+                } else if (
+                    (solutions[2] < 0 && solutions[0] > 0) || (solutions[2] > 0 && solutions[0] < 0)
+                ) {
+                    // Decide the side to repeat the steps
                     b = c;
+                    console2.log("new b", b);
                 } else {
                     a = c;
+                    console2.log("new a", a);
                 }
             }
 
@@ -366,26 +390,28 @@ contract PanopticHelper {
         // stack rolling
         int24 _atTick = atTick;
 
-        for (uint i; i < 4; i++) {
-            // validate the lower bounds of the amount moved
-            // if any of the amounts moved(s) are 0 then the solution for this position size is set to 0
-            // this forces the bounds of 'a' to be increased in the convergance function
-            // as the total requirement of a position with an amount moved of 0, is 0
-            {
-                uint256[4] memory amountsMoved = totalAmountsMoved(
-                    tokenId,
-                    uint128(uint256(positionSizes[i])),
-                    pool.univ3pool().tickSpacing()
-                );
+        //uint256 totalLegs = tokenId.countLegs();
+        for (uint i; i < 3; i++) {
+            // validate the upper bounds of the amount moved
+            // if the notional is above 128 bits then this is an invalid position
+            // {
+            //     uint256[4] memory amountsMoved = totalAmountsMoved(
+            //         tokenId,
+            //         uint128(uint256(positionSizes[i])),
+            //         pool.univ3pool().tickSpacing()
+            //     );
 
-                for (uint i; i < 4; i++) {
-                    uint256 currAmountMoved = amountsMoved[i];
-                    if (currAmountMoved.leftSlot() == 0 || currAmountMoved.rightSlot() == 0) {
-                        solutions[i] = 0;
-                        continue;
-                    }
-                }
-            }
+            //     for (uint i; i < totalLegs; i++) {
+            //         uint256 currAmountMoved = amountsMoved[i];
+
+            //         if (currAmountMoved.leftSlot() == 0 || currAmountMoved.rightSlot() == 0) {
+
+            //             break;
+            //         }
+            //     }
+            // }
+            // console2.log("after validation");
+            console2.log("positionSizes[i]", positionSizes[i]);
 
             int256 requiredCollateralITM0;
             int256 requiredCollateralITM1;
@@ -421,6 +447,18 @@ contract PanopticHelper {
             solutions[i] =
                 ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100) -
                 totalRequirement;
+
+            console2.log("availableCollateral", availableCollateral);
+            console2.log(
+                "((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100)",
+                ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100)
+            );
+            console2.log("sizingPercentages[sizingIndex]", sizingPercentages[sizingIndex]);
+            console2.log("totalRequirement", totalRequirement);
+            console2.log(
+                "solution",
+                ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100)
+            );
         }
     }
 

@@ -546,6 +546,27 @@ contract CollateralTrackerTest is Test, PositionUtils {
         );
     }
 
+    function _mockDeposit(address recipient, uint256 amount) internal {
+        // award corresponding shares
+        deal(address(collateralToken0), recipient, collateralToken0.previewDeposit(amount), true);
+        deal(address(collateralToken1), recipient, collateralToken1.previewDeposit(amount), true);
+
+        // equal deposits for both collateral token pairs for testing purposes
+        // deposit to panoptic pool
+        collateralToken0.setPoolAssets(collateralToken0._availableAssets() + amount);
+        collateralToken1.setPoolAssets(collateralToken1._availableAssets() + amount);
+        deal(
+            token0,
+            address(panopticPool),
+            IERC20Partial(token0).balanceOf(panopticPoolAddress) + amount
+        );
+        deal(
+            token1,
+            address(panopticPool),
+            IERC20Partial(token1).balanceOf(panopticPoolAddress) + amount
+        );
+    }
+
     //@note move this and panopticPool helper into position utils
     /*//////////////////////////////////////////////////////////////
                                 HELPERS
@@ -8576,8 +8597,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
 
-            // equal deposits for both collateral token pairs for testing purposes
-            _mockMaxDeposit(Bob);
+            _mockDeposit(Bob, type(uint8).max);
 
             // have Bob sell
             (width, strike) = PositionUtils.getOTMSW(
@@ -8604,12 +8624,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             positionIdList.push(tokenId);
-
-            /// calculate position size
-            (legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
-
-            positionSize0 = uint128(bound(positionSizeSeed, 10 ** 15, 10 ** 20));
-            _assumePositionValidity(Bob, tokenId, positionSize0);
+            // positionSize0 = uint128(bound(positionSizeSeed, 10 ** 15, 10 ** 20));
+            // _assumePositionValidity(Bob, tokenId, positionSize0);
 
             console2.log("maxPositionSizes 0", maxPositionSizes[0]);
             console2.log("maxPositionSizes 1", maxPositionSizes[1]);
@@ -8619,13 +8635,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
             console2.log("maxPositionSizes 5", maxPositionSizes[5]);
             console2.log("maxPositionSizes 6", maxPositionSizes[6]);
 
-            panopticPool.mintOptions(
-                positionIdList,
-                positionSize0,
-                type(uint64).max,
-                TickMath.MIN_TICK,
-                TickMath.MAX_TICK
-            );
+            // panopticPool.mintOptions(
+            //     positionIdList,
+            //     uint128(uint256(maxPositionSizes[0])),
+            //     type(uint64).max,
+            //     TickMath.MIN_TICK,
+            //     TickMath.MAX_TICK
+            // );
+
+            // after mint at each position size check if the available collateral
+            // falls within a certain buffer percentage of the original selected percentage
+            // the contract amount was computed for
         }
 
         // {

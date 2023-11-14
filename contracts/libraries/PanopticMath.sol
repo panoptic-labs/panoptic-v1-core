@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
+// Foundry
+import "forge-std/Test.sol";
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Libraries
@@ -411,8 +413,10 @@ library PanopticMath {
                 ? convert0to1(contractSize, Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2))
                 : convert1to0(contractSize, Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2));
 
-            if (notional == 0 || notional > uint128(type(int128).max))
-                revert Errors.InvalidNotionalValue();
+            // if (notional == 0 || notional > uint128(type(int128).max))
+            //     revert Errors.InvalidNotionalValue();
+
+            if (notional > uint128(type(int128).max)) revert Errors.InvalidNotionalValue();
 
             return uint128(notional);
         }
@@ -532,6 +536,8 @@ library PanopticMath {
                 amount0 = convertNotional(amount1, tickLower, tickUpper, tokenId.asset(legIndex));
             }
         }
+        console2.log("amount 0", amount0);
+        console2.log("amount 1", amount1);
         amountsMoved = amountsMoved.toRightSlot(amount0).toLeftSlot(amount1);
     }
 
