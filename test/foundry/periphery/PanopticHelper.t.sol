@@ -998,7 +998,7 @@ contract PanopticHelperTest is PositionUtils {
             tokenData0 = ct0.getAccountMarginDetails(Alice, atTick, posBalanceArray, premium0);
             tokenData1 = ct1.getAccountMarginDetails(Alice, atTick, posBalanceArray, premium1);
 
-            (calculatedCollateralBalance, calculatedRequiredCollateral, ) = PanopticMath
+            (calculatedCollateralBalance, calculatedRequiredCollateral) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, returnTokenType ? 1 : 0, atTick);
 
             // these are the balance/required cross, reusing variables to save stack space

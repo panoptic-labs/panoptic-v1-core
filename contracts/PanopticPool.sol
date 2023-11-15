@@ -148,6 +148,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @dev Boolean flag to determine wether a position is added (true) or not (!ADD = false)
     bool internal constant ADD = true;
 
+    /// @notice Decimals for computation (1 bps (basis point) precision: 0.01%)
+    /// uint type for composability with unsigned integer based mathematical operations.
+    int256 internal constant DECIMALS = 10_000;
+
     /// @dev The window to calculate the TWAP used for solvency checks
     /// Currently calculated by dividing this value into 20 periods, averaging them together, then taking the median
     /// May be configurable on a pool-by-pool basis in the future, but hardcoded for now
@@ -156,6 +160,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
     // The maximum allowed delta between the currentTick and the Uniswap TWAP tick during a liquidation (~5% down, ~5.26% up)
     // Prevents manipulation of the currentTick to liquidate positions at a less favorable price
     int256 internal constant MAX_TWAP_DELTA_LIQUIDATION = 513;
+
+    // Bonus paid to liquidators on tokens refunded in a different form, denominated in basis points (DECIMALS)
+    // 11000 = 110%
+    int256 internal constant LIQ_CONVERSION_BONUS = 11000;
 
     // The minimum amount of time, in seconds, permitted between mini/median TWAP updates.
     uint256 internal constant MEDIAN_PERIOD = 60;
@@ -942,47 +950,80 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param netExchanged The net exchanged value of the closed portfolio
     /// @return bonus0 bonus amount for token0
     /// @return bonus1 bonus amount for token1
-    function _getBonusSplit(
+    function _getLiquidationBonus(
         uint256 tokenData0,
         uint256 tokenData1,
         uint160 sqrtPriceX96,
         int256 netExchanged
     ) internal pure returns (int256 bonus0, int256 bonus1) {
-        (uint256 balanceCross, uint256 thresholdCross, bool oneIsLarger) = PanopticMath
-            .convertCollateralData(tokenData0, tokenData1, 0, sqrtPriceX96);
+        (uint256 balanceCross, uint256 thresholdCross) = PanopticMath.convertCollateralData(
+            tokenData0,
+            tokenData1,
+            0,
+            sqrtPriceX96
+        );
 
         unchecked {
-            // compute bonus as min(collateralBalance/2, required-collateralBalance)
-            uint256 diffCross = thresholdCross - balanceCross;
-            uint256 bonusCross = diffCross < balanceCross / 2 ? diffCross : balanceCross / 2;
+            {
+                // compute bonus as min(collateralBalance/2, required-collateralBalance)
+                uint256 diffCross = thresholdCross - balanceCross;
+                uint256 bonusCross = diffCross < balanceCross / 2 ? diffCross : balanceCross / 2;
 
-            // convert that bonus to tokens 0 and 1
-            bonus0 = int256(bonusCross / 2);
-            bonus1 = int256(PanopticMath.convert0to1(bonusCross / 2, sqrtPriceX96));
+                // convert that bonus to tokens 0 and 1
+                bonus0 = int256(bonusCross / 2);
+                bonus1 = int256(PanopticMath.convert0to1(bonusCross / 2, sqrtPriceX96));
+            }
 
-            // cache balances
             int256 balance0 = int256(uint256(tokenData0.rightSlot()));
             int256 balance1 = int256(uint256(tokenData1.rightSlot()));
 
-            int256 exchanged0 = int256(netExchanged.rightSlot());
-            int256 exchanged1 = int256(netExchanged.leftSlot());
+            int256 paid0 = bonus0 + int256(netExchanged.rightSlot());
+            int256 paid1 = bonus1 + int256(netExchanged.leftSlot());
 
-            if ((bonus0 + exchanged0 > balance0) && oneIsLarger) {
-                // bonus of token 0 cannot cover (balance - exchanged value of exercise)
-                // New bonuses:
-                //  - bonus0 = balance0 - exchanged0 <- may be negative
-                //  - bonus1 = bonusCross*sqrtPriceX96 - bonus0*sqrtPriceX96**2 + exchanged0*sqrtPriceX96**2
-                /// @dev Use bonusCross = 2*bonus0*sqrtPriceX96
-                bonus1 = PanopticMath.convert0to1(2 * bonus0 - balance0 + exchanged0, sqrtPriceX96);
-                bonus0 = balance0 - exchanged0;
-            } else if ((bonus1 + exchanged1 > balance1) && !oneIsLarger) {
-                // bonus of token 1 cannot cover (balance - exchanged value of exercise)
-                // New bonuses:
-                //  - bonus0 = bonusCross/sqrtPriceX96 - bonus1/sqrtPriceX96**2 + exchanged1/sqrtPriceX96**2
-                //  - bonus1 = balance1 - exchanged1 <- may be negative
-                /// @dev Use bonusCross = 2*bonus1/sqrtPriceX96
-                bonus0 = PanopticMath.convert1to0(2 * bonus1 - balance1 + exchanged1, sqrtPriceX96);
-                bonus1 = balance1 - exchanged1;
+            // note that "balance0" and "balance1" are the liquidatee's original balances before token delegation by a liquidator
+            // their actual balances at the time of computation may be higher, but these are a buffer representing the amount of tokens we
+            // have to work with before cutting into the liquidator's funds
+            if (paid0 > balance0 && paid1 > balance1) {
+                // liquidatee cannot pay back the liquidator fully in either token, so no protocol loss can be avoided
+                return (bonus0, bonus1);
+            } else if ((paid0 > balance0)) {
+                // liquidatee has insufficient token0 but some token1 left over, so we use what they have left to mitigate token0 losses
+                // we do this by substituting an equivalent value of token1 in our refund to the liquidator, plus a bonus, for the token0 we convert
+                // we want to convert the minimum amount of tokens required to achieve the lowest possible protocol loss (to avoid overpaying on the conversion bonus)
+                // the maximum level of protocol loss mitigation that can be achieved is the liquidatee's excess token1 balance: balance1 - paid1
+                // and paid0 - balance0 is the amount of token0 that the liquidatee is missing, i.e the protocol loss
+                // if the protocol loss is lower than the excess token1 balance, then we can fully mitigate the loss and we should only convert the loss amount
+                // if the protocol loss is higher than the excess token1 balance, we can only mitigate part of the loss, so we should convert only the excess token1 balance
+                // thus, the value converted should be min(balance1 - paid1, paid0 - balance0)
+                bonus1 +=
+                    (Math.min(
+                        balance1 - paid1,
+                        PanopticMath.convert0to1(paid0 - balance0, sqrtPriceX96)
+                    ) * LIQ_CONVERSION_BONUS) /
+                    DECIMALS;
+                bonus0 -= Math.min(
+                    PanopticMath.convert1to0(balance1 - paid1, sqrtPriceX96),
+                    paid0 - balance0
+                );
+            } else if ((paid1 > balance1)) {
+                // liquidatee has insufficient token1 but some token0 left over, so we use what they have left to mitigate token1 losses
+                // we do this by substituting an equivalent value of token0 in our refund to the liquidator, plus a bonus, for the token1 we convert
+                // we want to convert the minimum amount of tokens required to achieve the lowest possible protocol loss (to avoid overpaying on the conversion bonus)
+                // the maximum level of protocol loss mitigation that can be achieved is the liquidatee's excess token0 balance: balance0 - paid0
+                // and paid1 - balance1 is the amount of token1 that the liquidatee is missing, i.e the protocol loss
+                // if the protocol loss is lower than the excess token0 balance, then we can fully mitigate the loss and we should only convert the loss amount
+                // if the protocol loss is higher than the excess token0 balance, we can only mitigate part of the loss, so we should convert only the excess token0 balance
+                // thus, the value converted should be min(balance0 - paid0, paid1 - balance1)
+                bonus0 +=
+                    (Math.min(
+                        balance0 - paid0,
+                        PanopticMath.convert1to0(paid1 - balance1, sqrtPriceX96)
+                    ) * LIQ_CONVERSION_BONUS) /
+                    DECIMALS;
+                bonus1 -= Math.min(
+                    PanopticMath.convert0to1(balance0 - paid0, sqrtPriceX96),
+                    paid1 - balance1
+                );
             }
 
             return (bonus0, bonus1);
@@ -1382,7 +1423,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         );
 
         // compute bonus amounts
-        (int256 liquidationBonus0, int256 liquidationBonus1) = _getBonusSplit(
+        (int256 liquidationBonus0, int256 liquidationBonus1) = _getLiquidationBonus(
             tokenData0,
             tokenData1,
             Math.getSqrtRatioAtTick(twapTick),
