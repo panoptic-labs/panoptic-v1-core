@@ -173,33 +173,64 @@ contract PanopticHelper {
         uint256 tokenType,
         uint128 positionSize,
         int24 atTick
-    ) public view returns (int256 totalTokensRequired, int256 itmAmount) {
-        // get tokens required for the current tokenId position
-        // if the amount moved is 0 the required tokens are 0
-        uint256 tokensRequired = getPositionCollateralRequirement(
-            pool,
-            tokenId,
-            tokenType,
-            positionSize,
-            atTick
-        );
+    )
+        public
+        view
+        returns (int256 totalTokensRequired, int256 itmAmount, int256 estimatedExchangedAmount)
+    {
+        {
+            // get tokens required for the current tokenId position
+            // if the amount moved is 0 the required tokens are 0
+            uint256 tokensRequired = getPositionCollateralRequirement(
+                pool,
+                tokenId,
+                tokenType,
+                positionSize,
+                atTick
+            );
 
-        // compute ITM amounts
-        (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
-            tokenId,
-            positionSize,
-            pool.univ3pool().tickSpacing(),
-            atTick
-        );
+            // compute ITM amounts
+            (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
+                tokenId,
+                positionSize,
+                pool.univ3pool().tickSpacing(),
+                atTick
+            );
 
-        // use the ITM amount for the current collateral token
-        itmAmount = tokenType == 0 ? itmAmount0 : itmAmount1;
+            // use the ITM amount for the current collateral token
+            itmAmount = tokenType == 0 ? itmAmount0 : itmAmount1;
 
-        // * estimate swapped amounts based on ITM amounts
+            // deduct ITM amounts from tokens required
+            // final requirement can be negative due to an off by ~1-5 token precision loss error
+            totalTokensRequired = tokensRequired.toInt256() - itmAmount;
+        }
 
-        // deduct ITM amounts from tokens required
-        // final requirement can be negative due to an off by ~1-5 token precision loss error
-        totalTokensRequired = tokensRequired.toInt256() - itmAmount;
+        // move to separate function
+        {
+            CollateralTracker collateralToken = tokenType == 0
+                ? pool.collateralToken0()
+                : pool.collateralToken1();
+
+            (int256 longAmounts, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
+                tokenId,
+                0,
+                positionSize,
+                pool.univ3pool().tickSpacing()
+            );
+
+            (int256 longAmount, int256 shortAmount) = tokenType == 0
+                ? (longAmounts.rightSlot(), shortAmounts.rightSlot())
+                : (longAmounts.leftSlot(), shortAmounts.leftSlot());
+
+            // * estimate swapped amounts based on ITM amounts
+
+            // temporarily passing in swapped amounts as 0 (can estimate)
+            estimatedExchangedAmount = collateralToken._getExchangedAmount(
+                int128(longAmount),
+                int128(shortAmount),
+                0
+            );
+        }
     }
 
     /// @notice Compute the collateral requirement of a given tokenId at the given tick
@@ -245,7 +276,7 @@ contract PanopticHelper {
         int24 atTick
     ) public view returns (int256 requiredCollateralITM0, int256 requiredCollateralITM1) {
         // Query the required collateral amounts for the two tokens
-        (requiredCollateralITM0, ) = getITMPositionCollateralRequirement(
+        (requiredCollateralITM0, , ) = getITMPositionCollateralRequirement(
             pool,
             tokenId,
             0, // tokenType
@@ -253,7 +284,7 @@ contract PanopticHelper {
             atTick
         );
         // Query the required collateral amounts for the two tokens
-        (requiredCollateralITM1, ) = getITMPositionCollateralRequirement(
+        (requiredCollateralITM1, , ) = getITMPositionCollateralRequirement(
             pool,
             tokenId,
             1, // tokenType
@@ -306,23 +337,46 @@ contract PanopticHelper {
         for (uint i; i < 7; ) {
             // upper and lower bounds
             int256 a = 1;
-            int256 b = type(int80).max;
+            int256 b = type(int64).max;
             int256 c; // 0 by default
 
             // check if initial solution resides within bounds of 'a' and 'b'
             {
-                int256[3] memory solutions = _bisectionBaseCase(
-                    _pool,
-                    tokenId,
-                    atTick,
-                    tokenType,
-                    [a, b, c],
-                    availableCollateral,
-                    i // sizing index
-                );
-
-                if (solutions[0] * solutions[1] >= 0) {
-                    revert("failure, invalid bounds");
+                while (true) {
+                    int256[3] memory solutions;
+                    console2.log("testing bisection");
+                    try
+                        this.bisectionBaseCase1(
+                            _pool,
+                            tokenId,
+                            atTick,
+                            tokenType,
+                            [a, b, c],
+                            availableCollateral,
+                            i // sizing index
+                        )
+                    returns (int256[3] memory solutions) {
+                        // if solution not within bounds, then increase by 10%
+                        if (solutions[0] * solutions[1] <= 0) {
+                            break;
+                        } else {
+                            b += (b * 10) / 100;
+                            console2.log("b increase", b);
+                            // if solution position size is greater than 104 bits then throw an error
+                            if (b > type(int104).max) {
+                                console2.log("tokenId is invalid, the max bounds are too large");
+                                revert Errors.ExceedsMaximumRedemption(); // temp error **
+                            }
+                        }
+                        // if invalid notional error then reduce by 5%
+                    } catch Error(string memory reason) {
+                        if (bytes4(bytes(reason)) == Errors.InvalidNotionalValue.selector) {
+                            b -= b - (b * 5) / 100;
+                        } else {
+                            // any other error then this is an invalid position
+                            revert("Invalid position");
+                        }
+                    }
                 }
             }
 
@@ -330,7 +384,8 @@ contract PanopticHelper {
                 // Find middle point
                 c = (a + b) / 2;
 
-                int256[3] memory solutions = _bisectionBaseCase(
+                console2.log("real bisection");
+                int256[3] memory solutions = bisectionBaseCase1(
                     _pool,
                     tokenId,
                     atTick,
@@ -378,7 +433,7 @@ contract PanopticHelper {
     /// @param availableCollateral the interacting user's free collateral balances (total balancde - total requirements for open positions)
     /// @param sizingIndex The ratio of the available collateral being used to determine the maximum position size for
     /// @return solutions the collateral requirements for the corresponding position details passed in
-    function _bisectionBaseCase(
+    function bisectionBaseCase1(
         PanopticPool pool,
         uint256 tokenId,
         int24 atTick,
@@ -386,38 +441,22 @@ contract PanopticHelper {
         int256[3] memory positionSizes,
         uint256 availableCollateral,
         uint256 sizingIndex
-    ) internal view returns (int256[3] memory solutions) {
+    ) public view returns (int256[3] memory solutions) {
         // stack rolling
         int24 _atTick = atTick;
 
         //uint256 totalLegs = tokenId.countLegs();
         for (uint i; i < 3; i++) {
-            // validate the upper bounds of the amount moved
-            // if the notional is above 128 bits then this is an invalid position
-            // {
-            //     uint256[4] memory amountsMoved = totalAmountsMoved(
-            //         tokenId,
-            //         uint128(uint256(positionSizes[i])),
-            //         pool.univ3pool().tickSpacing()
-            //     );
-
-            //     for (uint i; i < totalLegs; i++) {
-            //         uint256 currAmountMoved = amountsMoved[i];
-
-            //         if (currAmountMoved.leftSlot() == 0 || currAmountMoved.rightSlot() == 0) {
-
-            //             break;
-            //         }
-            //     }
-            // }
-            // console2.log("after validation");
             console2.log("positionSizes[i]", positionSizes[i]);
+            console2.log("bisection 1");
 
             int256 requiredCollateralITM0;
             int256 requiredCollateralITM1;
+            int256 exchangedAmount0;
+            int256 exchangedAmount1;
             {
                 // Query the required collateral amounts for token0
-                (requiredCollateralITM0, ) = getITMPositionCollateralRequirement(
+                (requiredCollateralITM0, , exchangedAmount0) = getITMPositionCollateralRequirement(
                     pool,
                     tokenId,
                     0,
@@ -425,7 +464,7 @@ contract PanopticHelper {
                     _atTick
                 );
                 // Query the required collateral amounts for token1
-                (requiredCollateralITM1, ) = getITMPositionCollateralRequirement(
+                (requiredCollateralITM1, , exchangedAmount1) = getITMPositionCollateralRequirement(
                     pool,
                     tokenId,
                     1,

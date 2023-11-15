@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
+// Foundry
+import "forge-std/Test.sol";
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
@@ -1266,6 +1268,11 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         unchecked {
             int256 exchangedAmount = _getExchangedAmount(longAmount, shortAmount, swappedAmount);
 
+            console2.log("bob balance", balanceOf[environmentContext.caller()]);
+            console.log("bob address?", environmentContext.caller());
+            console2.log("exchangedAmount", exchangedAmount);
+            console2.log("oldPositionPremia", oldPositionPremia);
+
             // pay/collect premium of burnt option if rolling
             // add intrinsic value of option + commission/ITM spread fees to settle
             int256 tokenToPay = exchangedAmount - oldPositionPremia;
@@ -1275,6 +1282,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             if (tokenToPay > 0) {
                 // if user must pay tokens, burn them from user balance
                 uint256 sharesToBurn = convertToShares(uint256(tokenToPay));
+                console2.log("sharesToBurn", sharesToBurn);
                 _burn(environmentContext.caller(), sharesToBurn);
             } else if (tokenToPay < 0) {
                 // if user must receive tokens, mint them
@@ -1389,12 +1397,16 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 longAmount,
         int128 shortAmount,
         int128 swappedAmount
-    ) internal view returns (int256 exchangedAmount) {
+    ) public view returns (int256 exchangedAmount) {
         // If amount swapped is positive, the amount of tokens to pay is the ITM amount
 
         unchecked {
             // intrinsic value is the amount that need to be exchanged due to minting in-the-money
             int256 intrinsicValue = swappedAmount - (shortAmount - longAmount);
+
+            console2.log("swappedAmount", swappedAmount);
+            console2.log("shortAmount", shortAmount);
+            console2.log("longAmount", longAmount);
 
             if (intrinsicValue != 0) {
                 // the swap commission is paid on the intrinsic value, and it is always positive
@@ -1463,6 +1475,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                         DECIMALS;
                 }
             }
+
+            console2.log("tokenRequired - CT", tokenRequired);
         }
 
         // get the user's shares balance (amount of collateral);
