@@ -159,7 +159,7 @@ contract PanopticPoolTest is PositionUtils {
     uint160 sqrtUpper;
 
     uint256[] $posIdList;
-    uint256[][] $posIdLists;
+    uint256[][1000] $posIdLists;
 
     uint128 positionSize;
     uint128 positionSizeBurn;
