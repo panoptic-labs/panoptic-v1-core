@@ -275,15 +275,11 @@ library PanopticMath {
         uint160 sqrtPriceX96
     ) internal pure returns (uint256, uint256) {
         if (tokenType == 0) {
-            uint256 balance0 = tokenData0.rightSlot();
-            uint256 balance1 = convert1to0(tokenData1.rightSlot(), sqrtPriceX96);
             return (
-                balance0 + balance1,
+                tokenData0.rightSlot() + convert1to0(tokenData1.rightSlot(), sqrtPriceX96),
                 tokenData0.leftSlot() + convert1to0(tokenData1.leftSlot(), sqrtPriceX96)
             );
         } else {
-            uint256 balance0 = convert0to1(tokenData0.rightSlot(), sqrtPriceX96);
-            uint256 balance1 = tokenData1.rightSlot();
             return (
                 tokenData1.rightSlot() + convert0to1(tokenData0.rightSlot(), sqrtPriceX96),
                 tokenData1.leftSlot() + convert0to1(tokenData0.leftSlot(), sqrtPriceX96)

@@ -1118,6 +1118,10 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             _transferFrom(delegatee, delegator, delegateeBalance);
 
             unchecked {
+                uint256 _supply = totalSupply;
+                uint256 _totalAssets = totalAssets();
+
+                // compute amount of shares to mint
                 // mint shares to complete to requested amount
                 _mint(delegator, shares - delegateeBalance);
             }

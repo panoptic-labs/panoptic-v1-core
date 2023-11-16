@@ -134,6 +134,8 @@ contract PanopticPoolTest is PositionUtils {
     CollateralTracker ct0;
     CollateralTracker ct1;
 
+    PanopticHelper ph;
+
     address Deployer = address(0x1234);
     address Alice = address(0x123456);
     address Bob = address(0x12345678);
@@ -157,6 +159,7 @@ contract PanopticPoolTest is PositionUtils {
     uint160 sqrtUpper;
 
     uint256[] $posIdList;
+    uint256[][] $posIdLists;
 
     uint128 positionSize;
     uint128 positionSizeBurn;
@@ -372,6 +375,8 @@ contract PanopticPoolTest is PositionUtils {
 
     function setUp() public {
         sfpm = new SemiFungiblePositionManagerHarness(V3FACTORY);
+
+        ph = new PanopticHelper(sfpm);
 
         // deploy reference pool and collateral token
         poolReference = address(new PanopticPoolHarness(sfpm));
@@ -1288,6 +1293,24 @@ contract PanopticPoolTest is PositionUtils {
         );
 
         (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+    }
+
+    // "virtual" deposit or withdrawal from an account without changing the share price
+    function editCollateral(CollateralTracker ct, address owner, uint256 newShares) internal {
+        int256 shareDelta = int256(newShares) - int256(ct.balanceOf(owner));
+        int256 assetDelta = (shareDelta > 0 ? int8(1) : -1) *
+            int256(ct.convertToAssets(uint256(Math.abs(shareDelta))));
+        vm.store(
+            address(ct),
+            bytes32(uint256(8)),
+            bytes32(uint256(uint256(vm.load(address(ct), bytes32(uint256(8)))).add(assetDelta)))
+        );
+        deal(
+            ct.asset(),
+            address(ct),
+            uint256(int256(IERC20Partial(ct.asset()).balanceOf(address(ct))) + assetDelta)
+        );
+        deal(address(ct), owner, newShares);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -4520,15 +4543,6 @@ contract PanopticPoolTest is PositionUtils {
             tickSpacing
         );
 
-        uint256[2] memory commissionFeeAmounts = [
-            ct0.convertToShares(
-                uint256((int256(longAmounts.rightSlot() + shortAmounts.rightSlot()) * 10) / 10_000)
-            ),
-            ct1.convertToShares(
-                uint256((int256(longAmounts.leftSlot() + shortAmounts.leftSlot()) * 10) / 10_000)
-            )
-        ];
-
         pp.mintOptions(posIdList, positionSize, type(uint64).max, 0, 0);
 
         lastCollateralBalance0[Alice] = ct0.convertToAssets(ct0.balanceOf(Alice));
@@ -5379,7 +5393,6 @@ contract PanopticPoolTest is PositionUtils {
                 int256(Constants.MAX_V3POOL_TICK) - int256(currentTick)
             )
         );
-        console2.log("ct", currentTick);
         vm.assume(Math.abs(tickDelta) > 513);
         vm.store(
             address(pool),
@@ -5395,5 +5408,129 @@ contract PanopticPoolTest is PositionUtils {
         pp.liquidate(Alice, new uint256[](0), 0, 0);
     }
 
-    // function test_Fail_liquidate_NotMarginCalled
+    function test_Fail_liquidate_NotMarginCalled(
+        uint256 x,
+        uint256 numLegs,
+        uint256[4] memory isLongs,
+        uint256[4] memory tokenTypes,
+        uint256[4] memory widthSeeds,
+        int256[4] memory strikeSeeds,
+        uint256 positionSizeSeed,
+        uint256 swapSizeSeed,
+        uint256 collateralBalanceSeed,
+        uint256 collateralRatioSeed
+    ) public {
+        _initPool(x);
+
+        numLegs = bound(numLegs, 1, 4);
+
+        int24[4] memory widths;
+        int24[4] memory strikes;
+
+        for (uint256 i = 0; i < numLegs; ++i) {
+            tokenTypes[i] = bound(tokenTypes[i], 0, 1);
+            isLongs[i] = bound(isLongs[i], 0, 1);
+            (widths[i], strikes[i]) = getValidSW(
+                widthSeeds[i],
+                strikeSeeds[i],
+                uint24(tickSpacing),
+                // distancing tickSpacing ensures this position stays OTM throughout this test case. ITM is tested elsewhere.
+                currentTick
+            );
+        }
+        if (numLegs == 1) populatePositionData(widths[0], strikes[0], positionSizeSeed);
+        if (numLegs == 2)
+            populatePositionData(
+                [widths[0], widths[1]],
+                [strikes[0], strikes[1]],
+                positionSizeSeed
+            );
+        if (numLegs == 3)
+            populatePositionData(
+                [widths[0], widths[1], widths[2]],
+                [strikes[0], strikes[1], strikes[2]],
+                positionSizeSeed
+            );
+        if (numLegs == 4) populatePositionData(widths, strikes, positionSizeSeed);
+
+        // this is a long option; so need to sell before it can be bought (let's say 2x position size for now)
+        changePrank(Seller);
+
+        for (uint256 i = 0; i < numLegs; ++i) {
+            $posIdLists[0].push(
+                uint256(0).addUniv3pool(poolId).addLeg(
+                    i,
+                    1,
+                    isWETH,
+                    0,
+                    tokenTypes[i],
+                    i,
+                    strikes[i],
+                    widths[i]
+                )
+            );
+            pp.mintOptions($posIdLists[0], positionSize * 2, 0, 0, 0);
+        }
+
+        twoWaySwap(swapSizeSeed);
+
+        // now we can mint the long option we are force exercising
+        changePrank(Alice);
+
+        for (uint256 i = 0; i < numLegs; ++i) {
+            $posIdLists[1].push(
+                uint256(0).addUniv3pool(poolId).addLeg(
+                    i,
+                    1,
+                    isWETH,
+                    isLongs[i],
+                    tokenTypes[i],
+                    i,
+                    strikes[i],
+                    widths[i]
+                )
+            );
+
+            pp.mintOptions($posIdLists[1], positionSize * 2, 0, 0, 0);
+        }
+
+        twoWaySwap(swapSizeSeed);
+
+        (, uint256 totalCollateralRequired0) = ph.checkCollateral(
+            pp,
+            Alice,
+            pp.getUniV3TWAP_(),
+            0,
+            $posIdLists[1]
+        );
+
+        uint256 totalCollateralB0 = bound(
+            collateralBalanceSeed,
+            (totalCollateralRequired0 * 10_001) / 10_000,
+            type(uint104).max
+        );
+
+        editCollateral(
+            ct0,
+            Alice,
+            ct0.convertToShares(
+                (totalCollateralB0 * bound(collateralRatioSeed, 0, 10_000)) / 10_000
+            )
+        );
+        editCollateral(
+            ct1,
+            Alice,
+            ct1.convertToShares(
+                PanopticMath.convert0to1(
+                    (totalCollateralB0 * (10_000 - bound(collateralRatioSeed, 0, 10_000))) / 10_000,
+                    Math.getSqrtRatioAtTick(pp.getUniV3TWAP_())
+                )
+            )
+        );
+
+        changePrank(Bob);
+
+        vm.expectRevert(Errors.NotMarginCalled.selector);
+        pp.liquidate(Alice, $posIdLists[1], 0, 0);
+    }
 }
