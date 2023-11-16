@@ -5327,7 +5327,12 @@ contract PanopticPoolTest is PositionUtils {
         pp.liquidate(Alice, posIdList, 0, 0);
     }
 
-    function test_Fail_liquidate_LiquidatorHasOpenPositions(uint256 x, uint256 widthSeed, int256 strikeSeed, uint256 positionSizeSeed) public {
+    function test_Fail_liquidate_LiquidatorHasOpenPositions(
+        uint256 x,
+        uint256 widthSeed,
+        int256 strikeSeed,
+        uint256 positionSizeSeed
+    ) public {
         _initPool(x);
 
         (int24 width, int24 strike) = PositionUtils.getOTMSW(
@@ -5362,19 +5367,33 @@ contract PanopticPoolTest is PositionUtils {
         pp.mintOptions(posIdList, positionSize, 0, 0, 0);
 
         vm.expectRevert(Errors.LiquidatorHasOpenPositions.selector);
-        pp.liquidate(Alice, posIdList, 0, 0);        
+        pp.liquidate(Alice, posIdList, 0, 0);
     }
 
     function test_Fail_liquidate_StaleTWAP(uint256 x, int256 tickDeltaSeed) public {
         _initPool(x);
-        int256 tickDelta = int256(bound(tickDeltaSeed, -(int256(currentTick) - int256(Constants.MIN_V3POOL_TICK)), int256(Constants.MAX_V3POOL_TICK) - int256(currentTick)));
+        int256 tickDelta = int256(
+            bound(
+                tickDeltaSeed,
+                -(int256(currentTick) - int256(Constants.MIN_V3POOL_TICK)),
+                int256(Constants.MAX_V3POOL_TICK) - int256(currentTick)
+            )
+        );
         console2.log("ct", currentTick);
         vm.assume(Math.abs(tickDelta) > 513);
-        vm.store(address(pool), bytes32(0), bytes32((uint256(vm.load(address(pool), bytes32(0))) & 0xffffffffffffffffff000000ffffffffffffffffffffffffffffffffffffffff) + (uint256(uint24(int24(int256(currentTick) + int256(tickDelta)))) << 160)));
+        vm.store(
+            address(pool),
+            bytes32(0),
+            bytes32(
+                (uint256(vm.load(address(pool), bytes32(0))) &
+                    0xffffffffffffffffff000000ffffffffffffffffffffffffffffffffffffffff) +
+                    (uint256(uint24(int24(int256(currentTick) + int256(tickDelta)))) << 160)
+            )
+        );
 
         vm.expectRevert(Errors.StaleTWAP.selector);
         pp.liquidate(Alice, new uint256[](0), 0, 0);
     }
 
-    function test_Fail_liquidate_NotMarginCalled
+    // function test_Fail_liquidate_NotMarginCalled
 }
