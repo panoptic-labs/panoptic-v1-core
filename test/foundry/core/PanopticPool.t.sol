@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
+import {Constants} from "@libraries/Constants.sol";
 import {Errors} from "@libraries/Errors.sol";
 import {Math} from "@libraries/Math.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
@@ -5255,4 +5256,125 @@ contract PanopticPoolTest is PositionUtils {
             "netliq should be the same"
         );
     }
+
+    function test_Fail_liquidate_validatePositionList(
+        uint256 x,
+        uint256[2] memory widthSeeds,
+        int256[2] memory strikeSeeds,
+        uint256 positionSizeSeed
+    ) public {
+        _initPool(x);
+
+        (int24 width, int24 strike) = PositionUtils.getITMSW(
+            widthSeeds[0],
+            strikeSeeds[0],
+            uint24(tickSpacing),
+            currentTick,
+            0
+        );
+
+        (int24 width2, int24 strike2) = PositionUtils.getOTMSW(
+            widthSeeds[1],
+            strikeSeeds[1],
+            uint24(tickSpacing),
+            currentTick,
+            0
+        );
+        vm.assume(width2 != width || strike2 != strike);
+
+        populatePositionData([width, width2], [strike, strike2], positionSizeSeed);
+
+        uint256 tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+            0,
+            1,
+            isWETH,
+            0,
+            0,
+            0,
+            strike,
+            width
+        );
+
+        uint256[] memory posIdList = new uint256[](1);
+        posIdList[0] = tokenId;
+
+        pp.mintOptions(posIdList, positionSize, 0, 0, 0);
+
+        posIdList = new uint256[](2);
+        posIdList[0] = tokenId;
+
+        uint256 tokenId2 = uint256(0).addUniv3pool(poolId).addLeg(
+            0,
+            1,
+            isWETH,
+            0,
+            0,
+            0,
+            strike2,
+            width2
+        );
+
+        posIdList[1] = tokenId2;
+
+        pp.mintOptions(posIdList, positionSize, 0, 0, 0);
+
+        changePrank(Bob);
+
+        posIdList = new uint256[](1);
+        posIdList[0] = tokenId2;
+
+        vm.expectRevert(Errors.InputListFail.selector);
+        pp.liquidate(Alice, posIdList, 0, 0);
+    }
+
+    function test_Fail_liquidate_LiquidatorHasOpenPositions(uint256 x, uint256 widthSeed, int256 strikeSeed, uint256 positionSizeSeed) public {
+        _initPool(x);
+
+        (int24 width, int24 strike) = PositionUtils.getOTMSW(
+            widthSeed,
+            strikeSeed,
+            uint24(tickSpacing),
+            currentTick,
+            0
+        );
+
+        populatePositionData(width, strike, positionSizeSeed);
+
+        uint256 tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+            0,
+            1,
+            isWETH,
+            0,
+            0,
+            0,
+            strike,
+            width
+        );
+
+        uint256[] memory posIdList = new uint256[](1);
+
+        posIdList[0] = tokenId;
+
+        pp.mintOptions(posIdList, positionSize, 0, 0, 0);
+
+        changePrank(Bob);
+
+        pp.mintOptions(posIdList, positionSize, 0, 0, 0);
+
+        vm.expectRevert(Errors.LiquidatorHasOpenPositions.selector);
+        pp.liquidate(Alice, posIdList, 0, 0);        
+    }
+
+    function test_Fail_liquidate_StaleTWAP(uint256 x, int256 tickDeltaSeed) public {
+        _initPool(x);
+        int256 tickDelta = int256(bound(tickDeltaSeed, -(int256(currentTick) - int256(Constants.MIN_V3POOL_TICK)), int256(Constants.MAX_V3POOL_TICK) - int256(currentTick)));
+        console2.log("ct", currentTick);
+        vm.assume(Math.abs(tickDelta) > 513);
+        vm.store(address(pool), bytes32(0), bytes32((uint256(vm.load(address(pool), bytes32(0))) & 0xffffffffffffffffff000000ffffffffffffffffffffffffffffffffffffffff) + (uint256(uint24(int24(int256(currentTick) + int256(tickDelta)))) << 160)));
+
+        vm.expectRevert(Errors.StaleTWAP.selector);
+        pp.liquidate(Alice, new uint256[](0), 0, 0);
+    }
+
+    function test_Fail_liquidate_NotMarginCalled
 }
