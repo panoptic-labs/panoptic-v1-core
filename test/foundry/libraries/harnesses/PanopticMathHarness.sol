@@ -83,10 +83,13 @@ contract PanopticMathHarness is Test {
         uint256 tokenData1,
         uint256 tokenType,
         int24 tick
-    ) public pure returns (uint256, uint256, bool) {
-        (uint256 collateralBalance, uint256 requiredCollateral, bool oneIsLarger) = PanopticMath
-            .convertCollateralData(tokenData0, tokenData1, tokenType, tick);
-        return (collateralBalance, requiredCollateral, oneIsLarger);
+    ) public pure returns (uint256, uint256, uint256) {
+        (
+            uint256 collateralBalance,
+            uint256 requiredCollateral,
+            uint256 balanceRatioX128
+        ) = PanopticMath.convertCollateralData(tokenData0, tokenData1, tokenType, tick);
+        return (collateralBalance, requiredCollateral, balanceRatioX128);
     }
 
     function convertCollateralData(
@@ -94,10 +97,13 @@ contract PanopticMathHarness is Test {
         uint256 tokenData1,
         uint256 tokenType,
         uint160 sqrtPriceX96
-    ) public pure returns (uint256, uint256, bool) {
-        (uint256 collateralBalance, uint256 requiredCollateral, bool oneIsLarger) = PanopticMath
-            .convertCollateralData(tokenData0, tokenData1, tokenType, sqrtPriceX96);
-        return (collateralBalance, requiredCollateral, oneIsLarger);
+    ) public pure returns (uint256, uint256, uint256) {
+        (
+            uint256 collateralBalance,
+            uint256 requiredCollateral,
+            uint256 balanceRatioX128
+        ) = PanopticMath.convertCollateralData(tokenData0, tokenData1, tokenType, sqrtPriceX96);
+        return (collateralBalance, requiredCollateral, balanceRatioX128);
     }
 
     function _convertNotional(
