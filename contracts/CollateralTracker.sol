@@ -1377,6 +1377,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // get the user's shares balance (amount of collateral);
         uint256 collateralAmount = balanceOf[user];
         console2.log("CONVERTING...");
+        console2.log("collateralAmount", collateralAmount);
+        console2.log("totalAssets", totalAssets());
+        console2.log("totalSupply", totalSupply);
         // store assetBalance and tokens required in tokenData variable
         tokenData = tokenData.toRightSlot(uint128(convertToAssets(collateralAmount))).toLeftSlot(
             tokenRequired.toUint128()
