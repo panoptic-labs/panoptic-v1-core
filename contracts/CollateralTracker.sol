@@ -1265,7 +1265,11 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 oldPositionPremia,
         int128 swappedAmount,
         uint256[2][] memory positionBalanceArray
-    ) external onlyPanopticPool returns (int128 utilization, uint256 tokenData) {
+    )
+        external
+        onlyPanopticPool
+        returns (int128 utilization, uint256 tokenData, int128 realizedPremium)
+    {
         unchecked {
             // current available assets belonging to PLPs (updated after settlement) excluding any premium paid
             int256 updatedAssets = int256(uint256(s_poolAssets)) - swappedAmount;
@@ -1273,7 +1277,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // constrict premium to only assets not belonging to PLPs (i.e premium paid by sellers or collected from the pool earlier)
             int256 exchangedAmount = _getExchangedAmount(longAmount, shortAmount, swappedAmount);
 
-            oldPositionPremia = int128(
+            realizedPremium = int128(
                 Math.min(
                     oldPositionPremia,
                     int256(IERC20Partial(s_underlyingToken).balanceOf(address(s_panopticPool))) -
@@ -1283,7 +1287,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             // pay/collect premium of burnt option if rolling
             // add intrinsic value of option + commission/ITM spread fees to settle
-            int256 tokenToPay = exchangedAmount - oldPositionPremia;
+            int256 tokenToPay = exchangedAmount - realizedPremium;
 
             // compute tokens to be paid due to swap
             // mint or burn tokens due to minting in-the-money
@@ -1305,7 +1309,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // the inflow or outflow of pool assets is defined by the swappedAmount: it includes both the ITM swap amounts and the short/long amounts used to create the position
             // however, any intrinsic value is paid for by the users, so we only add the portion that comes from PLPs: the short/long amounts
             // premia is not included in the balance since it is the property of options buyers and sellers, not PLPs
-            s_poolAssets = uint128(uint256(updatedAssets + oldPositionPremia));
+            s_poolAssets = uint128(uint256(updatedAssets + realizedPremium));
             s_inAMM = uint128(uint256(int256(uint256(s_inAMM)) + (shortAmount - longAmount)));
 
             {
@@ -1362,13 +1366,13 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 shortAmount,
         int128 swappedAmount,
         int128 currentPositionPremium
-    ) external onlyPanopticPool {
+    ) external onlyPanopticPool returns (int128 realizedPremium) {
         unchecked {
             // current available assets belonging to PLPs (updated after settlement) excluding any premium paid
             int256 updatedAssets = int256(uint256(s_poolAssets)) - swappedAmount;
 
             // constrict premium to only assets not belonging to PLPs (i.e premium paid by sellers or collected from the pool earlier)
-            currentPositionPremium = int128(
+            realizedPremium = int128(
                 Math.min(
                     currentPositionPremium,
                     int256(IERC20Partial(s_underlyingToken).balanceOf(address(s_panopticPool))) -
@@ -1406,7 +1410,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // update stored asset balances with net moved amounts
             // any intrinsic value is paid for by the users, so we do not add it to s_inAMM
             // premia is not included in the balance since it is the property of options buyers and sellers, not PLPs
-            s_poolAssets = uint128(uint256(updatedAssets + currentPositionPremium));
+            s_poolAssets = uint128(uint256(updatedAssets + realizedPremium));
             s_inAMM = uint128(uint256(int256(uint256(s_inAMM)) - (shortAmount - longAmount)));
         }
     }

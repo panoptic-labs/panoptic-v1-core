@@ -661,7 +661,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
         // pay commission based on total moved amount (long + short)
         // write data about inAMM in collateralBase
-        poolUtilizations = _payCommissionAndWriteData(
+        (poolUtilizations, ) = _payCommissionAndWriteData(
             tickStateCallContext.updateCurrentTick(newTick),
             0,
             tokenId,
@@ -692,7 +692,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int256 totalSwapped,
         int256 oldPositionPremia,
         uint256[] calldata positionIdList
-    ) internal returns (uint128 poolUtilizations) {
+    ) internal returns (uint128 poolUtilizations, int256 realizedPremium) {
         // update storage data, take commission IMPORTANT: use post minting utilizations!
 
         int256 portfolioPremium;
@@ -731,7 +731,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
             );
 
             // update storage data, take commission
-            poolUtilizations = takeCommission(
+            (poolUtilizations, realizedPremium) = takeCommission(
                 positionBalanceArray,
                 tickStateCallContext,
                 longAmounts,
@@ -760,7 +760,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int256 portfolioPremium,
         int256 totalSwapped,
         int256 oldPositionPremia
-    ) internal returns (uint128) {
+    ) internal returns (uint128, int256 realizedPremium) {
         uint256 tokenData0;
         uint256 tokenData1;
         int128 utilization0;
@@ -774,15 +774,17 @@ contract PanopticPool is ERC1155Holder, Multicall {
             int128 _portfolioPremium = portfolioPremium.rightSlot();
             int128 _swapped = totalSwapped.rightSlot();
             int128 _oldPositionPremia = oldPositionPremia.rightSlot();
-            (utilization0, tokenData0) = s_collateralToken0.takeCommissionAddData(
-                _ct,
-                _longAmount,
-                _shortAmount,
-                _portfolioPremium,
-                _oldPositionPremia,
-                _swapped,
-                _positionBalanceArray
-            );
+            (utilization0, tokenData0, _oldPositionPremia) = s_collateralToken0
+                .takeCommissionAddData(
+                    _ct,
+                    _longAmount,
+                    _shortAmount,
+                    _portfolioPremium,
+                    _oldPositionPremia,
+                    _swapped,
+                    _positionBalanceArray
+                );
+            realizedPremium = int256(0).toRightSlot(_oldPositionPremia);
         }
         {
             int128 _longAmount = longAmounts.leftSlot();
@@ -790,15 +792,17 @@ contract PanopticPool is ERC1155Holder, Multicall {
             int128 _portfolioPremium = portfolioPremium.leftSlot();
             int128 _swapped = totalSwapped.leftSlot();
             int128 _oldPositionPremia = oldPositionPremia.leftSlot();
-            (utilization1, tokenData1) = s_collateralToken1.takeCommissionAddData(
-                _ct,
-                _longAmount,
-                _shortAmount,
-                _portfolioPremium,
-                _oldPositionPremia,
-                _swapped,
-                _positionBalanceArray
-            );
+            (utilization1, tokenData1, _oldPositionPremia) = s_collateralToken1
+                .takeCommissionAddData(
+                    _ct,
+                    _longAmount,
+                    _shortAmount,
+                    _portfolioPremium,
+                    _oldPositionPremia,
+                    _swapped,
+                    _positionBalanceArray
+                );
+            realizedPremium = realizedPremium.toLeftSlot(_oldPositionPremia);
         }
 
         unchecked {
@@ -824,7 +828,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
         // return pool utilizations as a uint128 (pool Utilization is always < 10000)
         unchecked {
-            return uint128(utilization0) + uint128(utilization1 << 64);
+            return (uint128(utilization0) + uint128(utilization1 << 64), realizedPremium);
         }
     }
 
@@ -1054,20 +1058,24 @@ contract PanopticPool is ERC1155Holder, Multicall {
         );
 
         // exercise the option and take the commission and addData
-        s_collateralToken0.exercise(
-            owner,
-            longAmounts.rightSlot(),
-            shortAmounts.rightSlot(),
-            totalSwapped.rightSlot(),
-            currentPositionPremia.rightSlot()
+        int256 realizedPremium = int256(0).toRightSlot(
+            s_collateralToken0.exercise(
+                owner,
+                longAmounts.rightSlot(),
+                shortAmounts.rightSlot(),
+                totalSwapped.rightSlot(),
+                currentPositionPremia.rightSlot()
+            )
         );
 
-        s_collateralToken1.exercise(
-            owner,
-            longAmounts.leftSlot(),
-            shortAmounts.leftSlot(),
-            totalSwapped.leftSlot(),
-            currentPositionPremia.leftSlot()
+        currentPositionPremia = realizedPremium.toLeftSlot(
+            s_collateralToken1.exercise(
+                owner,
+                longAmounts.leftSlot(),
+                shortAmounts.leftSlot(),
+                totalSwapped.leftSlot(),
+                currentPositionPremia.leftSlot()
+            )
         );
     }
 
@@ -1166,7 +1174,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         );
 
         // pay commission based on total moved amount (long + short), write data about inAMM and premia in collateralBase
-        poolUtilizations = _payCommissionAndWriteData(
+        (poolUtilizations, oldPositionPremia) = _payCommissionAndWriteData(
             tickStateCallContext,
             oldTokenId,
             newTokenId,
