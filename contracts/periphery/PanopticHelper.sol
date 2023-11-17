@@ -365,19 +365,10 @@ contract PanopticHelper {
         // 2. a put with an identical strike price
 
         // call
-        tokenId = addCallLeg(tokenId, start, optionRatio, asset, isLong, start, strike, width);
+        tokenId = addCallLeg(tokenId, start, optionRatio, asset, isLong, start + 1, strike, width);
 
         // put
-        tokenId = addPutLeg(
-            tokenId,
-            start + 1,
-            optionRatio,
-            asset,
-            isLong,
-            start + 1,
-            strike,
-            width
-        );
+        tokenId = addPutLeg(tokenId, start + 1, optionRatio, asset, isLong, start, strike, width);
     }
 
     /// @notice creates a call spread with 1 long leg and 1 short leg.
@@ -685,7 +676,7 @@ contract PanopticHelper {
         // 2. a long call
 
         // short strangle
-        tokenId = createStrangle(univ3pool, width, shortCallStrike, shortPutStrike, 0, asset, 1, 1);
+        tokenId = createStrangle(univ3pool, width, shortCallStrike, shortPutStrike, asset, 0, 1, 1);
 
         // long call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 1, 0, longCallStrike, width);
@@ -711,7 +702,7 @@ contract PanopticHelper {
         // 2. a long call
 
         // short straddle
-        tokenId = createStraddle(univ3pool, width, straddleStrike, 0, asset, 1, 1);
+        tokenId = createStraddle(univ3pool, width, straddleStrike, asset, 0, 1, 1);
 
         // long call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 1, 0, longCallStrike, width);
