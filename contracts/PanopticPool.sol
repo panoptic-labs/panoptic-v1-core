@@ -1376,7 +1376,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
             (, int24 currentTick, , , , , ) = s_univ3pool.slot0();
 
             // Enforce maximum delta between TWAP and currentTick to prevent extreme price manipulation
-            if (Math.abs(int256(currentTick) - int256(twapTick)) > MAX_TWAP_DELTA_LIQUIDATION)
+            if (Math.abs(int256(currentTick) - twapTick) > MAX_TWAP_DELTA_LIQUIDATION)
                 revert Errors.StaleTWAP();
 
             (int256 premia, uint256[2][] memory positionBalanceArray) = _calculateAccumulatedPremia(

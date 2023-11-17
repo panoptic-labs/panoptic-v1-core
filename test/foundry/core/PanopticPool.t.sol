@@ -5511,6 +5511,10 @@ contract PanopticPoolTest is PositionUtils {
 
         twoWaySwap(swapSizeSeed);
 
+        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+
+        vm.assume(Math.abs(int256(currentTick) - pp.getUniV3TWAP_()) <= 513);
+
         (, uint256 totalCollateralRequired0) = ph.checkCollateral(
             pp,
             Alice,
