@@ -5459,12 +5459,12 @@ contract PanopticPoolTest is PositionUtils {
         for (uint256 i = 0; i < numLegs; ++i) {
             $posIdLists[0].push(
                 uint256(0).addUniv3pool(poolId).addLeg(
-                    i,
+                    0,
                     1,
                     isWETH,
                     0,
                     tokenTypes[i],
-                    i,
+                    0,
                     strikes[i],
                     widths[i]
                 )
@@ -5480,12 +5480,12 @@ contract PanopticPoolTest is PositionUtils {
         for (uint256 i = 0; i < numLegs; ++i) {
             $posIdLists[1].push(
                 uint256(0).addUniv3pool(poolId).addLeg(
-                    i,
+                    0,
                     1,
                     isWETH,
                     isLongs[i],
                     tokenTypes[i],
-                    i,
+                    0,
                     strikes[i],
                     widths[i]
                 )
