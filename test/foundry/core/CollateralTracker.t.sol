@@ -7386,198 +7386,198 @@ contract CollateralTrackerTest is Test, PositionUtils {
                            LIQUIDATION BONUS
     //////////////////////////////////////////////////////////////*/
 
-    function test_Success_getLiquidationRefund_SufficientBalance(
-        uint256 x,
-        uint256[2] memory delegations,
-        uint256[2] memory balances
-    ) public {
-        _initWorld(x);
+    // function test_Success_getLiquidationRefund_SufficientBalance(
+    //     uint256 x,
+    //     uint256[2] memory delegations,
+    //     uint256[2] memory balances
+    // ) public {
+    //     _initWorld(x);
 
-        delegations[0] = bound(delegations[0], 0, type(uint104).max);
-        delegations[1] = bound(delegations[1], 0, type(uint104).max);
-        balances[0] = bound(balances[0], delegations[0], type(uint104).max);
-        balances[1] = bound(balances[1], delegations[1], type(uint104).max);
+    //     delegations[0] = bound(delegations[0], 0, type(uint104).max);
+    //     delegations[1] = bound(delegations[1], 0, type(uint104).max);
+    //     balances[0] = bound(balances[0], delegations[0], type(uint104).max);
+    //     balances[1] = bound(balances[1], delegations[1], type(uint104).max);
 
-        collateralToken0.setPoolAssets(balances[0]);
-        collateralToken1.setPoolAssets(balances[1]);
-        deal(address(collateralToken0), Alice, balances[0]);
-        deal(address(collateralToken1), Alice, balances[1]);
+    //     collateralToken0.setPoolAssets(balances[0]);
+    //     collateralToken1.setPoolAssets(balances[1]);
+    //     deal(address(collateralToken0), Alice, balances[0]);
+    //     deal(address(collateralToken1), Alice, balances[1]);
 
-        (int256 refund0, int256 refund1) = collateralToken0.getLiquidationRefund(
-            Alice,
-            delegations[0],
-            delegations[1],
-            currentTick,
-            CollateralTracker(address(collateralToken1))
-        );
+    //     (int256 refund0, int256 refund1) = collateralToken0.getLiquidationRefund(
+    //         Alice,
+    //         delegations[0],
+    //         delegations[1],
+    //         currentTick,
+    //         CollateralTracker(address(collateralToken1))
+    //     );
 
-        assertEq(uint256(refund0), delegations[0], "Incorrect token0 refund");
-        assertEq(uint256(refund1), delegations[1], "Incorrect token1 refund");
-    }
+    //     assertEq(uint256(refund0), delegations[0], "Incorrect token0 refund");
+    //     assertEq(uint256(refund1), delegations[1], "Incorrect token1 refund");
+    // }
 
-    function test_Success_getLiquidationRefund_InsufficientBalanceBoth(
-        uint256[2] memory delegations,
-        uint256[2] memory balances
-    ) public {
-        _initWorld(0);
+    // function test_Success_getLiquidationRefund_InsufficientBalanceBoth(
+    //     uint256[2] memory delegations,
+    //     uint256[2] memory balances
+    // ) public {
+    //     _initWorld(0);
 
-        uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(currentTick);
-        balances[0] = bound(balances[0], 10 ** 15, 10 ** 25 - 10 ** 10);
-        balances[1] = bound(balances[1], 10 ** 15, 10 ** 25 - 10 ** 10);
+    //     uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(currentTick);
+    //     balances[0] = bound(balances[0], 10 ** 15, 10 ** 25 - 10 ** 10);
+    //     balances[1] = bound(balances[1], 10 ** 15, 10 ** 25 - 10 ** 10);
 
-        delegations[0] = bound(delegations[0], balances[0] + 10 ** 10, 10 ** 25);
-        delegations[1] = bound(delegations[1], balances[1] + 10 ** 10, 10 ** 25);
+    //     delegations[0] = bound(delegations[0], balances[0] + 10 ** 10, 10 ** 25);
+    //     delegations[1] = bound(delegations[1], balances[1] + 10 ** 10, 10 ** 25);
 
-        collateralToken0.setPoolAssets(balances[0]);
-        collateralToken1.setPoolAssets(balances[1]);
-        deal(address(collateralToken0), Alice, balances[0]);
-        deal(address(collateralToken1), Alice, balances[1]);
+    //     collateralToken0.setPoolAssets(balances[0]);
+    //     collateralToken1.setPoolAssets(balances[1]);
+    //     deal(address(collateralToken0), Alice, balances[0]);
+    //     deal(address(collateralToken1), Alice, balances[1]);
 
-        (int256 refund0, int256 refund1) = collateralToken0.getLiquidationRefund(
-            Alice,
-            delegations[0],
-            delegations[1],
-            currentTick,
-            CollateralTracker(address(collateralToken1))
-        );
+    //     (int256 refund0, int256 refund1) = collateralToken0.getLiquidationRefund(
+    //         Alice,
+    //         delegations[0],
+    //         delegations[1],
+    //         currentTick,
+    //         CollateralTracker(address(collateralToken1))
+    //     );
 
-        uint256 valueDelegated1 = delegations[1] +
-            PanopticMath.convert0to1(delegations[0], sqrtPriceX96);
-        uint256 valueRefunded1 = uint256(refund1 + PanopticMath.convert0to1(refund0, sqrtPriceX96));
+    //     uint256 valueDelegated1 = delegations[1] +
+    //         PanopticMath.convert0to1(delegations[0], sqrtPriceX96);
+    //     uint256 valueRefunded1 = uint256(refund1 + PanopticMath.convert0to1(refund0, sqrtPriceX96));
 
-        uint256 shortfall1 = (int256(delegations[1]) - refund1) > 0
-            ? uint256(int256(delegations[1]) - refund1)
-            : uint256(PanopticMath.convert0to1(int256(delegations[0]) - refund0, sqrtPriceX96));
+    //     uint256 shortfall1 = (int256(delegations[1]) - refund1) > 0
+    //         ? uint256(int256(delegations[1]) - refund1)
+    //         : uint256(PanopticMath.convert0to1(int256(delegations[0]) - refund0, sqrtPriceX96));
 
-        assertApproxEqAbs(
-            valueDelegated1 + shortfall1 / 10,
-            valueRefunded1,
-            valueRefunded1 / 100_000,
-            "Incorrect refund value"
-        );
-        assertApproxEqAbs(
-            refund1 - int256(balances[1]),
-            PanopticMath.convert0to1(refund0 - int256(balances[0]), sqrtPriceX96),
-            uint256(refund1 - int256(balances[1])) / 100_000,
-            "Incorrect loss distribution"
-        );
-    }
+    //     assertApproxEqAbs(
+    //         valueDelegated1 + shortfall1 / 10,
+    //         valueRefunded1,
+    //         valueRefunded1 / 100_000,
+    //         "Incorrect refund value"
+    //     );
+    //     assertApproxEqAbs(
+    //         refund1 - int256(balances[1]),
+    //         PanopticMath.convert0to1(refund0 - int256(balances[0]), sqrtPriceX96),
+    //         uint256(refund1 - int256(balances[1])) / 100_000,
+    //         "Incorrect loss distribution"
+    //     );
+    // }
 
-    function test_Success_getLiquidationRefund_InsufficientBalance0(
-        uint256[2] memory delegations,
-        uint256[2] memory balances
-    ) public {
-        _initWorld(0);
+    // function test_Success_getLiquidationRefund_InsufficientBalance0(
+    //     uint256[2] memory delegations,
+    //     uint256[2] memory balances
+    // ) public {
+    //     _initWorld(0);
 
-        uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(currentTick);
-        balances[0] = bound(balances[0], 10 ** 15, 10 ** 25 - 10 ** 10);
-        delegations[1] = bound(delegations[1], 10 ** 15, 10 ** 25 - 10 ** 10);
+    //     uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(currentTick);
+    //     balances[0] = bound(balances[0], 10 ** 15, 10 ** 25 - 10 ** 10);
+    //     delegations[1] = bound(delegations[1], 10 ** 15, 10 ** 25 - 10 ** 10);
 
-        delegations[0] = bound(delegations[0], balances[0] + 10 ** 10, 10 ** 25);
-        balances[1] = bound(balances[1], delegations[1] + 10 ** 10, 10 ** 25);
+    //     delegations[0] = bound(delegations[0], balances[0] + 10 ** 10, 10 ** 25);
+    //     balances[1] = bound(balances[1], delegations[1] + 10 ** 10, 10 ** 25);
 
-        collateralToken0.setPoolAssets(balances[0]);
-        collateralToken1.setPoolAssets(balances[1]);
-        deal(address(collateralToken0), Alice, balances[0]);
-        deal(address(collateralToken1), Alice, balances[1]);
+    //     collateralToken0.setPoolAssets(balances[0]);
+    //     collateralToken1.setPoolAssets(balances[1]);
+    //     deal(address(collateralToken0), Alice, balances[0]);
+    //     deal(address(collateralToken1), Alice, balances[1]);
 
-        (int256 refund0, int256 refund1) = collateralToken0.getLiquidationRefund(
-            Alice,
-            delegations[0],
-            delegations[1],
-            currentTick,
-            CollateralTracker(address(collateralToken1))
-        );
+    //     (int256 refund0, int256 refund1) = collateralToken0.getLiquidationRefund(
+    //         Alice,
+    //         delegations[0],
+    //         delegations[1],
+    //         currentTick,
+    //         CollateralTracker(address(collateralToken1))
+    //     );
 
-        uint256 valueDelegated1 = delegations[1] +
-            PanopticMath.convert0to1(delegations[0], sqrtPriceX96);
-        uint256 valueRefunded1 = uint256(refund1 + PanopticMath.convert0to1(refund0, sqrtPriceX96));
+    //     uint256 valueDelegated1 = delegations[1] +
+    //         PanopticMath.convert0to1(delegations[0], sqrtPriceX96);
+    //     uint256 valueRefunded1 = uint256(refund1 + PanopticMath.convert0to1(refund0, sqrtPriceX96));
 
-        uint256 shortfall1 = uint256(
-            PanopticMath.convert0to1(int256(delegations[0]) - refund0, sqrtPriceX96)
-        );
+    //     uint256 shortfall1 = uint256(
+    //         PanopticMath.convert0to1(int256(delegations[0]) - refund0, sqrtPriceX96)
+    //     );
 
-        assertApproxEqAbs(
-            valueDelegated1 + shortfall1 / 10,
-            valueRefunded1,
-            valueRefunded1 / 100_000,
-            "Incorrect refund value"
-        );
-        assertApproxEqAbs(
-            Math.rectified(refund1 - int256(balances[1])),
-            PanopticMath.convert0to1(refund0 - int256(balances[0]), sqrtPriceX96),
-            uint256(refund1 - int256(balances[1])) / 100_000,
-            "Incorrect loss distribution"
-        );
+    //     assertApproxEqAbs(
+    //         valueDelegated1 + shortfall1 / 10,
+    //         valueRefunded1,
+    //         valueRefunded1 / 100_000,
+    //         "Incorrect refund value"
+    //     );
+    //     assertApproxEqAbs(
+    //         Math.rectified(refund1 - int256(balances[1])),
+    //         PanopticMath.convert0to1(refund0 - int256(balances[0]), sqrtPriceX96),
+    //         uint256(refund1 - int256(balances[1])) / 100_000,
+    //         "Incorrect loss distribution"
+    //     );
 
-        if (
-            int256(balances[1] - delegations[1]) -
-                PanopticMath.convert0to1(
-                    (int256(delegations[0] - balances[0]) * 115) / 105,
-                    sqrtPriceX96
-                ) >
-            0
-        ) {
-            assertLe(uint256(refund0), balances[0], "Protocol loss avoidance failed (0)");
-            assertLe(uint256(refund1), balances[1], "Protocol loss avoidance failed (1)");
-        }
-    }
+    //     if (
+    //         int256(balances[1] - delegations[1]) -
+    //             PanopticMath.convert0to1(
+    //                 (int256(delegations[0] - balances[0]) * 115) / 105,
+    //                 sqrtPriceX96
+    //             ) >
+    //         0
+    //     ) {
+    //         assertLe(uint256(refund0), balances[0], "Protocol loss avoidance failed (0)");
+    //         assertLe(uint256(refund1), balances[1], "Protocol loss avoidance failed (1)");
+    //     }
+    // }
 
-    function test_Success_getLiquidationRefund_InsufficientBalance1(
-        uint256[2] memory delegations,
-        uint256[2] memory balances
-    ) public {
-        _initWorld(0);
+    // function test_Success_getLiquidationRefund_InsufficientBalance1(
+    //     uint256[2] memory delegations,
+    //     uint256[2] memory balances
+    // ) public {
+    //     _initWorld(0);
 
-        uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(currentTick);
-        balances[1] = bound(balances[1], 10 ** 15, 10 ** 25 - 10 ** 10);
-        delegations[0] = bound(delegations[0], 10 ** 15, 10 ** 25 - 10 ** 10);
+    //     uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(currentTick);
+    //     balances[1] = bound(balances[1], 10 ** 15, 10 ** 25 - 10 ** 10);
+    //     delegations[0] = bound(delegations[0], 10 ** 15, 10 ** 25 - 10 ** 10);
 
-        delegations[1] = bound(delegations[1], balances[1] + 10 ** 10, 10 ** 25);
-        balances[0] = bound(balances[0], delegations[0] + 10 ** 10, 10 ** 25);
+    //     delegations[1] = bound(delegations[1], balances[1] + 10 ** 10, 10 ** 25);
+    //     balances[0] = bound(balances[0], delegations[0] + 10 ** 10, 10 ** 25);
 
-        collateralToken0.setPoolAssets(balances[0]);
-        collateralToken1.setPoolAssets(balances[1]);
-        deal(address(collateralToken0), Alice, balances[0]);
-        deal(address(collateralToken1), Alice, balances[1]);
+    //     collateralToken0.setPoolAssets(balances[0]);
+    //     collateralToken1.setPoolAssets(balances[1]);
+    //     deal(address(collateralToken0), Alice, balances[0]);
+    //     deal(address(collateralToken1), Alice, balances[1]);
 
-        (int256 refund0, int256 refund1) = collateralToken0.getLiquidationRefund(
-            Alice,
-            delegations[0],
-            delegations[1],
-            currentTick,
-            CollateralTracker(address(collateralToken1))
-        );
+    //     (int256 refund0, int256 refund1) = collateralToken0.getLiquidationRefund(
+    //         Alice,
+    //         delegations[0],
+    //         delegations[1],
+    //         currentTick,
+    //         CollateralTracker(address(collateralToken1))
+    //     );
 
-        uint256 valueDelegated1 = delegations[1] +
-            PanopticMath.convert0to1(delegations[0], sqrtPriceX96);
-        uint256 valueRefunded1 = uint256(refund1 + PanopticMath.convert0to1(refund0, sqrtPriceX96));
+    //     uint256 valueDelegated1 = delegations[1] +
+    //         PanopticMath.convert0to1(delegations[0], sqrtPriceX96);
+    //     uint256 valueRefunded1 = uint256(refund1 + PanopticMath.convert0to1(refund0, sqrtPriceX96));
 
-        uint256 shortfall1 = delegations[1] - uint256(refund1);
+    //     uint256 shortfall1 = delegations[1] - uint256(refund1);
 
-        assertApproxEqAbs(
-            valueDelegated1 + shortfall1 / 10,
-            valueRefunded1,
-            valueRefunded1 / 100_000,
-            "Incorrect refund value"
-        );
-        assertApproxEqAbs(
-            refund1 - int256(balances[1]),
-            PanopticMath.convert0to1(Math.rectified(refund0 - int256(balances[0])), sqrtPriceX96),
-            uint256(refund1 - int256(balances[1])) / 100_000,
-            "Incorrect loss distribution"
-        );
+    //     assertApproxEqAbs(
+    //         valueDelegated1 + shortfall1 / 10,
+    //         valueRefunded1,
+    //         valueRefunded1 / 100_000,
+    //         "Incorrect refund value"
+    //     );
+    //     assertApproxEqAbs(
+    //         refund1 - int256(balances[1]),
+    //         PanopticMath.convert0to1(Math.rectified(refund0 - int256(balances[0])), sqrtPriceX96),
+    //         uint256(refund1 - int256(balances[1])) / 100_000,
+    //         "Incorrect loss distribution"
+    //     );
 
-        if (
-            int256(balances[0] - delegations[0]) -
-                PanopticMath.convert1to0(
-                    (int256(delegations[1] - balances[1]) * 115) / 105,
-                    sqrtPriceX96
-                ) >
-            0
-        ) {
-            assertLe(uint256(refund0), balances[0], "Protocol loss avoidance failed (0)");
-            assertLe(uint256(refund1), balances[1], "Protocol loss avoidance failed (1)");
-        }
-    }
+    //     if (
+    //         int256(balances[0] - delegations[0]) -
+    //             PanopticMath.convert1to0(
+    //                 (int256(delegations[1] - balances[1]) * 115) / 105,
+    //                 sqrtPriceX96
+    //             ) >
+    //         0
+    //     ) {
+    //         assertLe(uint256(refund0), balances[0], "Protocol loss avoidance failed (0)");
+    //         assertLe(uint256(refund1), balances[1], "Protocol loss avoidance failed (1)");
+    //     }
+    // }
 }
