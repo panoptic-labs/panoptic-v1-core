@@ -1301,7 +1301,7 @@ contract PanopticPoolTest is PositionUtils {
         int256 assetDelta = (shareDelta > 0 ? int8(1) : -1) *
             int256(ct.convertToAssets(uint256(Math.abs(shareDelta))));
 
-        console.log("BE", ct.convertToAssets(10_000));
+        console2.log("BE", ct.convertToAssets(10_000));
         vm.store(
             address(ct),
             bytes32(uint256(8)),
@@ -1314,7 +1314,7 @@ contract PanopticPoolTest is PositionUtils {
         );
 
         deal(address(ct), owner, newShares);
-        console.log("AE", ct.convertToAssets(10_000));
+        console2.log("AE", ct.convertToAssets(10_000));
     }
 
     /*//////////////////////////////////////////////////////////////
