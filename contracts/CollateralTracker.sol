@@ -1381,7 +1381,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             );
 
             // add premium to be paid/collected on position close
-            int256 tokenToPay = -currentPositionPremium;
+            int256 tokenToPay = -realizedPremium;
 
             // if burning ITM and swap occurred, compute tokens to be paid through exercise and add swap fees
             int256 intrinsicValue = swappedAmount - (longAmount - shortAmount);
