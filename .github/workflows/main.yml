@@ -25,7 +25,7 @@ jobs:
         env:
           FOUNDRY_PROFILE: ci_test
         run: |
-          forge test --fork-url http://localhost:8545 -vvv --fuzz-runs 1000 --match-test test_Fail_liquidate
+          forge test --fork-url http://localhost:8545 -vvv --fuzz-runs 10000 --match-test test_Fail_liquidate
         id: forge-test
 
   contract_sizes:
