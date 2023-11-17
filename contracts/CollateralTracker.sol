@@ -20,7 +20,6 @@ import {TickStateCallContext} from "@types/TickStateCallContext.sol";
 import {LeftRight} from "@types/LeftRight.sol";
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 import {TokenId} from "@types/TokenId.sol";
-import "forge-std/Test.sol";
 
 /// @title Collateral Tracking System / Margin Accounting used in conjunction with a Panoptic Pool.
 /// @author Axicon Labs Limited
@@ -1374,12 +1373,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             }
         }
 
-        // get the user's shares balance (amount of collateral);
+        // get the user's shares balance (amount of collateral)
         uint256 collateralAmount = balanceOf[user];
-        console2.log("CONVERTING...");
-        console2.log("collateralAmount", collateralAmount);
-        console2.log("totalAssets", totalAssets());
-        console2.log("totalSupply", totalSupply);
         // store assetBalance and tokens required in tokenData variable
         tokenData = tokenData.toRightSlot(uint128(convertToAssets(collateralAmount))).toLeftSlot(
             tokenRequired.toUint128()
