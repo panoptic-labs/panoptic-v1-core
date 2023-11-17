@@ -1369,7 +1369,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             }
         }
 
-        // get the user's shares balance (amount of collateral);
+        // get the user's shares balance (amount of collateral)
         uint256 collateralAmount = balanceOf[user];
 
         // store assetBalance and tokens required in tokenData variable
