@@ -1313,7 +1313,7 @@ contract PanopticPoolTest is PositionUtils {
             uint256(int256(IERC20Partial(ct.asset()).balanceOf(address(ct))) + assetDelta)
         );
 
-        deal(address(ct), owner, newShares);
+        deal(address(ct), owner, newShares, true);
         console2.log("AE", ct.convertToAssets(10_000));
     }
 
