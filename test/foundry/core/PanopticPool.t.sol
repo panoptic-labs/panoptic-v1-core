@@ -5445,7 +5445,9 @@ contract PanopticPoolTest is PositionUtils {
             // make sure there are no conflicts
             for (uint256 j = 0; j < i; ++j) {
                 vm.assume(
-                    widths[i] != widths[j] || strikes[i] != strikes[j] || isLongs[i] != isLongs[j]
+                    widths[i] != widths[j] ||
+                        strikes[i] != strikes[j] ||
+                        tokenTypes[i] != tokenTypes[j]
                 );
             }
         }
