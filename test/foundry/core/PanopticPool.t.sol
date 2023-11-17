@@ -5437,6 +5437,13 @@ contract PanopticPoolTest is PositionUtils {
                 // distancing tickSpacing ensures this position stays OTM throughout this test case. ITM is tested elsewhere.
                 currentTick
             );
+
+            // make sure there are no conflicts
+            for (uint256 j = 0; j < i; ++j) {
+                vm.assume(
+                    widths[i] != widths[j] || strikes[i] != strikes[j] || isLongs[i] != isLongs[j]
+                );
+            }
         }
         if (numLegs == 1) populatePositionData(widths[0], strikes[0], positionSizeSeed);
         if (numLegs == 2)
