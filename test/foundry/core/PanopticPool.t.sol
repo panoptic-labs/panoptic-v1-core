@@ -5397,7 +5397,7 @@ contract PanopticPoolTest is PositionUtils {
                 int256(Constants.MAX_V3POOL_TICK) - int256(currentTick)
             )
         );
-        vm.assume(Math.abs(tickDelta) > 513);
+        vm.assume(Math.abs((int256(currentTick) + tickDelta) - pp.getUniV3TWAP_()) > 513);
         vm.store(
             address(pool),
             bytes32(0),
