@@ -5504,7 +5504,7 @@ contract PanopticPoolTest is PositionUtils {
                 )
             );
 
-            pp.mintOptions($posIdLists[1], positionSize, 0, 0, 0);
+            pp.mintOptions($posIdLists[1], positionSize, type(uint64).max, 0, 0);
         }
 
         twoWaySwap(swapSizeSeed);
