@@ -954,7 +954,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         unchecked {
             // compute bonus as min(collateralBalance/2, required-collateralBalance)
             uint256 diffCross = thresholdCross - balanceCross;
-            uint256 bonusCross = diffCross < balanceCross ? diffCross : balanceCross;
+            uint256 bonusCross = diffCross < balanceCross / 2 ? diffCross : balanceCross / 2;
 
             // convert that bonus to tokens 0 and 1
             int256 premia0 = int256(premia.rightSlot());
@@ -989,9 +989,9 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int24 tickLimitLow,
         int24 tickLimitHigh,
         uint256[] calldata positionIdList
-    ) internal returns (int256 premia) {
+    ) internal returns (int256 netExchanged) {
         for (uint256 i = 0; i < positionIdList.length; ) {
-            premia = premia.add(
+            netExchanged = netExchanged.add(
                 _burnOptions(positionIdList[i], owner, tickLimitLow, tickLimitHigh)
             );
             unchecked {
@@ -1010,7 +1010,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal returns (int256 premiaOwed) {
+    ) internal returns (int256 exchangedAmounts) {
         // Ensure that the current price is within the tick limits
         int24 currentTick;
         (currentTick, , tickLimitLow, tickLimitHigh) = _getPriceAndCheckSlippageViolation(
@@ -1021,7 +1021,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
         uint128 positionSize = s_positionBalance[owner][tokenId].rightSlot();
 
         // burn position and do exercise checks
-        premiaOwed = _burnAndHandleExercise(
+        int256 premiaOwed;
+        (premiaOwed, exchangedAmounts) = _burnAndHandleExercise(
             tokenId,
             positionSize,
             owner,
@@ -1071,7 +1072,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal returns (int256 currentPositionPremia) {
+    ) internal returns (int256 currentPositionPremia, int256 exchangedAmounts) {
         // burn the option in sfpm, switch order of tickLimits to create "swapAtMint" flag
         (, int256 totalSwapped, int24 newTick) = sfpm.burnTokenizedPosition(
             tokenId,
@@ -1099,20 +1100,29 @@ contract PanopticPool is ERC1155Holder, Multicall {
             s_tickSpacing
         );
 
-        s_collateralToken0.exercise(
-            owner,
-            longAmounts.rightSlot(),
-            shortAmounts.rightSlot(),
-            totalSwapped.rightSlot(),
-            currentPositionPremia.rightSlot()
+        // exercise the option and take the commission and addData
+        exchangedAmounts = exchangedAmounts.toRightSlot(
+            s_collateralToken0
+                .exercise(
+                    owner,
+                    longAmounts.rightSlot(),
+                    shortAmounts.rightSlot(),
+                    totalSwapped.rightSlot(),
+                    currentPositionPremia.rightSlot()
+                )
+                .toInt128()
         );
 
-        s_collateralToken1.exercise(
-            owner,
-            longAmounts.leftSlot(),
-            shortAmounts.leftSlot(),
-            totalSwapped.leftSlot(),
-            currentPositionPremia.leftSlot()
+        exchangedAmounts = exchangedAmounts.toLeftSlot(
+            s_collateralToken1
+                .exercise(
+                    owner,
+                    longAmounts.leftSlot(),
+                    shortAmounts.leftSlot(),
+                    totalSwapped.leftSlot(),
+                    currentPositionPremia.leftSlot()
+                )
+                .toInt128()
         );
     }
 
@@ -1347,7 +1357,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         s_collateralToken1.delegate(msg.sender, liquidatee, delegation1);
 
         // burn all options from the liquidatee
-        int256 premia = _burnAllOptionsFrom(
+        int256 netExchanged = _burnAllOptionsFrom(
             liquidatee,
             Constants.MIN_V3POOL_TICK,
             Constants.MAX_V3POOL_TICK,
@@ -1359,7 +1369,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
             tokenData0,
             tokenData1,
             Math.getSqrtRatioAtTick(twapTick),
-            premia
+            netExchanged
         );
 
         // revoke the delegated amount plus the bonus amount.
