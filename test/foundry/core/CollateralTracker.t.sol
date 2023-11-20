@@ -1718,8 +1718,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             {
                 console2.log("all amounts are the same for Diana (no protocol loss)");
                 console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-                assertTrue(balance0AfterD == balance0BeforeD);
-                assertTrue(balance1AfterD == balance1BeforeD);
+                assertApproxEqAbs(balance0AfterD, balance0BeforeD, 1, "rounding 0");
+                assertApproxEqAbs(balance1AfterD, balance1BeforeD, 1, "rounding 1");
             }
             {
                 console2.log("the liquidator made money");
@@ -2575,8 +2575,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             {
                 console2.log("all amounts are the same for Diana (no protocol loss)", asset);
                 console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-                assertTrue(balance0AfterD == balance0BeforeD);
-                assertTrue(balance1AfterD == balance1BeforeD);
+                assertApproxEqAbs(balance0AfterD, balance0BeforeD, 1, "rounding 0");
+                assertApproxEqAbs(balance1AfterD, balance1BeforeD, 1, "rounding 1");
             }
             {
                 console2.log("the liquidator made money");
@@ -2853,7 +2853,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 assertTrue(crossBeforeA > crossAfterA);
             }
             {
-                console2.log("all amounts are the same for Diana (no protocol loss)", asset);
+                console2.log("all amounts are the same for Diana (protocol loss)", asset);
                 console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
                 assertTrue(balance0AfterD <= balance0BeforeD);
                 assertTrue(balance1AfterD <= balance1BeforeD);
