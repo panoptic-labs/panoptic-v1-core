@@ -1380,11 +1380,12 @@ contract PanopticPool is ERC1155Holder, Multicall {
             positionIdList
         );
 
-        // compute bonus amounts
+        // compute bonus amounts using latest tick data
+        (, int24 finalTick, , , , , ) = s_univ3pool.slot0();
         (int256 liquidationBonus0, int256 liquidationBonus1) = _getBonusSplit(
             tokenData0,
             tokenData1,
-            Math.getSqrtRatioAtTick(twapTick),
+            Math.getSqrtRatioAtTick(finalTick),
             netExchanged
         );
 
