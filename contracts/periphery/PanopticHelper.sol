@@ -2,7 +2,6 @@
 pragma solidity =0.8.18;
 
 // Interfaces
-import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 // Libraries
@@ -16,7 +15,7 @@ import {TokenId} from "@types/TokenId.sol";
 contract PanopticHelper {
     using TokenId for uint256;
 
-    SemiFungiblePositionManager immutable SFPM;
+    SemiFungiblePositionManager internal immutable SFPM;
 
     struct Leg {
         uint64 poolId;
@@ -368,19 +367,10 @@ contract PanopticHelper {
         // 2. a put with an identical strike price
 
         // call
-        tokenId = addCallLeg(tokenId, start, optionRatio, asset, isLong, start, strike, width);
+        tokenId = addCallLeg(tokenId, start, optionRatio, asset, isLong, start + 1, strike, width);
 
         // put
-        tokenId = addPutLeg(
-            tokenId,
-            start + 1,
-            optionRatio,
-            asset,
-            isLong,
-            start + 1,
-            strike,
-            width
-        );
+        tokenId = addPutLeg(tokenId, start + 1, optionRatio, asset, isLong, start, strike, width);
     }
 
     /// @notice creates a call spread with 1 long leg and 1 short leg.
@@ -688,7 +678,7 @@ contract PanopticHelper {
         // 2. a long call
 
         // short strangle
-        tokenId = createStrangle(univ3pool, width, shortCallStrike, shortPutStrike, 0, asset, 1, 1);
+        tokenId = createStrangle(univ3pool, width, shortCallStrike, shortPutStrike, asset, 0, 1, 1);
 
         // long call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 1, 0, longCallStrike, width);
@@ -714,7 +704,7 @@ contract PanopticHelper {
         // 2. a long call
 
         // short straddle
-        tokenId = createStraddle(univ3pool, width, straddleStrike, 0, asset, 1, 1);
+        tokenId = createStraddle(univ3pool, width, straddleStrike, asset, 0, 1, 1);
 
         // long call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 1, 0, longCallStrike, width);
