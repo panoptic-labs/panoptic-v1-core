@@ -389,10 +389,19 @@ library TokenId {
             int24 minTick = (Constants.MIN_V3POOL_TICK / tickSpacing) * tickSpacing;
             int24 maxTick = (Constants.MAX_V3POOL_TICK / tickSpacing) * tickSpacing;
 
-            // The width is from lower to upper tick, the one-sided range is from strike to upper/lower
-            int24 oneSidedRange = (selfWidth * tickSpacing) / 2;
+            /// The width is from lower to upper tick, the one-sided range is from strike to upper/lower
+            /// if (width * tickSpacing) is:
+            ///     even: tick range -> (strike - range, strike + range)
+            ///     odd: tick range ->  (strike - range rounded down, strike + range rounded up)
+            (int24 oneSidedRangeLower, int24 oneSidedRangeUpper) = PanopticMath.mulDivAsTicks(
+                selfWidth,
+                tickSpacing
+            );
 
-            (legLowerTick, legUpperTick) = (selfStrike - oneSidedRange, selfStrike + oneSidedRange);
+            (legLowerTick, legUpperTick) = (
+                selfStrike - oneSidedRangeLower,
+                selfStrike + oneSidedRangeUpper
+            );
 
             // Revert if the upper/lower ticks are not multiples of tickSpacing
             // Revert if the tick range extends from the strike outside of the valid tick range
