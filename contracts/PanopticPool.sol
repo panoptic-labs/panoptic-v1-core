@@ -939,14 +939,14 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param tokenData0 Leftright encoded word with balance of token0 in the right slot, and required balance in left slot.
     /// @param tokenData1 Leftright encoded word with balance of token1 in the right slot, and required balance in left slot.
     /// @param sqrtPriceX96 The current sqrt(price) of the AMM.
-    /// @param premia The accumulated premia for that position
+    /// @param netExchanged The net exchanged value of the closed portfolio
     /// @return bonus0 bonus amount for token0
     /// @return bonus1 bonus amount for token1
     function _getBonusSplit(
         uint256 tokenData0,
         uint256 tokenData1,
         uint160 sqrtPriceX96,
-        int256 premia
+        int256 netExchanged
     ) internal pure returns (int256 bonus0, int256 bonus1) {
         (uint256 balanceCross, uint256 thresholdCross, uint256 requiredRatioX128) = PanopticMath
             .convertCollateralData(tokenData0, tokenData1, 0, sqrtPriceX96);
@@ -956,22 +956,38 @@ contract PanopticPool is ERC1155Holder, Multicall {
             uint256 diffCross = thresholdCross - balanceCross;
             uint256 bonusCross = diffCross < balanceCross / 2 ? diffCross : balanceCross / 2;
 
-            // convert that bonus to tokens 0 and 1
-            int256 premia0 = int256(premia.rightSlot());
-            int256 premia1 = int256(premia.leftSlot());
-            bonus0 =
-                int256(Math.mulDiv128(bonusCross, requiredRatioX128)) +
-                (premia0 > 0 ? premia0 : int256(0));
-            bonus1 =
-                int256(
-                    PanopticMath.convert0to1(
-                        Math.mulDiv128(bonusCross, 2 ** 128 - requiredRatioX128),
-                        sqrtPriceX96
-                    )
-                ) +
-                (premia1 > 0 ? premia1 : int256(0));
+            {
+                int256 exchanged0 = int256(netExchanged.rightSlot());
+                int256 exchanged1 = int256(netExchanged.leftSlot());
 
-            return (bonus0, bonus1);
+                // convert that bonus to tokens 0 and 1
+                bonus0 =
+                    int256(Math.mulDiv128(bonusCross, requiredRatioX128)) +
+                    PanopticMath.convert1to0(exchanged1, sqrtPriceX96) -
+                    exchanged0;
+
+                bonus1 =
+                    int256(
+                        PanopticMath.convert0to1(
+                            Math.mulDiv128(bonusCross, 2 ** 128 - requiredRatioX128),
+                            sqrtPriceX96
+                        )
+                    ) +
+                    PanopticMath.convert0to1(exchanged0, sqrtPriceX96) -
+                    exchanged1;
+            }
+            {
+                int256 balance0 = int256(uint256(tokenData0.rightSlot()));
+                int256 balance1 = int256(uint256(tokenData1.rightSlot()));
+
+                if ((bonus0 > balance0) && (bonus1 < balance1)) {
+                    bonus1 += PanopticMath.convert0to1(bonus0 - balance0, sqrtPriceX96);
+                    bonus0 = balance0;
+                } else if ((bonus1 > balance1) && (bonus0 < balance0)) {
+                    bonus0 += PanopticMath.convert1to0(bonus1 - balance1, sqrtPriceX96);
+                    bonus1 = balance1;
+                }
+            }
         }
     }
 

@@ -1220,7 +1220,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             }
 
             // get collateral of the user (optionOwner) for the current position.
-            tokenData = getAccountMarginDetails(
+            tokenData = _getAccountMargin(
                 environmentContext.caller(),
                 environmentContext.currentTick(),
                 positionBalanceArray,
@@ -1229,7 +1229,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             // multiply the current collateral requirement with the Maintenance margin ratio to prevent minting too close to liquidations
             tokenData = tokenData.toLeftSlot(
-                // no need to use safecast as initial requirement will never be more that (2 ** 128) - 1
+                // no need to use safecast as initial requirement will never be more than (2 ** 128) - 1
                 // calculation gives us the needed buffer to add onto the initial requirement
                 uint128((tokenData.leftSlot() * (s_maintenanceMarginRatio - DECIMALS)) / DECIMALS)
             );
@@ -1358,24 +1358,26 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         if (positionBalanceArray.length > 0) {
             // get all collateral required for the incoming list of positions
             tokenRequired = _getTotalRequiredCollateral(atTick, positionBalanceArray);
-
-            // If premium is negative, increase the short premium requirement by the maintenance margin ratio
-            if (premiumAllPositions < 0) {
-                unchecked {
-                    tokenRequired +=
-                        (s_maintenanceMarginRatio * uint128(-premiumAllPositions)) /
-                        DECIMALS;
-                }
-            }
         }
 
         // get the user's shares balance (amount of collateral);
-        uint256 collateralAmount = balanceOf[user];
+        int256 collateralAmount = int256(convertToAssets(balanceOf[user]));
+
+        // add/subtract the accumulated premia to the collateral amount
+        uint128 netBalance;
+        unchecked {
+            int256 net = collateralAmount + premiumAllPositions;
+            if (net < 0) {
+                netBalance = 0;
+            } else if (net > type(int128).max) {
+                netBalance = uint128(type(int128).max);
+            } else {
+                netBalance = uint128(uint256(net));
+            }
+        }
 
         // store assetBalance and tokens required in tokenData variable
-        tokenData = tokenData.toRightSlot(uint128(convertToAssets(collateralAmount))).toLeftSlot(
-            tokenRequired.toUint128()
-        );
+        tokenData = tokenData.toRightSlot(netBalance).toLeftSlot(tokenRequired.toUint128());
         return tokenData;
     }
 
