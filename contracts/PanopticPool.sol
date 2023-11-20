@@ -948,7 +948,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         uint160 sqrtPriceX96,
         int256 premia
     ) internal pure returns (int256 bonus0, int256 bonus1) {
-        (uint256 balanceCross, uint256 thresholdCross, uint256 balanceRatioX128) = PanopticMath
+        (uint256 balanceCross, uint256 thresholdCross, uint256 requiredRatioX128) = PanopticMath
             .convertCollateralData(tokenData0, tokenData1, 0, sqrtPriceX96);
 
         unchecked {
@@ -960,12 +960,12 @@ contract PanopticPool is ERC1155Holder, Multicall {
             int256 premia0 = int256(premia.rightSlot());
             int256 premia1 = int256(premia.leftSlot());
             bonus0 =
-                int256(Math.mulDiv128(bonusCross, balanceRatioX128)) +
+                int256(Math.mulDiv128(bonusCross, requiredRatioX128)) +
                 (premia0 > 0 ? premia0 : int256(0));
             bonus1 =
                 int256(
                     PanopticMath.convert0to1(
-                        Math.mulDiv128(bonusCross, 2 ** 128 - balanceRatioX128),
+                        Math.mulDiv128(bonusCross, 2 ** 128 - requiredRatioX128),
                         sqrtPriceX96
                     )
                 ) +
