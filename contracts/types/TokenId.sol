@@ -282,7 +282,7 @@ library TokenId {
         int24 _width,
         uint256 legIndex
     ) internal pure returns (uint256) {
-        // % 4096 -> take 12 bits from the incoming 16 bits (there's no uint12)
+        // % 4096 -> take 12 bits from the incoming 24 bits (there's no uint12)
         unchecked {
             return self + (uint256(uint24(_width) % 4096) << (64 + legIndex * 48 + 36));
         }

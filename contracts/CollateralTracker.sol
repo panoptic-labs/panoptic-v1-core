@@ -825,7 +825,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// - 10% if the position is liquidated when the price is between 950 and 1000, or if it is between 1050 and 1100
     /// - 5% if the price is between 900 and 950 or (1100, 1150)
     /// - 2.5% if between (850, 900) or (1150, 1200)
-    /// @param account Address of the exercised account.
     /// @param currentTick The current price tick.
     /// @param medianTick The median price tick.
     /// @param positionId The position to be exercised
@@ -833,7 +832,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param longAmounts The amount of longs in the position.
     /// @return exerciseFees The fees for exercising the option position.
     function exerciseCost(
-        address account,
         int24 currentTick,
         int24 medianTick,
         uint256 positionId,

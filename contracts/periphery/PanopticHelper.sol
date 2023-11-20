@@ -2,7 +2,6 @@
 pragma solidity =0.8.18;
 
 // Interfaces
-import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 // Libraries
@@ -16,7 +15,7 @@ import {TokenId} from "@types/TokenId.sol";
 contract PanopticHelper {
     using TokenId for uint256;
 
-    SemiFungiblePositionManager immutable SFPM;
+    SemiFungiblePositionManager internal immutable SFPM;
 
     struct Leg {
         uint64 poolId;

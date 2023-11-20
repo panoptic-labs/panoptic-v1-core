@@ -3,7 +3,6 @@ pragma solidity =0.8.18;
 
 // Interfaces
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
-import {IERC20Partial} from "@tokens/interfaces/IERC20Partial.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 import {IUniswapV3Factory} from "univ3-core/interfaces/IUniswapV3Factory.sol";
