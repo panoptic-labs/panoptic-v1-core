@@ -2642,9 +2642,15 @@ contract CollateralTrackerTest is Test, PositionUtils {
             (tokenType, asset) = (seed >> 25) % 2 == 0 ? (1, 1) : (0, 0);
 
             strike = asset == 1
-                ? ((currentTick - 2500) / tickSpacing) * tickSpacing - 2 * tickSpacing
-                : ((currentTick + 2500) / tickSpacing) * tickSpacing - 2 * tickSpacing;
-            width = 4; //(int24((uint24(seed >> 24) % 16) + 2) / 2) * 2;
+                ? ((currentTick - int24(uint24(seed) % 5000)) / tickSpacing) *
+                    tickSpacing -
+                    2 *
+                    tickSpacing
+                : ((currentTick + int24(uint24(seed) % 5000)) / tickSpacing) *
+                    tickSpacing +
+                    2 *
+                    tickSpacing;
+            width = (int24((uint24(seed >> 24) % 16) + 2) / 2) * 2;
 
             console2.log("strike", strike);
             tokenId = uint256(0).addUniv3pool(poolId).addLeg(
@@ -2663,8 +2669,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             //(legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
 
             positionSize0 = asset == 1
-                ? uint128(bound(seed, 1 ether, 1 ether))
-                : uint128(bound(seed, 10 ** 8, 10 ** 8));
+                ? uint128(bound(seed, 0.1 ether, 10 ether))
+                : uint128(bound(seed, 10 ** 10, 10 ** 10));
 
             panopticPool.mintOptions(positionIdList, uint128(positionSize0), 0, 0, 0);
             (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
@@ -2852,13 +2858,14 @@ contract CollateralTrackerTest is Test, PositionUtils {
             {
                 console2.log("the liquidator made money");
                 console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
+                uint160 _sP = sqrtPriceX96;
                 uint256 crossBeforeC = (balance1BeforeC << 96) /
-                    sqrtPriceX96 +
-                    (balance0BeforeC * sqrtPriceX96) /
+                    _sP +
+                    (balance0BeforeC * _sP) /
                     2 ** 96;
                 uint256 crossAfterC = (balance1AfterC << 96) /
-                    sqrtPriceX96 +
-                    (balance0AfterC * sqrtPriceX96) /
+                    _sP +
+                    (balance0AfterC * _sP) /
                     2 ** 96;
                 console2.log(crossBeforeC, crossAfterC);
                 assertTrue(crossBeforeC < crossAfterC);
