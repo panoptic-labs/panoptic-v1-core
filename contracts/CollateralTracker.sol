@@ -1358,26 +1358,30 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         if (positionBalanceArray.length > 0) {
             // get all collateral required for the incoming list of positions
             tokenRequired = _getTotalRequiredCollateral(atTick, positionBalanceArray);
+
+            if (premiumAllPositions < 0) {
+                unchecked {
+                    uint128 longPremium = uint128(-premiumAllPositions);
+                    tokenRequired += longPremium;
+                }
+            }
         }
 
         // get the user's shares balance (amount of collateral);
-        int256 collateralAmount = int256(convertToAssets(balanceOf[user]));
+        uint256 collateralAmount = convertToAssets(balanceOf[user]);
 
         // add/subtract the accumulated premia to the collateral amount
-        uint128 netBalance;
-        unchecked {
-            int256 net = collateralAmount + premiumAllPositions;
-            if (net < 0) {
-                netBalance = 0;
-            } else if (net > type(int128).max) {
-                netBalance = uint128(type(int128).max);
-            } else {
-                netBalance = uint128(uint256(net));
+        uint256 netBalance;
+        if (premiumAllPositions > 0) {
+            unchecked {
+                netBalance = collateralAmount + uint256(uint128(premiumAllPositions));
             }
         }
 
         // store assetBalance and tokens required in tokenData variable
-        tokenData = tokenData.toRightSlot(netBalance).toLeftSlot(tokenRequired.toUint128());
+        tokenData = tokenData.toRightSlot(netBalance.toUint128()).toLeftSlot(
+            tokenRequired.toUint128()
+        );
         return tokenData;
     }
 
