@@ -1650,6 +1650,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
             // approve collateral tracker to move tokens on Bob's behalf
             IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
             IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(1e12, Charlie);
+            collateralToken1.deposit(1e21, Charlie);
         }
 
         {
@@ -1674,7 +1677,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             vm.warp(block.timestamp + 1000000);
 
-            panopticPool.liquidate(Alice, positionIdList, 0, 0);
+            panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
