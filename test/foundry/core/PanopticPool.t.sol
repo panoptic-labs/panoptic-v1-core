@@ -216,6 +216,9 @@ contract PanopticPoolTest is PositionUtils {
     int256 $ITMSpread0;
     int256 $ITMSpread1;
 
+    int256 $longAmounts;
+    int256 $shortAmounts;
+
     int256 $balanceDelta0;
     int256 $balanceDelta1;
 
@@ -5270,6 +5273,148 @@ contract PanopticPoolTest is PositionUtils {
             ) + 10,
             "netliq should be the same"
         );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                           LIQUIDATION TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_success_liquidate(
+        uint256 x,
+        uint256 numLegs,
+        uint256[4] memory isLongs,
+        uint256[4] memory tokenTypes,
+        uint256[4] memory widthSeeds,
+        int256[4] memory strikeSeeds,
+        uint256 positionSizeSeed,
+        uint256 swapSizeSeed,
+        uint256 collateralBalanceSeed,
+        uint256 collateralRatioSeed
+    ) public {
+        _initPool(x);
+
+        numLegs = bound(numLegs, 1, 4);
+
+        int24[4] memory widths;
+        int24[4] memory strikes;
+
+        for (uint256 i = 0; i < numLegs; ++i) {
+            tokenTypes[i] = bound(tokenTypes[i], 0, 1);
+            isLongs[i] = bound(isLongs[i], 0, 1);
+            (widths[i], strikes[i]) = getValidSW(
+                widthSeeds[i],
+                strikeSeeds[i],
+                uint24(tickSpacing),
+                // distancing tickSpacing ensures this position stays OTM throughout this test case. ITM is tested elsewhere.
+                currentTick
+            );
+
+            // make sure there are no conflicts
+            for (uint256 j = 0; j < i; ++j) {
+                vm.assume(
+                    widths[i] != widths[j] ||
+                        strikes[i] != strikes[j] ||
+                        tokenTypes[i] != tokenTypes[j]
+                );
+            }
+        }
+        if (numLegs == 1) populatePositionData(widths[0], strikes[0], positionSizeSeed);
+        if (numLegs == 2)
+            populatePositionData(
+                [widths[0], widths[1]],
+                [strikes[0], strikes[1]],
+                positionSizeSeed
+            );
+        if (numLegs == 3)
+            populatePositionData(
+                [widths[0], widths[1], widths[2]],
+                [strikes[0], strikes[1], strikes[2]],
+                positionSizeSeed
+            );
+        if (numLegs == 4) populatePositionData(widths, strikes, positionSizeSeed);
+
+        // this is a long option; so need to sell before it can be bought (let's say 2x position size for now)
+        changePrank(Seller);
+
+        for (uint256 i = 0; i < numLegs; ++i) {
+            $posIdLists[0].push(
+                uint256(0).addUniv3pool(poolId).addLeg(
+                    0,
+                    1,
+                    isWETH,
+                    0,
+                    tokenTypes[i],
+                    0,
+                    strikes[i],
+                    widths[i]
+                )
+            );
+            pp.mintOptions($posIdLists[0], positionSize * 2, 0, 0, 0);
+        }
+
+        twoWaySwap(swapSizeSeed);
+
+        // now we can mint the long option we are force exercising
+        changePrank(Alice);
+
+        for (uint256 i = 0; i < numLegs; ++i) {
+            $posIdLists[1].push(
+                uint256(0).addUniv3pool(poolId).addLeg(
+                    0,
+                    1,
+                    isWETH,
+                    isLongs[i],
+                    tokenTypes[i],
+                    0,
+                    strikes[i],
+                    widths[i]
+                )
+            );
+
+            pp.mintOptions($posIdLists[1], positionSize, type(uint64).max, 0, 0);
+        }
+
+        twoWaySwap(swapSizeSeed);
+
+        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+
+        vm.assume(Math.abs(int256(currentTick) - pp.getUniV3TWAP_()) <= 513);
+
+        (, uint256 totalCollateralRequired0) = ph.checkCollateral(
+            pp,
+            Alice,
+            pp.getUniV3TWAP_(),
+            0,
+            $posIdLists[1]
+        );
+
+        uint256 totalCollateralB0 = bound(
+            collateralBalanceSeed,
+            1,
+            (totalCollateralRequired0 * 9_999) / 10_000
+        );
+
+        editCollateral(
+            ct0,
+            Alice,
+            ct0.convertToShares(
+                (totalCollateralB0 * bound(collateralRatioSeed, 0, 10_000)) / 10_000
+            )
+        );
+        editCollateral(
+            ct1,
+            Alice,
+            ct1.convertToShares(
+                PanopticMath.convert0to1(
+                    (totalCollateralB0 * (10_000 - bound(collateralRatioSeed, 0, 10_000))) / 10_000,
+                    Math.getSqrtRatioAtTick(pp.getUniV3TWAP_())
+                )
+            )
+        );
+
+        changePrank(Bob);
+
+        pp.liquidate(Alice, $posIdLists[1], type(uint96).max, type(uint96).max);
     }
 
     function test_Fail_liquidate_validatePositionList(
