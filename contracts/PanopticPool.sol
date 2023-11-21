@@ -684,6 +684,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @return poolUtilizations Packing of the pool utilization (how much funds are in the Panoptic pool versus the AMM pool at the time of minting),
     /// right 64bits for token0 and left 64bits for token1, defined as (inAMM * 10_000) / totalAssets().
     /// Where totalAssets is the total tracked assets in the AMM and PanopticPool minus fees and donations to the Panoptic pool.
+    /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function _payCommissionAndWriteData(
         uint256 tickStateCallContext,
         uint256 oldTokenId,
@@ -752,6 +753,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param portfolioPremium Value of the long premia owed for all position in positionIdList.
     /// @param totalSwapped Amount of tokens that were swapped during minting/rolling. Only happens when minting ITM positions.
     /// @param oldPositionPremia Premia accumulated for the position that was closed during a roll.
+    /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function takeCommission(
         uint256[2][] memory positionBalanceArray,
         uint256 tickStateCallContext,

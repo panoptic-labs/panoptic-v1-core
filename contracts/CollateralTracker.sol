@@ -1257,6 +1257,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param positionBalanceArray The list of all historical positions held by the 'optionOwner', stored as [[tokenId, balance/poolUtilizationAtMint], ...].
     /// @return utilization The utilization of the Panoptic Pool.
     /// @return tokenData LeftRight encoding with tokenbalance, ie assets, (in the right slot) and amount required in collateral (left slot).
+    /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function takeCommissionAddData(
         uint256 environmentContext,
         int128 longAmount,
@@ -1360,6 +1361,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param shortAmount The amount of shorts to be exercised (if any).
     /// @param swappedAmount The amount of tokens potentially swapped.
     /// @param currentPositionPremium The position premium.
+    /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function exercise(
         address optionOwner,
         int128 longAmount,
