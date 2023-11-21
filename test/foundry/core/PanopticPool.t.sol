@@ -215,9 +215,15 @@ contract PanopticPoolTest is PositionUtils {
     int256 $intrinsicValue1;
     int256 $ITMSpread0;
     int256 $ITMSpread1;
+    uint256[2][] $positionBalanceArray;
+
+    uint256 $accValueBefore0;
 
     int256 $longAmounts;
     int256 $shortAmounts;
+
+    int256 $tokenData0;
+    int256 $tokenData1;
 
     int256 $balanceDelta0;
     int256 $balanceDelta1;
@@ -5411,10 +5417,51 @@ contract PanopticPoolTest is PositionUtils {
                 )
             )
         );
+        TWAPtick = pp.getUniV3TWAP_();
+
+        ($expectedPremia0, $expectedPremia1, $positionBalanceArray) = pp
+            .calculateAccumulatedFeesBatch(Alice, $posIdLists[1]);
+
+        $tokenData0 = int256(
+            ct0.getAccountMarginDetails(Alice, TWAPtick, $positionBalanceArray, $expectedPremia0)
+        );
+
+        $tokenData1 = int256(
+            ct1.getAccountMarginDetails(Alice, TWAPtick, $positionBalanceArray, $expectedPremia1)
+        );
+
+        // simulate burning all options to compare against the liquidation
+        uint256 snapshot = vm.snapshot();
+
+        changePrank(address(pp));
+
+        ct0.delegate(Bob, Alice, type(uint96).max);
+        ct1.delegate(Bob, Alice, type(uint96).max);
+
+        changePrank(Alice);
+        pp.burnOptions($posIdLists[1], 0, 0);
+
+        uint256[2] memory balancesPostBurn = [
+            ct0.convertToAssets(ct0.balanceOf(Alice)),
+            ct1.convertToAssets(ct1.balanceOf(Alice))
+        ];
+
+        vm.revertTo(snapshot);
 
         changePrank(Bob);
 
+        $accValueBefore0 =
+            ct0.convertToAssets(ct0.balanceOf(Bob)) +
+            PanopticMath.convert1to0(ct1.convertToAssets(ct1.balanceOf(Bob)));
+
         pp.liquidate(Alice, $posIdLists[1], type(uint96).max, type(uint96).max);
+
+        vm.assume(
+            (ct0.convertToAssets(ct0.balanceOf(Bob)) +
+                PanopticMath.convert1to0(ct1.convertToAssets(ct1.balanceOf(Bob)))) >
+                $accValueBefore0,
+            "liquidator lost money"
+        );
     }
 
     function test_Fail_liquidate_validatePositionList(
