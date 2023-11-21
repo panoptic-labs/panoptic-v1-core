@@ -5417,7 +5417,9 @@ contract PanopticPoolTest is PositionUtils {
                 )
             )
         );
+
         TWAPtick = pp.getUniV3TWAP_();
+        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
         ($expectedPremia0, $expectedPremia1, $positionBalanceArray) = pp
             .calculateAccumulatedFeesBatch(Alice, $posIdLists[1]);
@@ -5452,14 +5454,20 @@ contract PanopticPoolTest is PositionUtils {
 
         $accValueBefore0 =
             ct0.convertToAssets(ct0.balanceOf(Bob)) +
-            PanopticMath.convert1to0(ct1.convertToAssets(ct1.balanceOf(Bob)));
+            PanopticMath.convert1to0(
+                ct1.convertToAssets(ct1.balanceOf(Bob)),
+                TickMath.getSqrtRatioAtTick(TWAPtick)
+            );
 
         pp.liquidate(Alice, $posIdLists[1], type(uint96).max, type(uint96).max);
 
-        vm.assume(
-            (ct0.convertToAssets(ct0.balanceOf(Bob)) +
-                PanopticMath.convert1to0(ct1.convertToAssets(ct1.balanceOf(Bob)))) >
-                $accValueBefore0,
+        assertGt(
+            ct0.convertToAssets(ct0.balanceOf(Bob)) +
+                PanopticMath.convert1to0(
+                    ct1.convertToAssets(ct1.balanceOf(Bob)),
+                    TickMath.getSqrtRatioAtTick(TWAPtick)
+                ),
+            $accValueBefore0,
             "liquidator lost money"
         );
     }
