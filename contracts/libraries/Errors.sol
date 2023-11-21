@@ -67,6 +67,9 @@ library Errors {
     /// @notice There is not enough liquidity to buy an option
     error NotEnoughLiquidity();
 
+    /// @notice Position is margin called and is therefore still insolvent
+    error MarginCalled();
+
     /// @notice Position is not margin called and is therefore still solvent
     error NotMarginCalled();
 
