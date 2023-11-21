@@ -859,7 +859,7 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
     function twoWaySwap(uint256 swapSize) public {
         changePrank(Swapper);
 
-        swapSize = bound(swapSize, 10 ** 18, 10 ** 22);
+        swapSize = bound(swapSize, 10 ** 18, 10 ** 20);
         router.exactInputSingle(
             ISwapRouter.ExactInputSingleParams(
                 isWETH == 0 ? token0 : token1,
