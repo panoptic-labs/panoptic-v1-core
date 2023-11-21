@@ -22,6 +22,8 @@ library PanopticMath {
     // represents an option position of up to four legs as a sinlge ERC1155 tokenId
     using TokenId for uint256;
 
+    uint256 internal constant MAX_UINT256 = 2 ** 256 - 1;
+
     /*//////////////////////////////////////////////////////////////
                               MATH HELPERS
     //////////////////////////////////////////////////////////////*/

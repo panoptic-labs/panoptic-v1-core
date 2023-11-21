@@ -852,11 +852,22 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
                 int24 strike = positionId.strike(leg);
 
-                int24 range = (positionId.width(leg) * s_tickSpacing) / 2;
-
                 uint256 currNumRangesFromStrike;
 
-                if (_currentTick < (strike - range)) {
+                int24 rangeDown;
+                int24 rangeUp;
+                {
+                    /// The width is from lower to upper tick, the one-sided range is from strike to upper/lower
+                    /// if (width * tickSpacing) is:
+                    ///     even: tick range -> (strike - range, strike + range)
+                    ///     odd: tick range ->  (strike - range rounded down, strike + range rounded up)
+                    /// the perceived one-sided tick range of the leg will be the real value rounded up if (width * tickSpacing) is odd.
+                    /// otherwise rangeUp and rangeDown will be the same
+                    int24 width = positionId.width(leg);
+                    (rangeDown, rangeUp) = PanopticMath.mulDivAsTicks(width, s_tickSpacing);
+                }
+
+                if (currentTick < (strike - rangeDown)) {
                     /**
                          current      strike
                            tick          │
@@ -866,9 +877,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                                 range=width/2
                     */
                     currNumRangesFromStrike = uint256(
-                        (2 * int256(strike - range - _currentTick)) / range
+                        (2 * int256(strike - rangeUp - currentTick)) / rangeUp
                     ); // = (strike - range - _currentTick) / (range / 2); the "range/2" are the "half ranges"
-                } else if (_currentTick > (strike + range)) {
+                } else if (currentTick > (strike + rangeUp)) {
                     /**
                            strike      current
                               │         tick
@@ -878,7 +889,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                             range
                     */
                     currNumRangesFromStrike = uint256(
-                        (2 * int256(_currentTick - strike - range)) / range
+                        (2 * int256(currentTick - strike - rangeUp)) / rangeUp
                     );
                 }
                 maxNumRangesFromStrike = currNumRangesFromStrike > maxNumRangesFromStrike
@@ -1627,17 +1638,24 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             if (isLong == 0) {
                 // if position is short, check whether the position is out-the-money
 
-                int24 oneSidedRange;
+                /// The width is from lower to upper tick, the one-sided range is from strike to upper/lower
+                /// if (width * tickSpacing) is:
+                ///     even: tick range -> (strike - range, strike + range)
+                ///     odd: tick range ->  (strike - range rounded down, strike + range rounded up)
+                /// the perceived one-sided tick range of the leg will be the real value rounded up if (width * tickSpacing) is odd.
+                /// otherwise rangeUp and rangeDown will be the same
+                int24 rangeDown;
+                int24 rangeUp;
                 {
                     uint256 c_tokenId = tokenId;
                     int24 width = c_tokenId.width(index);
-                    oneSidedRange = (width * s_tickSpacing) / 2;
+                    (rangeDown, rangeUp) = PanopticMath.mulDivAsTicks(width, s_tickSpacing);
                 }
                 // compute the collateral requirement as a fixed amount that doesn't depend on price
 
                 if (
-                    ((atTick >= (strike + oneSidedRange)) && (tokenType == 1)) || // strike OTM when price >= upperTick for tokenType=1
-                    ((atTick < (strike - oneSidedRange)) && (tokenType == 0)) // strike OTM when price < lowerTick for tokenType=0
+                    ((atTick >= (strike + rangeUp)) && (tokenType == 1)) || // strike OTM when price >= upperTick for tokenType=1
+                    ((atTick < (strike - rangeDown)) && (tokenType == 0)) // strike OTM when price < lowerTick for tokenType=0
                 ) {
                     // position is out-the-money, collateral requirement = SCR * amountMoved
                     required;
@@ -1664,8 +1682,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
                     /// ITM and out-of-range
                     if (
-                        ((atTick < (strike - oneSidedRange)) && (tokenType == 1)) || // strike ITM but out of range price < lowerTick for tokenType=1
-                        ((atTick >= (strike + oneSidedRange)) && (tokenType == 0)) // strike ITM but out of range when price >= upperTick for tokenType=0
+                        ((atTick < (strike - rangeDown)) && (tokenType == 1)) || // strike ITM but out of range price < lowerTick for tokenType=1
+                        ((atTick >= (strike + rangeUp)) && (tokenType == 0)) // strike ITM but out of range when price >= upperTick for tokenType=0
                     ) {
                         /**
                                     Short put BPR = 100% - (100% - SCR)*(price/strike)
@@ -1696,7 +1714,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                         // the collateral requirement when in-range, which always over-estimates the amount of token required
                         // Specifically:
                         //  required = (1-sellCollateral) * (scaleFactor - ratio) / (scaleFactor + 1) + sellCollateral
-                        uint160 scaleFactor = Math.getSqrtRatioAtTick(2 * oneSidedRange);
+                        uint160 scaleFactor = Math.getSqrtRatioAtTick(2 * rangeUp);
                         uint256 c3 = Math.mulDiv(
                             c2,
                             scaleFactor - ratio,
