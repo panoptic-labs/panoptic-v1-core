@@ -1371,10 +1371,10 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         uint256 collateralAmount = convertToAssets(balanceOf[user]);
 
         // add/subtract the accumulated premia to the collateral amount
-        uint256 netBalance;
+        uint256 netBalance = collateralAmount;
         if (premiumAllPositions > 0) {
             unchecked {
-                netBalance = collateralAmount + uint256(uint128(premiumAllPositions));
+                netBalance += uint256(uint128(premiumAllPositions));
             }
         }
 
