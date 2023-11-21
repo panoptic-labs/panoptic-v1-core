@@ -412,6 +412,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     uint128 positionSize0;
     uint128 positionSize1;
+    uint256[] emptyList;
     uint256[] positionIdList1;
     uint256[] positionIdList;
     uint256 tokenId;
@@ -1677,7 +1678,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             vm.warp(block.timestamp + 1000000);
 
-            panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
+            panopticPool.liquidate(Alice, positionIdList, emptyList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
@@ -1951,7 +1952,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             vm.warp(block.timestamp + 1000000);
 
-            panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
+            panopticPool.liquidate(Alice, positionIdList, emptyList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
@@ -2243,7 +2244,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             vm.warp(block.timestamp + 1000000);
 
-            panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
+            panopticPool.liquidate(Alice, positionIdList, emptyList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
@@ -2534,7 +2535,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             vm.warp(block.timestamp + 1000000);
 
-            panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
+            panopticPool.liquidate(Alice, positionIdList, emptyList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
@@ -2814,7 +2815,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
             vm.warp(block.timestamp + 1000000);
 
-            panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
+            panopticPool.liquidate(Alice, positionIdList, emptyList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
