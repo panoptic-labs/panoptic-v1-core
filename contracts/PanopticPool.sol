@@ -147,6 +147,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @dev Boolean flag to determine wether a position is added (true) or not (!ADD = false)
     bool internal constant ADD = true;
 
+    /// @notice Decimals for computation (1 bps (basis point) precision: 0.01%)
+    /// uint type for composability with unsigned integer based mathematical operations.
+    int256 internal constant DECIMALS = 10_000;
+
     /// @dev The window to calculate the TWAP used for solvency checks
     /// Currently calculated by dividing this value into 20 periods, averaging them together, then taking the median
     /// May be configurable on a pool-by-pool basis in the future, but hardcoded for now
@@ -155,6 +159,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
     // The maximum allowed delta between the currentTick and the Uniswap TWAP tick during a liquidation (~5% down, ~5.26% up)
     // Prevents manipulation of the currentTick to liquidate positions at a less favorable price
     int256 internal constant MAX_TWAP_DELTA_LIQUIDATION = 513;
+
+    // Bonus paid to liquidators on tokens refunded in a different form, denominated in basis points (DECIMALS)
+    // 11000 = 110%
+    int256 internal constant LIQ_CONVERSION_BONUS = 11000;
 
     // The minimum amount of time, in seconds, permitted between mini/median TWAP updates.
     uint256 internal constant MEDIAN_PERIOD = 60;
@@ -991,10 +999,12 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 // if the protocol loss is lower than the excess token1 balance, then we can fully mitigate the loss and we should only convert the loss amount
                 // if the protocol loss is higher than the excess token1 balance, we can only mitigate part of the loss, so we should convert only the excess token1 balance
                 // thus, the value converted should be min(balance1 - paid1, paid0 - balance0)
-                bonus1 += Math.min(
-                    balance1 - paid1,
-                    PanopticMath.convert0to1(paid0 - balance0, sqrtPriceX96)
-                );
+                bonus1 +=
+                    (Math.min(
+                        balance1 - paid1,
+                        PanopticMath.convert0to1(paid0 - balance0, sqrtPriceX96)
+                    ) * LIQ_CONVERSION_BONUS) /
+                    DECIMALS;
                 bonus0 -= Math.min(
                     PanopticMath.convert1to0(balance1 - paid1, sqrtPriceX96),
                     paid0 - balance0
@@ -1008,15 +1018,19 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 // if the protocol loss is lower than the excess token0 balance, then we can fully mitigate the loss and we should only convert the loss amount
                 // if the protocol loss is higher than the excess token0 balance, we can only mitigate part of the loss, so we should convert only the excess token0 balance
                 // thus, the value converted should be min(balance0 - paid0, paid1 - balance1)
-                bonus0 += Math.min(
-                    balance0 - paid0,
-                    PanopticMath.convert1to0(paid1 - balance1, sqrtPriceX96)
-                );
+                bonus0 +=
+                    (Math.min(
+                        balance0 - paid0,
+                        PanopticMath.convert1to0(paid1 - balance1, sqrtPriceX96)
+                    ) * LIQ_CONVERSION_BONUS) /
+                    DECIMALS;
                 bonus1 -= Math.min(
                     PanopticMath.convert0to1(balance0 - paid0, sqrtPriceX96),
                     paid1 - balance1
                 );
             }
+
+            return (bonus0, bonus1);
         }
     }
 
