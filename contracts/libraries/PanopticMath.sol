@@ -268,28 +268,21 @@ library PanopticMath {
     /// @param sqrtPriceX96 the sqrt price at which to convert between token0/token1
     /// @return collateralBalance the total combined balance of token0 and token1 for a user in terms of tokenType
     /// @return requiredCollateral The combined collateral requirement for a user in terms of tokenType
-    /// @return requiredRatioX128 ratio of the balance of token0 over the total value
     function convertCollateralData(
         uint256 tokenData0,
         uint256 tokenData1,
         uint256 tokenType,
         uint160 sqrtPriceX96
-    ) internal pure returns (uint256, uint256, uint256) {
+    ) internal pure returns (uint256, uint256) {
         if (tokenType == 0) {
-            uint256 required0 = tokenData0.leftSlot();
-            uint256 required1 = convert1to0(tokenData1.leftSlot(), sqrtPriceX96);
             return (
                 tokenData0.rightSlot() + convert1to0(tokenData1.rightSlot(), sqrtPriceX96),
-                required0 + required1,
-                (required0 << 128) / (required0 + required1)
+                tokenData0.leftSlot() + convert1to0(tokenData1.leftSlot(), sqrtPriceX96)
             );
         } else {
-            uint256 required0 = convert0to1(tokenData0.leftSlot(), sqrtPriceX96);
-            uint256 required1 = tokenData1.leftSlot();
             return (
                 tokenData1.rightSlot() + convert0to1(tokenData0.rightSlot(), sqrtPriceX96),
-                required0 + required1,
-                (required0 << 128) / (required0 + required1)
+                tokenData1.leftSlot() + convert0to1(tokenData0.leftSlot(), sqrtPriceX96)
             );
         }
     }
@@ -301,13 +294,12 @@ library PanopticMath {
     /// @param tick the tick at which to convert between token0/token1
     /// @return collateralBalance the total combined balance of token0 and token1 for a user in terms of tokenType
     /// @return requiredCollateral The combined collateral requirement for a user in terms of tokenType
-    /// @return balanceRatioX128 ratio of the balance of token0 over the total value
     function convertCollateralData(
         uint256 tokenData0,
         uint256 tokenData1,
         uint256 tokenType,
         int24 tick
-    ) internal pure returns (uint256, uint256, uint256) {
+    ) internal pure returns (uint256, uint256) {
         return
             convertCollateralData(tokenData0, tokenData1, tokenType, Math.getSqrtRatioAtTick(tick));
     }
