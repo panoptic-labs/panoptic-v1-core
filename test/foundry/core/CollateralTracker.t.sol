@@ -528,7 +528,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // equal deposits for both collateral token pairs for testing purposes
         // deposit to panoptic pool
         collateralToken0.setPoolAssets(collateralToken0._availableAssets() + initialMockTokens);
-        collateralToken1.setPoolAssets(collateralToken0._availableAssets() + initialMockTokens);
+        collateralToken1.setPoolAssets(collateralToken1._availableAssets() + initialMockTokens);
         deal(
             token0,
             address(panopticPool),
@@ -3063,8 +3063,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -3227,8 +3227,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -3397,8 +3397,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -3565,8 +3565,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -3734,8 +3734,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -3903,8 +3903,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -4072,8 +4072,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -4236,8 +4236,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             // assert the collateral requirements between the pool and tracker are equivalent
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
 
             // assert that the threshold cross is 0 (calendar spread of same strike/width) has 0 requirement
             assertEq(tokenData1, 0);
@@ -4400,8 +4400,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             // assert the collateral requirements between the pool and tracker are equivalent
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
 
             // assert that the threshold cross is 0 (calendar spread of same strike/width) has 0 requirement
             assertEq(tokenData1, 0);
@@ -4600,8 +4600,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -4803,8 +4803,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -4993,8 +4993,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList1
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -5164,8 +5164,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -5333,8 +5333,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -5497,8 +5497,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -5660,8 +5660,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -5819,8 +5819,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -5977,8 +5977,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList
             );
 
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 
@@ -6123,8 +6123,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 0,
                 positionIdList
             );
-            assertEq(tokenData0, calcBalanceCross);
-            assertEq(tokenData1, calcThresholdCross);
+            assertEq(tokenData0, calcBalanceCross, "0");
+            assertEq(tokenData1, calcThresholdCross, "1");
         }
     }
 

@@ -46,16 +46,9 @@ library Math {
     /// @notice Compute the max of the incoming `a` and `b`.
     /// @param a the first number
     /// @param b the second number
-    /// @return the min of `a` and `b`: min(a, b), e.g.: min(4, 1) = 1
+    /// @return the max of `a` and `b`: max(a, b), e.g.: max(4, 1) = 4
     function max(int256 a, int256 b) internal pure returns (int256) {
         return a > b ? a : b;
-    }
-
-    /// @notice Compute the maximum of (x, 0)
-    /// @param x the incoming *signed* integer
-    /// @return the maximum of (x, 0), e.g.: rectified(4) = 4, rectified(-4) = 0
-    function rectified(int256 x) internal pure returns (int256) {
-        return x > int256(0) ? int256(x) : int256(0);
     }
 
     /// @notice Compute the absolute value of an integer (int256).
