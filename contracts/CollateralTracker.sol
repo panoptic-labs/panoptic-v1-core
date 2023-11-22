@@ -1265,7 +1265,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param shortAmount The amount of shorts to be exercised (if any).
     /// @param swappedAmount The amount of tokens potentially swapped.
     /// @param currentPositionPremium The position premium.
-    /// @return exchangedAmount The amount of ITM funds that were exchanged when closing the position
+    /// @return tokenToPay The amount of ITM funds that were exchanged when closing the position
     /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function exercise(
         address optionOwner,
@@ -1273,7 +1273,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 shortAmount,
         int128 swappedAmount,
         int128 currentPositionPremium
-    ) external onlyPanopticPool returns (int128 exchangedAmount, int128 realizedPremium) {
+    ) external onlyPanopticPool returns (int256 tokenToPay, int128 realizedPremium) {
         unchecked {
             // current available assets belonging to PLPs (updated after settlement) excluding any premium paid
             int256 updatedAssets = int256(uint256(s_poolAssets)) - swappedAmount;
@@ -1288,7 +1288,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             );
 
             // add premium to be paid/collected on position close
-            int256 tokenToPay = -realizedPremium;
+            tokenToPay = -realizedPremium;
 
             // if burning ITM and swap occurred, compute tokens to be paid through exercise and add swap fees
             int256 intrinsicValue = swappedAmount - (longAmount - shortAmount);
@@ -1298,7 +1298,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
                 // add the intrinsic value to the tokenToPay
                 tokenToPay += intrinsicValue;
-                exchangedAmount = intrinsicValue.toInt128();
             }
 
             if (tokenToPay > 0) {
