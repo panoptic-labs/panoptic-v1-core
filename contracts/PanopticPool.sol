@@ -944,7 +944,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param netExchanged The net exchanged value of the closed portfolio
     /// @return bonus0 bonus amount for token0
     /// @return bonus1 bonus amount for token1
-    function _getBonusSplit(
+    function _getLiquidationBonus(
         uint256 tokenData0,
         uint256 tokenData1,
         uint160 sqrtPriceX96,
@@ -1363,7 +1363,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
             (, int24 currentTick, , , , , ) = s_univ3pool.slot0();
 
             // Enforce maximum delta between TWAP and currentTick to prevent extreme price manipulation
-            if (Math.abs(int256(currentTick) - int256(twapTick)) > MAX_TWAP_DELTA_LIQUIDATION)
+            if (Math.abs(int256(currentTick) - twapTick) > MAX_TWAP_DELTA_LIQUIDATION)
                 revert Errors.StaleTWAP();
 
             (int256 premia, uint256[2][] memory positionBalanceArray) = _calculateAccumulatedPremia(
@@ -1409,12 +1409,11 @@ contract PanopticPool is ERC1155Holder, Multicall {
             positionIdList
         );
 
-        // compute bonus amounts using latest tick data
-        (, int24 finalTick, , , , , ) = s_univ3pool.slot0();
-        (int256 liquidationBonus0, int256 liquidationBonus1) = _getBonusSplit(
+        // compute bonus amounts
+        (int256 liquidationBonus0, int256 liquidationBonus1) = _getLiquidationBonus(
             tokenData0,
             tokenData1,
-            Math.getSqrtRatioAtTick(finalTick),
+            Math.getSqrtRatioAtTick(twapTick),
             netExchanged
         );
 
