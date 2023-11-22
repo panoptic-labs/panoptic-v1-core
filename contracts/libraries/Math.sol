@@ -35,6 +35,22 @@ library Math {
         return a > b ? a : b;
     }
 
+    /// @notice Compute the min of the incoming `a` and `b`.
+    /// @param a the first number
+    /// @param b the second number
+    /// @return the min of `a` and `b`: min(a, b), e.g.: min(4, 1) = 1
+    function min(int256 a, int256 b) internal pure returns (int256) {
+        return a < b ? a : b;
+    }
+
+    /// @notice Compute the max of the incoming `a` and `b`.
+    /// @param a the first number
+    /// @param b the second number
+    /// @return the min of `a` and `b`: min(a, b), e.g.: min(4, 1) = 1
+    function max(int256 a, int256 b) internal pure returns (int256) {
+        return a > b ? a : b;
+    }
+
     /// @notice Compute the maximum of (x, 0)
     /// @param x the incoming *signed* integer
     /// @return the maximum of (x, 0), e.g.: rectified(4) = 4, rectified(-4) = 0
