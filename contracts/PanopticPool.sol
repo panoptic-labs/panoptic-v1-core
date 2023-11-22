@@ -1064,12 +1064,13 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param owner the owner of the option position to be burned.
     /// @param tickLimitLow Price slippage limit when burning an ITM option
     /// @param tickLimitHigh Price slippage limit when burning an ITM option
+    /// @return paidAmounts The total amount of token0(right) and token1(left) paid or collected received by the user.
     function _burnOptions(
         uint256 tokenId,
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal returns (int256 exchangedAmounts) {
+    ) internal returns (int256 paidAmounts) {
         // Ensure that the current price is within the tick limits
         int24 currentTick;
         (currentTick, , tickLimitLow, tickLimitHigh) = _getPriceAndCheckSlippageViolation(
@@ -1081,7 +1082,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
         // burn position and do exercise checks
         int256 premiaOwed;
-        (premiaOwed, exchangedAmounts) = _burnAndHandleExercise(
+        (premiaOwed, paidAmounts) = _burnAndHandleExercise(
             tokenId,
             positionSize,
             owner,
@@ -1125,13 +1126,15 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param tickLimitLow The lower slippage limit on the tick.
     /// @param tickLimitHigh The upper slippage limit on the tick.
     /// @param owner The owner of the option position.
+    /// @return currentPositionPremia The amount of premia paid/collected by the user.
+    /// @return paidAmounts The total amount of token0(right) and token1(left) paid or collected received by the user.
     function _burnAndHandleExercise(
         uint256 tokenId,
         uint128 positionSize,
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal returns (int256 currentPositionPremia, int256 exchangedAmounts) {
+    ) internal returns (int256 currentPositionPremia, int256 paidAmounts) {
         // burn the option in sfpm, switch order of tickLimits to create "swapAtMint" flag
         (, int256 totalSwapped, int24 newTick) = sfpm.burnTokenizedPosition(
             tokenId,
@@ -1159,10 +1162,9 @@ contract PanopticPool is ERC1155Holder, Multicall {
             s_tickSpacing
         );
 
-        exchangedAmounts = currentPositionPremia;
         // exercise the option and take the commission and addData
         {
-            (int256 exchangedAmount0, int128 realizedPremium0) = s_collateralToken0.exercise(
+            (int256 paidAmount0, int128 realizedPremium0) = s_collateralToken0.exercise(
                 owner,
                 longAmounts.rightSlot(),
                 shortAmounts.rightSlot(),
@@ -1170,10 +1172,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 currentPositionPremia.rightSlot()
             );
             currentPositionPremia = int256(realizedPremium0);
-            exchangedAmounts = exchangedAmounts.toRightSlot(exchangedAmount0.toInt128());
+            paidAmounts = paidAmount0.toInt128();
         }
         {
-            (int256 exchangedAmount1, int128 realizedPremium1) = s_collateralToken1.exercise(
+            (int256 paidAmount1, int128 realizedPremium1) = s_collateralToken1.exercise(
                 owner,
                 longAmounts.leftSlot(),
                 shortAmounts.leftSlot(),
@@ -1181,7 +1183,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 currentPositionPremia.leftSlot()
             );
             currentPositionPremia = currentPositionPremia.toLeftSlot(realizedPremium1);
-            exchangedAmounts = exchangedAmounts.toLeftSlot(exchangedAmount1.toInt128());
+            paidAmounts = paidAmounts.toLeftSlot(paidAmount1.toInt128());
         }
     }
 
