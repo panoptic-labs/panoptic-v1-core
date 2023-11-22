@@ -456,7 +456,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     function _initWorld(uint256 seed) internal {
         // Pick a pool from the seed and cache initial state
-        _cacheWorldState(pools[seed == 0 ? 0 : bound(seed, 0, pools.length - 1)]);
+        _cacheWorldState(pools[bound(seed, 0, pools.length - 1)]);
         //_cacheWorldState(pools[0]);
 
         _deployCustomPanopticPool(token0, token1, pool);
@@ -556,7 +556,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         IERC20Partial(token0).approve(address(router), type(uint256).max);
         IERC20Partial(token1).approve(address(router), type(uint256).max);
 
-        swapSize = bound(swapSize, 10 ** 10, 10 ** 12);
+        swapSize = bound(swapSize, 10 ** 18, 10 ** 22);
         router.exactInputSingle(
             ISwapRouter.ExactInputSingleParams(
                 isWETH == 0 ? token0 : token1,

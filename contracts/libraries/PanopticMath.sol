@@ -282,7 +282,7 @@ library PanopticMath {
         } else {
             return (
                 tokenData1.rightSlot() + convert0to1(tokenData0.rightSlot(), sqrtPriceX96),
-                convert0to1(tokenData0.leftSlot(), sqrtPriceX96) + tokenData1.leftSlot()
+                tokenData1.leftSlot() + convert0to1(tokenData0.leftSlot(), sqrtPriceX96)
             );
         }
     }

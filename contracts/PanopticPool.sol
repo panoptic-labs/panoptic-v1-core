@@ -794,7 +794,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                     _swapped,
                     _positionBalanceArray
                 );
-            realizedPremium = int256(_oldPositionPremia);
+            realizedPremium = _oldPositionPremia;
         }
         {
             int128 _longAmount = longAmounts.leftSlot();
