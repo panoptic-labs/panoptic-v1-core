@@ -51,6 +51,7 @@ contract PanopticHelper {
         uint256 tokenType,
         uint256[] calldata positionIdList
     ) public view returns (uint256, uint256) {
+        int24 _atTick = atTick;
         // Compute premia for all options (includes short+long premium)
         (int128 premium0, int128 premium1, uint256[2][] memory positionBalanceArray) = pool
             .calculateAccumulatedFeesBatch(account, positionIdList);
@@ -71,7 +72,7 @@ contract PanopticHelper {
 
         // convert (using atTick) and return the total collateral balance and required balance in terms of tokenType
         (uint256 collateralBalance, uint256 requiredCollateral) = PanopticMath
-            .convertCollateralData(tokenData0, tokenData1, tokenType, atTick);
+            .convertCollateralData(tokenData0, tokenData1, tokenType, _atTick);
         return (collateralBalance, requiredCollateral);
     }
 
