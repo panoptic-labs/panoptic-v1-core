@@ -1123,9 +1123,9 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @notice Burns and handles the exercise of options.
     /// @param tokenId The option position to burn.
     /// @param positionSize The size of the option position, expressed in terms of the asset.
+    /// @param owner The owner of the option position.
     /// @param tickLimitLow The lower slippage limit on the tick.
     /// @param tickLimitHigh The upper slippage limit on the tick.
-    /// @param owner The owner of the option position.
     /// @return currentPositionPremia The amount of premia paid/collected by the user.
     /// @return paidAmounts The total amount of token0(right) and token1(left) paid or collected received by the user.
     function _burnAndHandleExercise(
@@ -1360,6 +1360,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @dev Will revert if: account is not margin called or if the user liquidates themselves.
     /// @param liquidatee Address of the distressed account.
     /// @param positionIdList List of positions owned by the user. Written as [tokenId1, tokenId2, ...].
+    /// @param delegation0 Amount of token0 delegated to the liquidatee by the liquidator so the option can be smoothly exercised.
+    /// @param delegation1 Amount of token1 delegated to the liquidatee by the liquidator so the option can be smoothly exercised.
     function liquidate(
         address liquidatee,
         uint256[] calldata positionIdList,
