@@ -1145,31 +1145,29 @@ contract PanopticPool is ERC1155Holder, Multicall {
             s_tickSpacing
         );
 
-        // adding the position premia to the exchanged amount
-        exchangedAmounts = currentPositionPremia;
-
         // exercise the option and take the commission and addData
         {
-        (int256 exchangedAmount0, int128 realizedPremium0) = s_collateralToken0.exercise(
+            (int256 exchangedAmount0, int128 realizedPremium0) = s_collateralToken0.exercise(
                 owner,
                 longAmounts.rightSlot(),
                 shortAmounts.rightSlot(),
                 totalSwapped.rightSlot(),
                 currentPositionPremia.rightSlot()
-        );
-
-        (int256 exchangedAmount1, int128 realizedPremium1) = realizedPremium.toLeftSlot(
-            s_collateralToken1.exercise(
+            );
+            currentPositionPremia = int256(realizedPremium0);
+            exchangedAmounts = exchangedAmount0;
+        }
+        {
+            (int256 exchangedAmount1, int128 realizedPremium1) = s_collateralToken1.exercise(
                 owner,
                 longAmounts.leftSlot(),
                 shortAmounts.leftSlot(),
                 totalSwapped.leftSlot(),
                 currentPositionPremia.leftSlot()
-            )
-        currentPositionPremia = int256(realizedPremium0).toLeftSlot(realizedPremium1);
-        exchangedAmounts = int256(exchangedAmount0).toLeftSlot(exchangedAmount1);
+            );
+            currentPositionPremia = currentPositionPremia.toLeftSlot(realizedPremium1);
+            exchangedAmounts = exchangedAmounts.toLeftSlot(int128(exchangedAmount1));
         }
-
     }
 
     /*//////////////////////////////////////////////////////////////
