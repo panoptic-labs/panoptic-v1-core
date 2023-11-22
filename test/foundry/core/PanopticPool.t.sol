@@ -3596,9 +3596,6 @@ contract PanopticPoolTest is PositionUtils {
             ? (notionalVals[0] * tickSpacing) / 10_000
             : -((notionalVals[0] * tickSpacing) / 10_000);
 
-        console2.log(tokensOwed0, tokensOwed1);
-        console2.log(expectedSwaps[0], expectedSwaps[1]);
-
         assertApproxEqAbs(
             balanceBefores[0],
             uint256(
@@ -4988,14 +4985,16 @@ contract PanopticPoolTest is PositionUtils {
             int256(uint256(type(uint104).max)) -
                 (exerciseFeeAmounts[0] < 0 ? -1 : int8(1)) *
                 int256(ct0.convertToShares(uint256(Math.abs(exerciseFeeAmounts[0])))),
-            10
+            10,
+            "Incorrect Exercise Fees 0 for Bob"
         );
         assertApproxEqAbs(
             int256(ct1.balanceOf(Bob)),
             int256(uint256(type(uint104).max)) -
                 (exerciseFeeAmounts[1] < 0 ? -1 : int8(1)) *
                 int256(ct1.convertToShares(uint256(Math.abs(exerciseFeeAmounts[1])))),
-            10
+            10,
+            "Incorrect Exercise Fees 1 for Bob"
         );
 
         assertEq(sfpm.balanceOf(address(pp), tokenId), 0);
@@ -5005,7 +5004,8 @@ contract PanopticPoolTest is PositionUtils {
             assertApproxEqAbs(
                 inAMM,
                 uint128(longAmounts.rightSlot() + shortAmounts.rightSlot()) * 2,
-                10
+                10,
+                "Incorrect token0 inAMM amount"
             );
         }
 
@@ -5014,7 +5014,8 @@ contract PanopticPoolTest is PositionUtils {
             assertApproxEqAbs(
                 inAMM,
                 uint128(longAmounts.leftSlot() + shortAmounts.leftSlot()) * 2,
-                10
+                10,
+                "Incorrect token1 inAMM amount"
             );
         }
         {
@@ -5048,12 +5049,16 @@ contract PanopticPoolTest is PositionUtils {
                 uint256(int256(lastCollateralBalance0[Alice]) + $balanceDelta0),
                 uint256(
                     int256((longAmounts.rightSlot() + shortAmounts.rightSlot()) / 1_000_000 + 10)
-                )
+                ),
+                "Incorrect Collateral 0 Balance for Alice"
             );
             assertApproxEqAbs(
                 ct1.convertToAssets(ct1.balanceOf(Alice)),
                 uint256(int256(lastCollateralBalance1[Alice]) + $balanceDelta1),
-                uint256(int256((longAmounts.leftSlot() + shortAmounts.leftSlot()) / 1_000_000 + 10))
+                uint256(
+                    int256((longAmounts.leftSlot() + shortAmounts.leftSlot()) / 1_000_000 + 10)
+                ),
+                "Incorrect Collateral 1 Balance for Alice"
             );
         }
     }

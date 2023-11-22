@@ -1171,28 +1171,26 @@ contract PanopticPool is ERC1155Holder, Multicall {
         );
 
         // exercise the option and take the commission and addData
-        {
-            (int256 paidAmount0, int128 realizedPremium0) = s_collateralToken0.exercise(
-                owner,
-                longAmounts.rightSlot(),
-                shortAmounts.rightSlot(),
-                totalSwapped.rightSlot(),
-                currentPositionPremia.rightSlot()
-            );
-            currentPositionPremia = int256(realizedPremium0);
-            paidAmounts = paidAmount0.toInt128();
-        }
-        {
-            (int256 paidAmount1, int128 realizedPremium1) = s_collateralToken1.exercise(
-                owner,
-                longAmounts.leftSlot(),
-                shortAmounts.leftSlot(),
-                totalSwapped.leftSlot(),
-                currentPositionPremia.leftSlot()
-            );
-            currentPositionPremia = currentPositionPremia.toLeftSlot(realizedPremium1);
-            paidAmounts = paidAmounts.toLeftSlot(paidAmount1.toInt128());
-        }
+        int256 realizedPremium0;
+
+        (paidAmounts, realizedPremium0) = s_collateralToken0.exercise(
+            owner,
+            longAmounts.rightSlot(),
+            shortAmounts.rightSlot(),
+            totalSwapped.rightSlot(),
+            currentPositionPremia.rightSlot()
+        );
+
+        (int256 paidAmount1, int128 realizedPremium1) = s_collateralToken1.exercise(
+            owner,
+            longAmounts.leftSlot(),
+            shortAmounts.leftSlot(),
+            totalSwapped.leftSlot(),
+            currentPositionPremia.leftSlot()
+        );
+
+        currentPositionPremia = realizedPremium0.toLeftSlot(realizedPremium1);
+        paidAmounts = paidAmounts.toLeftSlot(paidAmount1.toInt128());
     }
 
     /*//////////////////////////////////////////////////////////////
