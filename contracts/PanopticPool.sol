@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
-// Foundry
-import "forge-std/Test.sol";
-
 // Interfaces
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
@@ -979,14 +976,6 @@ contract PanopticPool is ERC1155Holder, Multicall {
             int256 paid0 = bonus0 + int256(netExchanged.rightSlot());
             int256 paid1 = bonus1 + int256(netExchanged.leftSlot());
 
-            console2.log("sqrtPrice", sqrtPriceX96);
-            console2.log("bonus0", bonus0);
-            console2.log("bonus1", bonus1);
-            console2.log("paid0", paid0);
-            console2.log("paid1", paid1);
-
-            console2.log("balance0", balance0);
-            console2.log("balance1", balance1);
             // note that "balance0" and "balance1" are the liquidatee's original balances before token delegation by a liquidator
             // their actual balances at the time of computation may be higher, but these are a buffer representing the amount of tokens we
             // have to work with before cutting into the liquidator's funds
@@ -1002,20 +991,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 // if the protocol loss is lower than the excess token1 balance, then we can fully mitigate the loss and we should only convert the loss amount
                 // if the protocol loss is higher than the excess token1 balance, we can only mitigate part of the loss, so we should convert only the excess token1 balance
                 // thus, the value converted should be min(balance1 - paid1, paid0 - balance0)
-                console2.log("balance1 - paid1", balance1 - paid1);
-                console2.log(
-                    "PanopticMath.convert0to1(paid0 - balance0, sqrtPriceX96)",
-                    PanopticMath.convert0to1(paid0 - balance0, sqrtPriceX96)
-                );
                 bonus1 += Math.min(
                     balance1 - paid1,
                     PanopticMath.convert0to1(paid0 - balance0, sqrtPriceX96)
                 );
-                console2.log(
-                    "PanopticMath.convert1to0(balance1 - paid1, sqrtPriceX96)",
-                    PanopticMath.convert1to0(balance1 - paid1, sqrtPriceX96)
-                );
-                console2.log("paid0 - balance0", paid0 - balance0);
                 bonus0 -= Math.min(
                     PanopticMath.convert1to0(balance1 - paid1, sqrtPriceX96),
                     paid0 - balance0
@@ -1038,8 +1017,6 @@ contract PanopticPool is ERC1155Holder, Multicall {
                     paid1 - balance1
                 );
             }
-            console2.log("bonus0", bonus0);
-            console2.log("bonus1", bonus1);
         }
     }
 
