@@ -58,9 +58,6 @@ library Errors {
     /// @notice PanopticPool: Position does not have enough collateral
     error NotEnoughCollateral();
 
-    /// @notice User does not have enough funds
-    error NotEnoughFunds();
-
     /// @notice max token amounts for position exceed 128 bits.
     error PositionTooLarge();
 

@@ -4,6 +4,7 @@ pragma solidity =0.8.18;
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
+import {IERC20Partial} from "@tokens/interfaces/IERC20Partial.sol";
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Inherited implementations
 import {ERC20Minimal} from "@tokens/ERC20Minimal.sol";
@@ -546,7 +547,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @return maxShares The maximum amount of shares that can be minted.
     function maxMint(address) external view returns (uint256 maxShares) {
         unchecked {
-            return (convertToShares(type(uint104).max) * 1000) / 1001;
+            return
+                (convertToShares(type(uint104).max) * DECIMALS) /
+                (DECIMALS + uint128(s_commissionFee));
         }
     }
 
@@ -849,7 +852,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// - 10% if the position is liquidated when the price is between 950 and 1000, or if it is between 1050 and 1100
     /// - 5% if the price is between 900 and 950 or (1100, 1150)
     /// - 2.5% if between (850, 900) or (1150, 1200)
-    /// @param account Address of the exercised account.
     /// @param currentTick The current price tick.
     /// @param medianTick The median price tick.
     /// @param positionId The position to be exercised
@@ -857,7 +859,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param longAmounts The amount of longs in the position.
     /// @return exerciseFees The fees for exercising the option position.
     function exerciseCost(
-        address account,
         int24 currentTick,
         int24 medianTick,
         uint256 positionId,
@@ -1278,6 +1279,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param positionBalanceArray The list of all historical positions held by the 'optionOwner', stored as [[tokenId, balance/poolUtilizationAtMint], ...].
     /// @return utilization The utilization of the Panoptic Pool.
     /// @return tokenData LeftRight encoding with tokenbalance, ie assets, (in the right slot) and amount required in collateral (left slot).
+    /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function takeCommissionAddData(
         uint256 environmentContext,
         int128 longAmount,
@@ -1286,19 +1288,39 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 oldPositionPremia,
         int128 swappedAmount,
         uint256[2][] memory positionBalanceArray
-    ) external onlyPanopticPool returns (int128 utilization, uint256 tokenData) {
+    )
+        external
+        onlyPanopticPool
+        returns (int128 utilization, uint256 tokenData, int128 realizedPremium)
+    {
         unchecked {
+            // current available assets belonging to PLPs (updated after settlement) excluding any premium paid
+            int256 updatedAssets = int256(uint256(s_poolAssets)) - swappedAmount;
+
+            // constrict premium to only assets not belonging to PLPs (i.e premium paid by sellers or collected from the pool earlier)
             int256 exchangedAmount = _getExchangedAmount(longAmount, shortAmount, swappedAmount);
+
+            realizedPremium = int128(
+                Math.min(
+                    oldPositionPremia,
+                    int256(IERC20Partial(s_underlyingToken).balanceOf(address(s_panopticPool))) -
+                        updatedAssets
+                )
+            );
 
             // pay/collect premium of burnt option if rolling
             // add intrinsic value of option + commission/ITM spread fees to settle
-            int256 tokenToPay = exchangedAmount - oldPositionPremia;
+            int256 tokenToPay = exchangedAmount - realizedPremium;
 
             // compute tokens to be paid due to swap
             // mint or burn tokens due to minting in-the-money
             if (tokenToPay > 0) {
                 // if user must pay tokens, burn them from user balance
-                uint256 sharesToBurn = convertToShares(uint256(tokenToPay));
+                uint256 sharesToBurn = Math.mulDivUp(
+                    uint256(tokenToPay),
+                    totalSupply,
+                    totalAssets()
+                );
                 _burn(environmentContext.caller(), sharesToBurn);
             } else if (tokenToPay < 0) {
                 // if user must receive tokens, mint them
@@ -1310,9 +1332,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // the inflow or outflow of pool assets is defined by the swappedAmount: it includes both the ITM swap amounts and the short/long amounts used to create the position
             // however, any intrinsic value is paid for by the users, so we only add the portion that comes from PLPs: the short/long amounts
             // premia is not included in the balance since it is the property of options buyers and sellers, not PLPs
-            s_poolAssets = uint128(
-                uint256(int256(uint256(s_poolAssets)) - swappedAmount + oldPositionPremia)
-            );
+            s_poolAssets = uint128(uint256(updatedAssets + realizedPremium));
             s_inAMM = uint128(uint256(int256(uint256(s_inAMM)) + (shortAmount - longAmount)));
 
             {
@@ -1363,16 +1383,29 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param shortAmount The amount of shorts to be exercised (if any).
     /// @param swappedAmount The amount of tokens potentially swapped.
     /// @param currentPositionPremium The position premium.
+    /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function exercise(
         address optionOwner,
         int128 longAmount,
         int128 shortAmount,
         int128 swappedAmount,
         int128 currentPositionPremium
-    ) external onlyPanopticPool {
+    ) external onlyPanopticPool returns (int128 realizedPremium) {
         unchecked {
+            // current available assets belonging to PLPs (updated after settlement) excluding any premium paid
+            int256 updatedAssets = int256(uint256(s_poolAssets)) - swappedAmount;
+
+            // constrict premium to only assets not belonging to PLPs (i.e premium paid by sellers or collected from the pool earlier)
+            realizedPremium = int128(
+                Math.min(
+                    currentPositionPremium,
+                    int256(IERC20Partial(s_underlyingToken).balanceOf(address(s_panopticPool))) -
+                        updatedAssets
+                )
+            );
+
             // add premium to be paid/collected on position close
-            int256 tokenToPay = -currentPositionPremium;
+            int256 tokenToPay = -realizedPremium;
 
             // if burning ITM and swap occurred, compute tokens to be paid through exercise and add swap fees
             int256 intrinsicValue = swappedAmount - (longAmount - shortAmount);
@@ -1386,7 +1419,11 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             if (tokenToPay > 0) {
                 // if user must pay tokens, burn them from user balance (revert if balance too small)
-                uint256 sharesToBurn = convertToShares(uint256(tokenToPay));
+                uint256 sharesToBurn = Math.mulDivUp(
+                    uint256(tokenToPay),
+                    totalSupply,
+                    totalAssets()
+                );
                 _burn(optionOwner, sharesToBurn);
             } else if (tokenToPay < 0) {
                 // if user must receive tokens, mint them
@@ -1397,9 +1434,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // update stored asset balances with net moved amounts
             // any intrinsic value is paid for by the users, so we do not add it to s_inAMM
             // premia is not included in the balance since it is the property of options buyers and sellers, not PLPs
-            s_poolAssets = uint128(
-                uint256(int256(uint256(s_poolAssets)) - swappedAmount + currentPositionPremium)
-            );
+            s_poolAssets = uint128(uint256(updatedAssets + realizedPremium));
             s_inAMM = uint128(uint256(int256(uint256(s_inAMM)) - (shortAmount - longAmount)));
         }
     }
