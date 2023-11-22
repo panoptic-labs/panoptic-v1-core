@@ -71,7 +71,7 @@ contract PanopticHelper {
         );
 
         // convert (using atTick) and return the total collateral balance and required balance in terms of tokenType
-        (uint256 collateralBalance, uint256 requiredCollateral, ) = PanopticMath
+        (uint256 collateralBalance, uint256 requiredCollateral) = PanopticMath
             .convertCollateralData(tokenData0, tokenData1, tokenType, _atTick);
         return (collateralBalance, requiredCollateral);
     }

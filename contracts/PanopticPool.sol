@@ -961,11 +961,16 @@ contract PanopticPool is ERC1155Holder, Multicall {
         unchecked {
             // compute bonus as min(collateralBalance/2, required-collateralBalance)
             {
-                (
-                    uint256 balanceCross,
-                    uint256 thresholdCross,
-                    uint256 requiredRatioX128
-                ) = PanopticMath.convertCollateralData(tokenData0, tokenData1, 0, sqrtPriceX96);
+                // compute the ratio of token0 to total collateral requirements
+                uint256 requiredRatioX128 = (tokenData0.leftSlot() * 2 ** 128) /
+                    (tokenData0.leftSlot() +
+                        PanopticMath.convert1to0(tokenData1.leftSlot(), sqrtPriceX96));
+                (uint256 balanceCross, uint256 thresholdCross) = PanopticMath.convertCollateralData(
+                    tokenData0,
+                    tokenData1,
+                    0,
+                    sqrtPriceX96
+                );
 
                 uint256 diffCross = thresholdCross - balanceCross;
                 uint256 bonusCross = diffCross < balanceCross / 2 ? diffCross : balanceCross / 2;

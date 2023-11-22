@@ -3052,7 +3052,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3216,7 +3216,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3386,7 +3386,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3554,7 +3554,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3723,7 +3723,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -3892,7 +3892,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4061,7 +4061,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4224,7 +4224,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4388,7 +4388,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 1, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4589,7 +4589,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4792,7 +4792,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -4982,7 +4982,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5153,7 +5153,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5322,7 +5322,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5486,7 +5486,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5649,7 +5649,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5808,7 +5808,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -5966,7 +5966,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
@@ -6113,7 +6113,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 premium1
             );
 
-            (uint256 calcBalanceCross, uint256 calcThresholdCross, ) = PanopticMath
+            (uint256 calcBalanceCross, uint256 calcThresholdCross) = PanopticMath
                 .convertCollateralData(tokenData0, tokenData1, 0, currentTick);
 
             (tokenData0, tokenData1) = panopticHelper.checkCollateral(
