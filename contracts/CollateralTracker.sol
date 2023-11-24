@@ -1120,20 +1120,24 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // transfer delegatee balance to delegator
             _transferFrom(delegatee, delegator, delegateeBalance);
 
-            unchecked {
-                // this is paying out protocol loss, so correct for that in the amount of shares to be minted
-                // X: total assets in vault
-                // Y: total supply of shares
-                // Z: desired value (assets) of shares to be minted
-                // N: actual shares to be minted
-                // Z = N * X / (Y + N)
-                // Z * (Y + N) = N * X
-                // ZY + ZN = NX
-                // ZY = N(X - Z)
-                // N = ZY / (X - Z)
-                uint256 assetsToMint = convertToAssets(shares - delegateeBalance);
-                _mint(delegator, (assetsToMint * totalSupply) / (totalAssets() - assetsToMint));
-            }
+            // this is paying out protocol loss, so correct for that in the amount of shares to be minted
+            // X: total assets in vault
+            // Y: total supply of shares
+            // Z: desired value (assets) of shares to be minted
+            // N: total shares corresponding to Z
+            // T: transferred shares from liquidatee which are a component of N but do not contribute toward protocol loss
+            // Z = N * X / (Y + N - T)
+            // Z * (Y + N - T) = N * X
+            // ZY + ZN - ZT = NX
+            // ZY - ZT = N(X - Z)
+            // N = (ZY - ZT) / (X - Z)
+            // N = Z(Y - T) / (X - Z)
+            // subtract delegatee balance from N since it was already transferred to the delegator
+            _mint(
+                delegator,
+                ((assets * (totalSupply - delegateeBalance)) / (totalAssets() - assets)) -
+                    delegateeBalance
+            );
         }
         // if requested amount < delegatee balance, then just transfer shares back
         else {
