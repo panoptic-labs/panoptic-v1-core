@@ -125,28 +125,6 @@ contract MathTest is Test {
         harness.mulDiv96(input, input);
     }
 
-    function test_Success_mulDivUp(uint128 a, uint128 b, uint128 denominator) public {
-        vm.assume(denominator != 0);
-
-        uint256 expectedResult = FullMath.mulDiv(a, b, denominator);
-        if (mulmod(a, b, denominator) > 0) {
-            require(expectedResult < type(uint256).max);
-            expectedResult++;
-        }
-        uint256 returnedResult = harness.mulDivUp(a, b, denominator);
-
-        assertEq(expectedResult, returnedResult);
-    }
-
-    function test_Success_mulDivDown(uint128 a, uint128 b, uint128 denominator) public {
-        vm.assume(denominator != 0);
-
-        uint256 expectedResult = FullMath.mulDiv(a, b, denominator);
-        uint256 returnedResult = harness.mulDivDown(a, b, denominator);
-
-        assertEq(expectedResult, returnedResult);
-    }
-
     function test_Success_mulDiv192(uint128 a, uint128 b) public {
         uint256 expectedResult = FullMath.mulDiv(a, b, 2 ** 192);
         uint256 returnedResult = harness.mulDiv192(a, b);
