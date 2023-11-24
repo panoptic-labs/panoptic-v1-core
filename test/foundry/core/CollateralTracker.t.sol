@@ -6692,8 +6692,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         CollateralTracker collateralToken
     ) public view returns (uint256 shares) {
         uint256 supply = collateralToken.totalSupply();
-        return
-            supply == 0 ? assets : Math.mulDivDown(assets, supply, collateralToken.totalAssets());
+        return supply == 0 ? assets : Math.mulDiv(assets, supply, collateralToken.totalAssets());
     }
 
     function convertToAssets(
@@ -6701,8 +6700,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         CollateralTracker collateralToken
     ) public view returns (uint256 assets) {
         uint256 supply = collateralToken.totalSupply();
-        return
-            supply == 0 ? shares : Math.mulDivDown(shares, collateralToken.totalAssets(), supply);
+        return supply == 0 ? shares : Math.mulDiv(shares, collateralToken.totalAssets(), supply);
     }
 
     /*//////////////////////////////////////////////////////////////
