@@ -562,7 +562,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         uint64 effectiveLiquidityLimitX32,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) external whenNotCloseOnly {
+    ) private {
         // checks that the current tick is within the limits provided
         int24 currentTick;
         int24 medianTick;
