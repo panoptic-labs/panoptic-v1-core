@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.0;
 
 // Libraries
@@ -66,10 +65,6 @@ library TokenId {
     uint256 internal constant OPTION_RATIO_MASK =
         0x0000000000FE_0000000000FE_0000000000FE_0000000000FE_0000000000000000;
     int256 internal constant BITMASK_INT24 = 0xFFFFFF;
-    // this mask in hex has a 1 bit in each location except in the strike+width of the tokenId:
-    // this ROLL_MASK will make sure that two tokens will have the exact same parameters
-    uint256 internal constant ROLL_MASK =
-        0xFFF_000000000FFF_000000000FFF_000000000FFF_FFFFFFFFFFFFFFFF;
     // this mask in hex has a 1 bit in each location except in the riskPartner of the 48bits on a position's tokenId:
     // this RISK_PARTNER_MASK will make sure that two tokens will have the exact same parameters
     uint256 internal constant RISK_PARTNER_MASK = 0xFFFFFFFFF3FF;
@@ -556,124 +551,4 @@ library TokenId {
         revert Errors.NoLegsExercisable();
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             OPTION ROLLING
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Validate that a roll didn't change unexpected parameters.
-    /// @notice Does NOT revert if invalid; returns the validation check as a boolean.
-    /// @dev Call this on an old tokenId when rolling into a new TokenId.
-    /// this checks that the new tokenId is valid in structure.
-    /// @param oldTokenId the old tokenId that is being rolled into a new position.
-    /// @param newTokenId the new tokenId that the old position is being rolled into.
-    /// @return true of the rolled token (newTokenId) is valid in structure.
-    function rolledTokenIsValid(
-        uint256 oldTokenId,
-        uint256 newTokenId
-    ) internal pure returns (bool) {
-        // tokenIds (option positions) are identical except in strike and/or width
-        return ((oldTokenId & ROLL_MASK) == (newTokenId & ROLL_MASK));
-    }
-
-    /// @notice Roll an option position from an old TokenId to a position with parameters from the newTokenId.
-    /// @dev a roll in general burns existing legs and re-mints the legs.
-    /// @param oldTokenId the old option position that we are rolling into a new position.
-    /// @param newTokenId the new option position that we are rolling into.
-    /// @return burnTokenId the details of the legs to burn as part of the roll.
-    /// @return mintTokenId the details of the legs to mint as part of the roll.
-    function constructRollTokenIdWith(
-        uint256 oldTokenId,
-        uint256 newTokenId
-    ) internal pure returns (uint256 burnTokenId, uint256 mintTokenId) {
-        // take the bitwise XOR between old and new token to identify modified parameters
-        uint256 XORtokenId = oldTokenId ^ newTokenId;
-
-        uint64 poolId = uint64(oldTokenId);
-
-        uint256 j = 0;
-        burnTokenId = uint256(poolId);
-        mintTokenId = uint256(poolId);
-        // construct mint and burn tokenIds so that only the legs that are different are touched
-
-        for (uint256 i = 0; i < 4; ) {
-            // Checks that the strike or width is finite
-            // @dev the strike and the width will in general differ when rolling by definition
-            //      if they don't we simply leave one leg untouched as part of the roll
-            if ((XORtokenId.strike(i) != 0) || (XORtokenId.width(i) != 0)) {
-                // Ensures that all other leg parameters are the same
-                // @dev for example: the asset shouldn't change during a roll
-                // First, shift the tokenId so that the least significant bit is the first bit of the sequence
-                // asset(i), optionRatio(i), isLong(i), tokenType(i), riskPartner(i)
-                // Then mask with 12 "1" bits to isolate that 12 bit sequence (0xFFF = 111111111111)
-                // Finally, check that the masked sequence is zero. If it is not, one of the properties has changed
-                if ((((XORtokenId) >> (64 + 48 * i)) & (0xFFF)) != 0) revert Errors.NotATokenRoll();
-
-                burnTokenId = burnTokenId.rollTokenInfo(oldTokenId, i, j);
-                mintTokenId = mintTokenId.rollTokenInfo(newTokenId, i, j);
-
-                unchecked {
-                    ++j;
-                }
-            }
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    /// @notice Clear a leg in an option position with index `i`.
-    /// @dev set bits of the leg to zero. Also sets the optionRatio and asset to zero of that leg.
-    /// @dev NOTE it's important that the caller fills in the leg details after.
-    /// @dev  - optionRatio is zeroed
-    /// @dev  - asset is zeroed
-    /// @dev  - width is zeroed
-    /// @dev  - strike is zeroed
-    /// @dev  - tokenType is zeroed
-    /// @dev  - isLong is zeroed
-    /// @dev  - riskPartner is zeroed
-    /// @param self the tokenId to reset the leg of
-    /// @param i the leg index to reset, in {0,1,2,3}
-    /// @return `self` with the `i`th leg zeroed including optionRatio and asset.
-    function clearLeg(uint256 self, uint256 i) internal pure returns (uint256) {
-        if (i == 0)
-            return self & 0xFFFFFFFFFFFF_FFFFFFFFFFFF_FFFFFFFFFFFF_000000000000_FFFFFFFFFFFFFFFF;
-        if (i == 1)
-            return self & 0xFFFFFFFFFFFF_FFFFFFFFFFFF_000000000000_FFFFFFFFFFFF_FFFFFFFFFFFFFFFF;
-        if (i == 2)
-            return self & 0xFFFFFFFFFFFF_000000000000_FFFFFFFFFFFF_FFFFFFFFFFFF_FFFFFFFFFFFFFFFF;
-        if (i == 3)
-            return self & 0x000000000000_FFFFFFFFFFFF_FFFFFFFFFFFF_FFFFFFFFFFFF_FFFFFFFFFFFFFFFF;
-
-        return self;
-    }
-
-    /// @notice Roll (by copying) over the information from `other`'s leg index `src` to `self`'s leg index `dst`.
-    /// @notice to leg index `dst` in `self`.
-    /// @param self the destination tokenId of the roll
-    /// @param other the source tokenId of the roll
-    /// @param src the leg index in `other` we are rolling/copying over to `self`s `dst` leg index
-    /// @param dst the leg index in `self` we are rolling/copying into from `other`s `src` leg index
-    /// @return `self` with its `dst` leg index overwritten by the `src` leg index of `other`
-    function rollTokenInfo(
-        uint256 self,
-        uint256 other,
-        uint256 src,
-        uint256 dst
-    ) internal pure returns (uint256) {
-        unchecked {
-            // clear the destination leg details
-            self = self.clearLeg(dst);
-
-            // copy over details from `other`s `src` leg into `self`s `dst` leg:
-            self = self.addWidth(other.width(src), dst);
-            self = self.addStrike(other.strike(src), dst);
-            self = self.addOptionRatio(other.optionRatio(src), dst);
-            self = self.addTokenType(other.tokenType(src), dst);
-            self = self.addIsLong(other.isLong(src), dst);
-            self = self.addAsset(other.asset(src), dst);
-            self = self.addRiskPartner(dst, dst);
-
-            return self;
-        }
-    }
 }

@@ -100,19 +100,6 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         uint128 positionSize
     );
 
-    /// @notice Emitted when a position is rolled (i.e. burned and re-deployed/re-minted)
-    /// @dev Recipient is used to track whether it was minted directly by the user or through an option contract
-    /// @param recipient The address of the user which minted the position
-    /// @param oldTokenId The tokenId of the burnt position
-    /// @param newTokenId The tokenId of the newly minted position
-    /// @param positionSize The number of contracts rolled, expressed in terms of the asset
-    event TokenizedPositionRolled(
-        address indexed recipient,
-        uint256 indexed oldTokenId,
-        uint256 indexed newTokenId,
-        uint128 positionSize
-    );
-
     /*//////////////////////////////////////////////////////////////
                                 TYPES 
     //////////////////////////////////////////////////////////////*/
@@ -328,39 +315,6 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         endReentrancyLock(poolId);
     }
 
-    /// @notice Modifier that prohibits reentrant calls for all relevant pools when rolling
-    /// @dev If the pool IDs are the same, behavior is identical to `ReentrancyLock`
-    /// @dev If the pool IDs are different, behavior is equivalent to calling `ReentrancyLock` on both pools
-    /// @dev We piggyback the reentrancy lock on the (pool id => pool) mapping to save gas
-    /// @dev (there's an extra 96 bits of storage available in the mapping slot and it's almost always warm)
-    /// @param poolIdOld the poolId of the pool on the tokenId being rolled from
-    /// @param poolIdNew the poolId of the pool on the tokenId being rolled to
-    modifier ReentrancyLockRoll(uint64 poolIdOld, uint64 poolIdNew) {
-        if (poolIdOld != poolIdNew) {
-            // check if the pools are already locked
-            // init lock if not
-            beginReentrancyLock(poolIdOld);
-            beginReentrancyLock(poolIdNew);
-
-            // execute function
-            _;
-
-            // remove locks
-            endReentrancyLock(poolIdOld);
-            endReentrancyLock(poolIdNew);
-        } else {
-            // check if the pool is already locked
-            // init lock if not
-            beginReentrancyLock(poolIdOld);
-
-            // execute function
-            _;
-
-            // remove lock
-            endReentrancyLock(poolIdOld);
-        }
-    }
-
     /// @notice Add reentrancy lock on pool
     /// @dev reverts if the pool is already locked
     /// @param poolId The poolId of the pool to add the reentrancy lock to
@@ -545,76 +499,6 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         );
     }
 
-    /// @notice Roll a position containing up to 4 legs stored in `oldTokenId` to `newTokenId`.
-    /// @dev Will either i) perform burnTokenizedPosition then mintTokenizedPosition or ii) create a new tokenId that only rolls the touched legs
-    /// @param oldTokenId The tokenId of the burnt position
-    /// @param newTokenId The tokenId of the newly minted position
-    /// @param positionSize The number of contracts minted, expressed in terms of the asset
-    /// @param slippageTickLimitLow The lower price slippage limit when minting an ITM position (set to larger than slippageTickLimitHigh for swapping when minting)
-    /// @param slippageTickLimitHigh The higher slippage limit when minting an ITM position (set to lower than slippageTickLimitLow for swapping when minting)
-    /// @return totalCollectedBurn A LeftRight encoded word containing the total amount of token0 and token1 collected as fees when burning the position
-    /// @return totalSwappedBurn A LeftRight encoded word containing the total amount of token0 and token1 swapped if burned ITM
-    /// @return totalCollectedMint A LeftRight encoded word containing the total amount of token0 and token1 collect as fees when minting the position
-    /// @return totalSwappedMint A LeftRight encoded word containing the total amount of token0 and token1 swapped if minted ITM
-    /// @return newTick the current tick in the pool after all the mints and swaps
-    function rollTokenizedPositions(
-        uint256 oldTokenId,
-        uint256 newTokenId,
-        uint128 positionSize,
-        int24 slippageTickLimitLow,
-        int24 slippageTickLimitHigh
-    )
-        external
-        // activate reentrancy lock for both pools
-        ReentrancyLockRoll(oldTokenId.univ3pool(), newTokenId.univ3pool())
-        returns (
-            int256 totalCollectedBurn,
-            int256 totalSwappedBurn,
-            int256 totalCollectedMint,
-            int256 totalSwappedMint,
-            int24 newTick
-        )
-    {
-        // when rolling a position, we need to mint (new position) and burn (clean up old position)
-        // liquidity in uniswap as we physically transfer liquidity chunks along the uniswap tick bitmap
-        uint256 burnTokenId;
-        uint256 mintTokenId;
-
-        // If old and new token are from the same pool: construct burn+mint tokenId's that only only roll the legs that differ
-        if (oldTokenId.rolledTokenIsValid(newTokenId)) {
-            // same pool: burnTokenId+mintTokenId only roll the legs that differ
-            // we construct the XOR of the old and new tokens, and burn and mint only differing legs
-            (burnTokenId, mintTokenId) = oldTokenId.constructRollTokenIdWith(newTokenId);
-        } else {
-            // we roll from one pool to another so burn all of the old token and mint all of the new token
-            // (all meaning all legs for each)
-            // different pool: burnTokenId+mintTokenId are oldTokenId+newTokenId
-            (burnTokenId, mintTokenId) = (oldTokenId, newTokenId);
-        }
-
-        // burn oldTokenId tokens
-        _burn(msg.sender, oldTokenId, positionSize);
-
-        // mint/create newTokenId tokens
-        _mint(msg.sender, newTokenId, positionSize);
-
-        // store the roll in the event logs (tokenIds are stored in their encoded formats to keep it simple)
-        emit TokenizedPositionRolled(msg.sender, oldTokenId, newTokenId, positionSize);
-        (
-            totalCollectedBurn,
-            totalSwappedBurn,
-            totalCollectedMint,
-            totalSwappedMint,
-            newTick
-        ) = _exerciseRolls(
-            burnTokenId,
-            mintTokenId,
-            positionSize,
-            slippageTickLimitLow,
-            slippageTickLimitHigh
-        );
-    }
-
     /// @notice Create a new position `tokenId` containing up to 4 legs.
     /// @param tokenId The tokenId of the minted position, which encodes information for up to 4 legs
     /// @param positionSize The number of contracts minted, expressed in terms of the asset
@@ -766,11 +650,8 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
     ///                               │
     ///   ┌───────────────────────┐   │   ┌───────────────────────────────┐
     ///   │burnTokenizedPosition()├───┼───► _validateAndForwardToAMM(...) ├─ (...) --> (mint/burn in AMM)
-    ///   └───────────────────────┘   │   └───────────────────────────────┘
-    ///                               │
-    ///   ┌───────────────────────┐   │
-    ///   │rollTokenizedPosition()├───┘
-    ///   └───────────────────────┘
+    ///   └───────────────────────┘       └───────────────────────────────┘
+    ///
     /// @param tokenId the option position
     /// @param positionSize the size of the position to create
     /// @param tickLimitLow lower limits on potential slippage
@@ -786,7 +667,7 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         int24 tickLimitHigh,
         bool isBurn
     ) internal returns (int256 totalCollectedFromAMM, int256 totalMoved, int24 newTick) {
-        // Reverts if positionSize is 0 and user did not own the position before minting/burning/rolling
+        // Reverts if positionSize is 0 and user did not own the position before minting/burning
         if (positionSize == 0) revert Errors.OptionsBalanceZero();
 
         /// @dev the flipToBurnToken() function flips the isLong bits
@@ -955,7 +836,7 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         }
     }
 
-    /// @notice Create the position in the AMM given in the tokenId. This could imply modifying (rolling) an existing position.
+    /// @notice Create the position in the AMM given in the tokenId. 
     /// @dev Loops over each leg in the tokenId and calls _createLegInAMM for each, which does the mint/burn in the AMM.
     /// @param univ3pool the Uniswap pool.
     /// @param tokenId the option position
@@ -1037,7 +918,7 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
             revert Errors.PositionTooLarge();
     }
 
-    /// @notice Create the position in the AMM for a specific leg in the tokenId. This could imply modifying (rolling) an existing position.
+    /// @notice Create the position in the AMM for a specific leg in the tokenId.
     /// @dev For the leg specified by the _leg input:
     /// @dev  - mints any new liquidity in the AMM needed (via _mintLiquidity)
     /// @dev  - burns any new liquidity in the AMM needed (via _burnLiquidity)
@@ -1445,52 +1326,6 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
                 }
             }
         }
-    }
-
-    /// @notice Helper to carry out the option position rolls. A roll moves a position's liquidity chunks.
-    /// @notice for example: move leg index 2 from strike 500 to strike 1000 but maintain its width
-    /// that requires burning the old chunk at strike 500 and then mint at strike 1000.
-    /// @param burnTokenId the option position to burn during the roll
-    /// @param mintTokenId the option position to mint during the roll
-    /// @param positionSize the amount of the position to roll
-    /// @param tickLimitLow lower tick for slippage check
-    /// @param tickLimitHigh upper tick for slippage check
-    /// @return totalCollectedBurn total amount of fees collected from the burnt chunk
-    /// @return totalSwappedBurn total amount of tokens swapped during the burn
-    /// @return totalCollectedMint total amount of fees collected from the mint chunk
-    /// @return totalSwappedMint total amount of tokens swapped during the mint
-    function _exerciseRolls(
-        uint256 burnTokenId,
-        uint256 mintTokenId,
-        uint128 positionSize,
-        int24 tickLimitLow,
-        int24 tickLimitHigh
-    )
-        internal
-        returns (
-            int256 totalCollectedBurn,
-            int256 totalSwappedBurn,
-            int256 totalCollectedMint,
-            int256 totalSwappedMint,
-            int24 newTick
-        )
-    {
-        // oldTokenId: flip the isLong bit for all 4 options; mint liquidity
-        (totalCollectedBurn, totalSwappedBurn, ) = _validateAndForwardToAMM(
-            burnTokenId,
-            positionSize,
-            tickLimitLow,
-            tickLimitHigh,
-            BURN
-        );
-        // newTokenId: mint liquidity
-        (totalCollectedMint, totalSwappedMint, newTick) = _validateAndForwardToAMM(
-            mintTokenId,
-            positionSize,
-            tickLimitLow,
-            tickLimitHigh,
-            MINT
-        );
     }
 
     /*///////////////////////////////////////////////////////////////////////////
