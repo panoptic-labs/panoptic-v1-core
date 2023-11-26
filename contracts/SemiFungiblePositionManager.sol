@@ -836,7 +836,7 @@ contract SemiFungiblePositionManager is ERC1155, Multicall {
         }
     }
 
-    /// @notice Create the position in the AMM given in the tokenId. 
+    /// @notice Create the position in the AMM given in the tokenId.
     /// @dev Loops over each leg in the tokenId and calls _createLegInAMM for each, which does the mint/burn in the AMM.
     /// @param univ3pool the Uniswap pool.
     /// @param tokenId the option position

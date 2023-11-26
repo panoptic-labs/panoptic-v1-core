@@ -550,5 +550,4 @@ library TokenId {
         // Fail if position has no legs that is far-out-of-the-money
         revert Errors.NoLegsExercisable();
     }
-
 }

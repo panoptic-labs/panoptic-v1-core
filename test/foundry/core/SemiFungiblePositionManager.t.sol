@@ -2630,6 +2630,7 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
             TickMath.MAX_TICK
         );
     }
+
     /*//////////////////////////////////////////////////////////////
                          TRANSFER HOOK LOGIC: +
     //////////////////////////////////////////////////////////////*/
