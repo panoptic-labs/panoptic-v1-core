@@ -1119,10 +1119,27 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         if (shares > delegateeBalance) {
             // transfer delegatee balance to delegator
             _transferFrom(delegatee, delegator, delegateeBalance);
+            // must mint the correct amount of shares (∆) so that the redeemable value is exactly equal to A, the requested assets
+            // tA: total assets in vault (ie. totalAssets())
+            // tS: total supply of shares (ie. totalSupply)
+            // ∆: desired number of shares to be minted
+            // A: requested assets
+            // B: transferred shares from liquidatee (ie. delegateeBalance)
+            //
+            // Redeemable value = assets === delegatorShares * totalAssets() / newTotalSupply
+            //
+            // A = (B + ∆) * tA / (tS + ∆)
+            // ∆ * (tA - A) = A * tS - B * tA
+            // ∆ = (A*tS - B*tA)/(tA-A)
 
+            uint256 tA = totalAssets();
             unchecked {
                 // mint shares to complete to requested amount
-                _mint(delegator, shares - delegateeBalance);
+                _mint(
+                    delegator,
+                    Math.mulDiv(assets, totalSupply, tA - assets) -
+                        Math.mulDiv(delegateeBalance, tA, tA - assets)
+                );
             }
         }
         // if requested amount < delegatee balance, then just transfer shares back
@@ -1265,7 +1282,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param shortAmount The amount of shorts to be exercised (if any).
     /// @param swappedAmount The amount of tokens potentially swapped.
     /// @param currentPositionPremium The position premium.
-    /// @return tokenToPay The amount of ITM funds that were exchanged when closing the position
+    /// @return paidAmount The amount of ITM funds that were exchanged when closing the position
     /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function exercise(
         address optionOwner,
@@ -1273,7 +1290,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 shortAmount,
         int128 swappedAmount,
         int128 currentPositionPremium
-    ) external onlyPanopticPool returns (int256 tokenToPay, int128 realizedPremium) {
+    ) external onlyPanopticPool returns (int256 paidAmount, int128 realizedPremium) {
         unchecked {
             // current available assets belonging to PLPs (updated after settlement) excluding any premium paid
             int256 updatedAssets = int256(uint256(s_poolAssets)) - swappedAmount;
@@ -1288,7 +1305,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             );
 
             // add premium to be paid/collected on position close
-            tokenToPay = -realizedPremium;
+            int256 tokenToPay = -realizedPremium;
 
             // if burning ITM and swap occurred, compute tokens to be paid through exercise and add swap fees
             int256 intrinsicValue = swappedAmount - (longAmount - shortAmount);
@@ -1298,6 +1315,9 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
                 // add the intrinsic value to the tokenToPay
                 tokenToPay += intrinsicValue;
+
+                // record the paid amount
+                paidAmount = intrinsicValue;
             }
 
             if (tokenToPay > 0) {

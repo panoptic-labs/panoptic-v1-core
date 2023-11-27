@@ -1128,7 +1128,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal returns (int256 currentPositionPremia, int256 exchangedAmounts) {
+    ) internal returns (int256 currentPositionPremia, int256 paidAmounts) {
         // burn the option in sfpm, switch order of tickLimits to create "swapAtMint" flag
         (, int256 totalSwapped, int24 newTick) = sfpm.burnTokenizedPosition(
             tokenId,
@@ -1157,23 +1157,22 @@ contract PanopticPool is ERC1155Holder, Multicall {
         );
 
         // add current premia to exchangedAmounts because it is subtracted from exchangedAmount0/1
-        exchangedAmounts = currentPositionPremia;
 
         // exercise the option and take the commission and addData
         int128 realizedPremium0;
         {
-            int256 exchangedAmount0;
-            (exchangedAmount0, realizedPremium0) = s_collateralToken0.exercise(
+            int256 paidAmount0;
+            (paidAmount0, realizedPremium0) = s_collateralToken0.exercise(
                 owner,
                 longAmounts.rightSlot(),
                 shortAmounts.rightSlot(),
                 totalSwapped.rightSlot(),
                 currentPositionPremia.rightSlot()
             );
-            exchangedAmounts = exchangedAmounts.toRightSlot(exchangedAmount0.toInt128());
+            paidAmounts = paidAmounts.toRightSlot(paidAmount0.toInt128());
         }
         {
-            (int256 exchangedAmount1, int128 realizedPremium1) = s_collateralToken1.exercise(
+            (int256 paidAmount1, int128 realizedPremium1) = s_collateralToken1.exercise(
                 owner,
                 longAmounts.leftSlot(),
                 shortAmounts.leftSlot(),
@@ -1185,7 +1184,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 realizedPremium1
             );
 
-            exchangedAmounts = exchangedAmounts.toLeftSlot(exchangedAmount1.toInt128());
+            paidAmounts = paidAmounts.toLeftSlot(paidAmount1.toInt128());
         }
     }
 
