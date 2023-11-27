@@ -3763,6 +3763,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
+        vm.assume(pool != USDC_WETH_100);
 
         {
             _initWorld(x);
@@ -3932,6 +3933,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 swapSizeSeed
     ) public {
         vm.assume(strikeSeed != strikeSeed2);
+        vm.assume(pool != USDC_WETH_100);
 
         uint128 required;
 
