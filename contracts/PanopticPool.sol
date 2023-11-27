@@ -962,9 +962,12 @@ contract PanopticPool is ERC1155Holder, Multicall {
             // compute bonus as min(collateralBalance/2, required-collateralBalance)
             {
                 // compute the ratio of token0 to total collateral requirements
-                uint256 requiredRatioX128 = (tokenData0.leftSlot() * 2 ** 128) /
-                    (tokenData0.leftSlot() +
-                        PanopticMath.convert1to0(tokenData1.leftSlot(), sqrtPriceX96));
+                uint256 requiredRatioX128 = Math.mulDiv(
+                    tokenData0.leftSlot(),
+                    2 ** 128,
+                    tokenData0.leftSlot() +
+                        PanopticMath.convert1to0(tokenData1.leftSlot(), sqrtPriceX96)
+                );
                 (uint256 balanceCross, uint256 thresholdCross) = PanopticMath.convertCollateralData(
                     tokenData0,
                     tokenData1,
@@ -984,6 +987,11 @@ contract PanopticPool is ERC1155Holder, Multicall {
                         2 ** 128 - requiredRatioX128
                     )
                 );
+                console2.log("bonus0", bonus0);
+                console2.log("bonus1", bonus1);
+                console2.log("tokenData0.ls", tokenData0.leftSlot());
+                console2.log("tokenData1.ls", tokenData1.leftSlot());
+                console2.log("requiredRatioX128", requiredRatioX128);
             }
 
             int256 balance0 = int256(uint256(tokenData0.rightSlot()));
