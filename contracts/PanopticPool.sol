@@ -979,9 +979,9 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 bonus0 = int256(Math.mulDiv128(bonusCross, requiredRatioX128));
 
                 bonus1 = int256(
-                    PanopticMath.convert0to1(
-                        Math.mulDiv128(bonusCross, 2 ** 128 - requiredRatioX128),
-                        sqrtPriceX96
+                    Math.mulDiv128(
+                        PanopticMath.convert0to1(bonusCross, sqrtPriceX96),
+                        2 ** 128 - requiredRatioX128
                     )
                 );
             }
