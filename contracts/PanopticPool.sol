@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
-
+import "forge-std/Test.sol";
 // Interfaces
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
@@ -1017,6 +1017,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                     PanopticMath.convert1to0(balance1 - paid1, sqrtPriceX96),
                     paid0 - balance0
                 );
+                console2.log("COMP 0");
             } else if ((paid1 > balance1)) {
                 // liquidatee has insufficient token1 but some token0 left over, so we use what they have left to mitigate token1 losses
                 // we do this by substituting an equivalent value of token0 in our refund to the liquidator, plus a bonus, for the token1 we convert
@@ -1036,6 +1037,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                     PanopticMath.convert0to1(balance0 - paid0, sqrtPriceX96),
                     paid1 - balance1
                 );
+                console2.log("COMP 1");
             }
 
             return (bonus0, bonus1);
@@ -1440,6 +1442,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
             Math.getSqrtRatioAtTick(twapTick),
             netExchanged
         );
+        console2.log("liquidationBonus0", liquidationBonus0);
+        console2.log("liquidationBonus1", liquidationBonus1);
 
         // revoke the delegated amount plus the bonus amount.
 
