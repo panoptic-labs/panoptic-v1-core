@@ -786,7 +786,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                     _swapped,
                     _positionBalanceArray
                 );
-            realizedPremium = int256(_oldPositionPremia);
+            realizedPremium = _oldPositionPremia;
         }
         {
             int128 _longAmount = longAmounts.leftSlot();
@@ -944,7 +944,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param netExchanged The net exchanged value of the closed portfolio
     /// @return bonus0 bonus amount for token0
     /// @return bonus1 bonus amount for token1
-    function _getBonusSplit(
+    function getLiquidationBonus(
         uint256 tokenData0,
         uint256 tokenData1,
         uint160 sqrtPriceX96,
@@ -1154,17 +1154,20 @@ contract PanopticPool is ERC1155Holder, Multicall {
             s_tickSpacing
         );
 
+        // add current premia to exchangedAmounts because it is subtracted from exchangedAmount0/1
         exchangedAmounts = currentPositionPremia;
+
         // exercise the option and take the commission and addData
+        int128 realizedPremium0;
         {
-            (int256 exchangedAmount0, int128 realizedPremium0) = s_collateralToken0.exercise(
+            int256 exchangedAmount0;
+            (exchangedAmount0, realizedPremium0) = s_collateralToken0.exercise(
                 owner,
                 longAmounts.rightSlot(),
                 shortAmounts.rightSlot(),
                 totalSwapped.rightSlot(),
                 currentPositionPremia.rightSlot()
             );
-            currentPositionPremia = int256(realizedPremium0);
             exchangedAmounts = exchangedAmounts.toRightSlot(exchangedAmount0.toInt128());
         }
         {
@@ -1175,7 +1178,11 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 totalSwapped.leftSlot(),
                 currentPositionPremia.leftSlot()
             );
-            currentPositionPremia = currentPositionPremia.toLeftSlot(realizedPremium1);
+            // update currentPositionPremia in case owed amoutns exceeded pool balance
+            currentPositionPremia = int256(0).toRightSlot(realizedPremium0).toLeftSlot(
+                realizedPremium1
+            );
+
             exchangedAmounts = exchangedAmounts.toLeftSlot(exchangedAmount1.toInt128());
         }
     }
@@ -1372,7 +1379,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
             (, int24 currentTick, , , , , ) = s_univ3pool.slot0();
 
             // Enforce maximum delta between TWAP and currentTick to prevent extreme price manipulation
-            if (Math.abs(int256(currentTick) - int256(twapTick)) > MAX_TWAP_DELTA_LIQUIDATION)
+            if (Math.abs(currentTick - twapTick) > MAX_TWAP_DELTA_LIQUIDATION)
                 revert Errors.StaleTWAP();
 
             (int256 premia, uint256[2][] memory positionBalanceArray) = _calculateAccumulatedPremia(
@@ -1420,7 +1427,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
         // compute bonus amounts using latest tick data
         (, int24 finalTick, , , , , ) = s_univ3pool.slot0();
-        (int256 liquidationBonus0, int256 liquidationBonus1) = _getBonusSplit(
+        (int256 liquidationBonus0, int256 liquidationBonus1) = getLiquidationBonus(
             tokenData0,
             tokenData1,
             Math.getSqrtRatioAtTick(finalTick),
