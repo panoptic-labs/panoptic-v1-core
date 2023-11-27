@@ -10,6 +10,8 @@ import {ISwapRouter} from "v3-periphery/interfaces/ISwapRouter.sol";
 import {PoolAddress} from "v3-periphery/libraries/PoolAddress.sol";
 import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 import {TransferHelper} from "v3-periphery/libraries/TransferHelper.sol";
+import {Constants} from "@libraries/Constants.sol";
+import {Math} from "@libraries/Math.sol";
 
 contract MiniPositionManager {
     struct CallbackData {
@@ -140,8 +142,8 @@ contract PositionUtils is Test {
 
         strikeOffset = int24(width % 2 == 0 ? int256(0) : ts / 2);
 
-        minTick = int24(((currentTick - 4096 * ts) / ts) * ts);
-        maxTick = int24(((currentTick + 4096 * ts) / ts) * ts);
+        minTick = int24((Math.max(currentTick - 4096 * ts, Constants.MIN_V3POOL_TICK) / ts) * ts);
+        maxTick = int24((Math.min(currentTick + 4096 * ts, Constants.MAX_V3POOL_TICK) / ts) * ts);
     }
 
     function getValidSW(
