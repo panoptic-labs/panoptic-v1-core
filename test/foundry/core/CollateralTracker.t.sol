@@ -2166,13 +2166,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 0,
                 0
             );
-            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
-                panopticPool,
-                Alice,
-                strike,
-                asset,
-                positionIdList
-            );
         }
         uint160 sqrtPriceX96;
 
@@ -2255,9 +2248,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
             );
 
             vm.warp(block.timestamp + 1000000);
+            sqrtPriceX96 = Math.getSqrtRatioAtTick(panopticPool.getTWAP());
 
             panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
-            (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
             uint256 balance0AfterA = collateralToken0.previewRedeem(
                 collateralToken0.balanceOf(Alice)
