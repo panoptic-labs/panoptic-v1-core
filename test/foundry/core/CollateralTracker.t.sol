@@ -1006,11 +1006,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
             strikeSeed,
             uint24(tickSpacing),
             currentTick,
-            1
+            0
         );
 
         // sell as Bob
-        tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 0, 0, strike, width);
+        tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 0, 0, 0, 0, strike, width);
         positionIdList.push(tokenId);
 
         /// calculate position size
