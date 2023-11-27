@@ -1256,7 +1256,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             }
 
             // get collateral of the user (optionOwner) for the current position.
-            tokenData = _getAccountMargin(
+            tokenData = getAccountMarginDetails(
                 environmentContext.caller(),
                 environmentContext.currentTick(),
                 positionBalanceArray,
@@ -1375,35 +1375,17 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// NOTE: It's up to the caller to confirm from the returned result that the account has enough collateral.
     /// @dev This can be used to check the health: how many tokens a user has compared to the margin threshold.
     /// @param user The account to check collateral/margin health for.
-    /// @param currentTick The current AMM price tick.
+    /// @param atTick The tick at which to compute the collateral requirement.
     /// @param positionBalanceArray The list of all historical positions held by the 'optionOwner', stored as [[tokenId, balance/poolUtilizationAtMint], ...].
     /// @param premiumAllPositions The premium collected thus far across all positions.
     /// @return tokenData Information collected for the tokens about the health of the account.
     /// The collateral balance of the user is in the right slot and the threshold for margin call is in the left slot.
     function getAccountMarginDetails(
         address user,
-        int24 currentTick,
-        uint256[2][] memory positionBalanceArray,
-        int128 premiumAllPositions
-    ) public view returns (uint256 tokenData) {
-        tokenData = _getAccountMargin(user, currentTick, positionBalanceArray, premiumAllPositions);
-    }
-
-    /// @notice Get the collateral status/margin details of an account/user.
-    /// NOTE: It's up to the caller to confirm from the returned result that the account has enough collateral.
-    /// @dev This can be used to check the health: how many tokens a user has compared to the margin threshold.
-    /// @param user the account to check collateral/margin health for.
-    /// @param atTick tick to convert values at. This can be the current tick or the Uniswap pool TWAP tick.
-    /// @param positionBalanceArray the list of all historical positions held by the 'optionOwner', stored as [[tokenId, balance/poolUtilizationAtMint], ...].
-    /// @param premiumAllPositions the premium collected thus far across all positions.
-    /// @return tokenData information collected for the tokens about the health of the account.
-    /// The collateral balance of the user is in the right slot and the threshold for margin call is in the left slot.
-    function _getAccountMargin(
-        address user,
         int24 atTick,
         uint256[2][] memory positionBalanceArray,
         int128 premiumAllPositions
-    ) internal view returns (uint256 tokenData) {
+    ) public view returns (uint256 tokenData) {
         uint256 tokenRequired;
 
         // if the account has active options, compute the required collateral to keep account in good health
