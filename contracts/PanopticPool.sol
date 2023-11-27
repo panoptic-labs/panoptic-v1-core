@@ -1011,7 +1011,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                     (Math.min(
                         balance1 - paid1,
                         PanopticMath.convert0to1(paid0 - balance0, sqrtPriceX96)
-                    ) * LIQ_CONVERSION_BONUS) /
+                    ) * DECIMALS) /
                     DECIMALS;
                 bonus0 -= Math.min(
                     PanopticMath.convert1to0(balance1 - paid1, sqrtPriceX96),
@@ -1030,7 +1030,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                     (Math.min(
                         balance0 - paid0,
                         PanopticMath.convert1to0(paid1 - balance1, sqrtPriceX96)
-                    ) * LIQ_CONVERSION_BONUS) /
+                    ) * DECIMALS) /
                     DECIMALS;
                 bonus1 -= Math.min(
                     PanopticMath.convert0to1(balance0 - paid0, sqrtPriceX96),

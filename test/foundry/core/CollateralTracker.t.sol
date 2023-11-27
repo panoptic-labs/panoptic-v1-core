@@ -2309,7 +2309,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                     assertTrue(balance1AfterD < balance1BeforeD);
                 } else {
                     assertTrue(balance0AfterD < balance0BeforeD);
-                    console.log("C21");
+                    console.log("C20");
                     assertTrue(balance1AfterD == balance1BeforeD);
                 }
             }
