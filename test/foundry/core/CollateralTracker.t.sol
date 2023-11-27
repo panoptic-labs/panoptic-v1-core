@@ -1656,81 +1656,62 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            uint256 balance0BeforeA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1BeforeA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
-            uint256 balance0BeforeC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1BeforeC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0BeforeD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1BeforeD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
+            worldState memory dataBefore = worldSnapshot();
 
             vm.warp(block.timestamp + 1000000);
 
             panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
-            (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
-            uint256 balance0AfterA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1AfterA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
+            worldState memory dataAfter = worldSnapshot();
 
-            uint256 balance0AfterC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1AfterC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0AfterD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1AfterD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
-
-            console2.log("Alice lost money");
+            console2.log("Alice lost tokens");
             {
-                uint256 crossBeforeA = (balance1BeforeA << 96) /
+                console2.log(
+                    dataBefore.AliceBalance0,
+                    dataAfter.AliceBalance0,
+                    dataBefore.AliceBalance1,
+                    dataAfter.AliceBalance1
+                );
+                uint256 crossBeforeA = (dataBefore.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeA * sqrtPriceX96) /
+                    (dataBefore.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterA = (balance1AfterA << 96) /
+                uint256 crossAfterA = (dataAfter.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterA * sqrtPriceX96) /
+                    (dataAfter.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                console2.log(balance0BeforeA, balance0AfterA, balance1BeforeA, balance1AfterA);
-
-                console2.log(crossBeforeA, crossAfterA);
-                assertTrue(crossBeforeA > crossAfterA);
+                assertTrue(crossAfterA < crossBeforeA);
             }
             {
                 console2.log("all amounts are the same for Diana (no protocol loss)");
-                console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-                assertApproxEqAbs(balance0AfterD, balance0BeforeD, 1, "rounding 0");
-                assertApproxEqAbs(balance1AfterD, balance1BeforeD, 1, "rounding 1");
+                assertApproxEqAbs(
+                    dataBefore.DianaBalance0,
+                    dataAfter.DianaBalance0,
+                    1,
+                    "rounding 0"
+                );
+                assertApproxEqAbs(
+                    dataBefore.DianaBalance1,
+                    dataAfter.DianaBalance1,
+                    1,
+                    "rounding 1"
+                );
             }
             {
                 console2.log("the liquidator made money");
-                console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
-                uint256 crossBeforeC = (balance1BeforeC << 96) /
+                console2.log(
+                    dataBefore.CharlieBalance0,
+                    dataAfter.CharlieBalance0,
+                    dataBefore.CharlieBalance1,
+                    dataAfter.CharlieBalance1
+                );
+                uint256 crossBeforeC = (dataBefore.CharlieBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeC * sqrtPriceX96) /
+                    (dataBefore.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterC = (balance1AfterC << 96) /
+                uint256 crossAfterC = (dataAfter.CharlieBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterC * sqrtPriceX96) /
+                    (dataAfter.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
                 console2.log(crossBeforeC, crossAfterC);
                 assertTrue(crossBeforeC < crossAfterC);
@@ -1930,100 +1911,66 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            uint256 balance0BeforeA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1BeforeA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
-            uint256 balance0BeforeC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1BeforeC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0BeforeD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1BeforeD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
+            worldState memory dataBefore = worldSnapshot();
 
             vm.warp(block.timestamp + 1000000);
 
             panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
-            uint256 balance0AfterA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1AfterA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
-
-            uint256 balance0AfterC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1AfterC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0AfterD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1AfterD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
+            worldState memory dataAfter = worldSnapshot();
 
             console2.log("Alice lost all her money");
             {
-                uint256 crossBeforeA = (balance1BeforeA << 96) /
+                console2.log(
+                    dataBefore.AliceBalance0,
+                    dataAfter.AliceBalance0,
+                    dataBefore.AliceBalance1,
+                    dataAfter.AliceBalance1
+                );
+                uint256 crossBeforeA = (dataBefore.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeA * sqrtPriceX96) /
+                    (dataBefore.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterA = (balance1AfterA << 96) /
+                uint256 crossAfterA = (dataAfter.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterA * sqrtPriceX96) /
+                    (dataAfter.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                console2.log(balance0BeforeA, balance0AfterA, balance1BeforeA, balance1AfterA);
-
-                console2.log(crossBeforeA, crossAfterA);
                 assertTrue(crossAfterA == 0);
             }
+
             {
                 console2.log(
                     "total amount is lower for Diana (protocol loss only for asset side)",
                     asset
                 );
-                uint256 crossBeforeD = (balance1BeforeD << 96) /
-                    sqrtPriceX96 +
-                    (balance0BeforeD * sqrtPriceX96) /
-                    2 ** 96;
-                uint256 crossAfterD = (balance1AfterD << 96) /
-                    sqrtPriceX96 +
-                    (balance0AfterD * sqrtPriceX96) /
-                    2 ** 96;
-                console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-                assertTrue(crossAfterD < crossBeforeD);
                 if (asset == 1) {
-                    assertTrue(balance0AfterD == balance0BeforeD);
-                    assertTrue(balance1AfterD < balance1BeforeD);
+                    assertTrue(dataBefore.DianaBalance0 == dataAfter.DianaBalance0);
+                    assertTrue(dataBefore.DianaBalance1 > dataAfter.DianaBalance1);
                 } else {
-                    assertTrue(balance0AfterD < balance0BeforeD);
-                    assertTrue(balance1AfterD == balance1BeforeD);
+                    assertTrue(dataBefore.DianaBalance0 > dataAfter.DianaBalance0);
+                    assertTrue(dataBefore.DianaBalance1 == dataAfter.DianaBalance1);
                 }
             }
+
             {
                 console2.log("the liquidator made money");
-                console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
-                uint256 crossBeforeC = (balance1BeforeC << 96) /
+                console2.log(
+                    dataBefore.CharlieBalance0,
+                    dataAfter.CharlieBalance0,
+                    dataBefore.CharlieBalance1,
+                    dataAfter.CharlieBalance1
+                );
+                uint256 crossBeforeC = (dataBefore.CharlieBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeC * sqrtPriceX96) /
+                    (dataBefore.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterC = (balance1AfterC << 96) /
+                uint256 crossAfterC = (dataAfter.CharlieBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterC * sqrtPriceX96) /
+                    (dataAfter.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                assertTrue(crossAfterC > crossBeforeC);
+                console2.log(crossBeforeC, crossAfterC);
+                assertTrue(crossBeforeC < crossAfterC);
             }
         }
     }
@@ -2222,101 +2169,66 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            uint256 balance0BeforeA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1BeforeA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
-            uint256 balance0BeforeC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1BeforeC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0BeforeD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1BeforeD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
+            worldState memory dataBefore = worldSnapshot();
 
             vm.warp(block.timestamp + 1000000);
 
             panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
-            uint256 balance0AfterA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1AfterA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
-
-            uint256 balance0AfterC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1AfterC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0AfterD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1AfterD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
+            worldState memory dataAfter = worldSnapshot();
 
             console2.log("Alice lost all her money");
             {
-                uint256 crossBeforeA = (balance1BeforeA << 96) /
+                console2.log(
+                    dataBefore.AliceBalance0,
+                    dataAfter.AliceBalance0,
+                    dataBefore.AliceBalance1,
+                    dataAfter.AliceBalance1
+                );
+                uint256 crossBeforeA = (dataBefore.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeA * sqrtPriceX96) /
+                    (dataBefore.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterA = (balance1AfterA << 96) /
+                uint256 crossAfterA = (dataAfter.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterA * sqrtPriceX96) /
+                    (dataAfter.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                console2.log(balance0BeforeA, balance0AfterA, balance1BeforeA, balance1AfterA);
-
-                console2.log(crossBeforeA, crossAfterA);
                 assertTrue(crossAfterA == 0);
             }
+
             {
                 console2.log(
                     "total amount is lower for Diana (protocol loss only for asset side)",
                     asset
                 );
-                uint256 crossBeforeD = (balance1BeforeD << 96) /
-                    sqrtPriceX96 +
-                    (balance0BeforeD * sqrtPriceX96) /
-                    2 ** 96;
-                uint256 crossAfterD = (balance1AfterD << 96) /
-                    sqrtPriceX96 +
-                    (balance0AfterD * sqrtPriceX96) /
-                    2 ** 96;
-                console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-                assertTrue(crossAfterD < crossBeforeD);
                 if (asset == 1) {
-                    assertTrue(balance0AfterD == balance0BeforeD);
-                    assertTrue(balance1AfterD < balance1BeforeD);
+                    assertTrue(dataBefore.DianaBalance0 == dataAfter.DianaBalance0);
+                    assertTrue(dataBefore.DianaBalance1 > dataAfter.DianaBalance1);
                 } else {
-                    assertTrue(balance0AfterD < balance0BeforeD);
-                    assertTrue(balance1AfterD == balance1BeforeD);
+                    assertTrue(dataBefore.DianaBalance0 > dataAfter.DianaBalance0);
+                    assertTrue(dataBefore.DianaBalance1 == dataAfter.DianaBalance1);
                 }
             }
+
             {
                 console2.log("the liquidator made money");
-                console2.log(balance0BeforeC, balance0AfterC, balance1BeforeC, balance1AfterC);
-                uint256 crossBeforeC = (balance1BeforeC << 96) /
+                console2.log(
+                    dataBefore.CharlieBalance0,
+                    dataAfter.CharlieBalance0,
+                    dataBefore.CharlieBalance1,
+                    dataAfter.CharlieBalance1
+                );
+                uint256 crossBeforeC = (dataBefore.CharlieBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeC * sqrtPriceX96) /
+                    (dataBefore.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterC = (balance1AfterC << 96) /
+                uint256 crossAfterC = (dataAfter.CharlieBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterC * sqrtPriceX96) /
+                    (dataAfter.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
                 console2.log(crossBeforeC, crossAfterC);
-                assertTrue(crossAfterC > crossBeforeC);
+                assertTrue(crossBeforeC < crossAfterC);
             }
         }
     }
@@ -2513,90 +2425,346 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            uint256 balance0BeforeA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
+            worldState memory dataBefore = worldSnapshot();
+            vm.warp(block.timestamp + 1000000);
+
+            panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
+            (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+            worldState memory dataAfter = worldSnapshot();
+
+            console2.log("Alice lost tokens");
+            {
+                console2.log(
+                    dataBefore.AliceBalance0,
+                    dataAfter.AliceBalance0,
+                    dataBefore.AliceBalance1,
+                    dataAfter.AliceBalance1
+                );
+                uint256 crossBeforeA = (dataBefore.AliceBalance1 << 96) /
+                    sqrtPriceX96 +
+                    (dataBefore.AliceBalance0 * sqrtPriceX96) /
+                    2 ** 96;
+                uint256 crossAfterA = (dataAfter.AliceBalance1 << 96) /
+                    sqrtPriceX96 +
+                    (dataAfter.AliceBalance0 * sqrtPriceX96) /
+                    2 ** 96;
+                assertTrue(crossAfterA < crossBeforeA);
+            }
+
+            {
+                console2.log("all amounts are the same for Diana (no protocol loss)");
+                assertApproxEqAbs(
+                    dataBefore.DianaBalance0,
+                    dataAfter.DianaBalance0,
+                    1,
+                    "rounding 0"
+                );
+                assertApproxEqAbs(
+                    dataBefore.DianaBalance1,
+                    dataAfter.DianaBalance1,
+                    1,
+                    "rounding 1"
+                );
+            }
+            {
+                console2.log("the liquidator made money, but lost asset token");
+                console2.log(
+                    dataBefore.CharlieBalance0,
+                    dataAfter.CharlieBalance0,
+                    dataBefore.CharlieBalance1,
+                    dataAfter.CharlieBalance1
+                );
+                uint256 crossBeforeC = (dataBefore.CharlieBalance1 << 96) /
+                    sqrtPriceX96 +
+                    (dataBefore.CharlieBalance0 * sqrtPriceX96) /
+                    2 ** 96;
+                uint256 crossAfterC = (dataAfter.CharlieBalance1 << 96) /
+                    sqrtPriceX96 +
+                    (dataAfter.CharlieBalance0 * sqrtPriceX96) /
+                    2 ** 96;
+                console2.log(crossBeforeC, crossAfterC);
+                assertTrue(crossBeforeC < crossAfterC);
+                if (asset == 0) {
+                    assertTrue(dataAfter.CharlieBalance0 < dataBefore.CharlieBalance0);
+                    assertTrue(dataAfter.CharlieBalance1 > dataBefore.CharlieBalance1);
+                } else if (asset == 1) {
+                    assertTrue(dataAfter.CharlieBalance0 > dataBefore.CharlieBalance0);
+                    assertTrue(dataAfter.CharlieBalance1 < dataBefore.CharlieBalance1);
+                }
+            }
+        }
+    }
+
+    // pos starts OTM then gets flipped ITM
+    function test_Success_liquidate_ITM_smallLoss_cross(uint256 seed) public {
+        {
+            // fuzz
+            _initWorld(0);
+
+            // initalize a custom Panoptic pool
+            _deployCustomPanopticPool(token0, token1, pool);
+            console2.log("pool", address(pool));
+
+            // Diana: Passive Liquidity Provider (PLP)
+            // Invoke all interactions with the Collateral Tracker from user Diana.
+            vm.startPrank(Diana);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Diana);
+            _grantTokens(Swapper);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(type(uint96).max, Diana);
+            collateralToken1.deposit(type(uint96).max, Diana);
+        }
+
+        uint256 tokenType;
+        uint256 asset;
+        uint160 sqrtPriceX96;
+        {
+            // Bob: Trader / price manipulator
+            // Invoke all interactions with the Collateral Tracker from user Bob/
+            vm.startPrank(Bob);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(type(uint104).max, Bob);
+            collateralToken1.deposit(type(uint104).max, Bob);
+            // sell an OTM call as Bob
+
+            (tokenType, asset) = (seed >> 25) % 2 == 0 ? (1, 1) : (0, 0);
+
+            strike = asset == 1
+                ? ((currentTick - int24(uint24(seed) % 5000)) / tickSpacing) *
+                    tickSpacing -
+                    2 *
+                    tickSpacing
+                : ((currentTick + int24(uint24(seed) % 5000)) / tickSpacing) *
+                    tickSpacing +
+                    2 *
+                    tickSpacing;
+            width = (int24((uint24(seed >> 24) % 16) + 2) / 2) * 2;
+
+            console2.log("strike", strike);
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(
+                0,
+                1,
+                tokenType,
+                0,
+                asset,
+                0,
+                strike,
+                width
             );
-            uint256 balance1BeforeA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
+            positionIdList.push(tokenId);
+
+            /// calculate position size
+            //(legLowerTick, legUpperTick) = tokenId.asTicks(0, tickSpacing);
+
+            positionSize0 = asset == 1
+                ? uint128(bound(seed, 0.1 ether, 10 ether))
+                : uint128(bound(seed, 10 ** 10, 10 ** 10));
+
+            panopticPool.mintOptions(positionIdList, uint128(positionSize0), 0, 0, 0);
+            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
+                panopticPool,
+                Bob,
+                currentTick,
+                asset,
+                positionIdList
             );
-            uint256 balance0BeforeC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
+            assertTrue(requiredBalance >= positionSize0 / 5);
+
+            panopticPool.burnOptions(positionIdList, 0, 0);
+        }
+
+        {
+            // Alice: Liquidatee
+            // sell as Alice
+            changePrank(Alice);
+
+            // approve collateral tracker to move tokens on Alice's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // give Alice the max amount of tokens
+            _grantTokens(Alice);
+
+            (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+
+            // deposit only the token that is not moved to activate cross collateralization
+            if (asset == 1) {
+                uint256 collateralAmount = (((uint256(positionSize0) * 2 ** 96) / sqrtPriceX96) *
+                    2 ** 96) / sqrtPriceX96;
+                console2.log("collateral1", collateralAmount, positionSize0, sqrtPriceX96);
+                collateralToken0.deposit((collateralAmount) / 2, Alice);
+                collateralToken1.deposit((positionSize0) / 20, Alice);
+            } else {
+                uint256 collateralAmount = (((uint256(positionSize0) * sqrtPriceX96) / 2 ** 96) *
+                    sqrtPriceX96) / 2 ** 96;
+                console2.log("collateral0", collateralAmount, positionSize0, sqrtPriceX96);
+                collateralToken1.deposit((collateralAmount) / 2, Alice);
+                collateralToken0.deposit((positionSize0) / 20, Alice);
+            }
+            // sell a put as Alice
+            panopticPool.mintOptions(
+                positionIdList,
+                uint128(positionSize0),
+                type(uint64).max,
+                0,
+                0
             );
-            uint256 balance1BeforeC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
+            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
+                panopticPool,
+                Alice,
+                strike,
+                asset,
+                positionIdList
             );
-            uint256 balance0BeforeD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
+        }
+
+        {
+            (, currentTick, , , , , ) = pool.slot0();
+            console2.log("before", currentTick);
+
+            // mimic pool activity
+            //twoWaySwap(10 * positionSize0);
+            //twoWaySwap(10 * positionSize0);
+
+            // check that Alice is insolvent:
+
+            (uint256 collateralBalance, uint256 requiredBalance) = panopticHelper.checkCollateral(
+                panopticPool,
+                Alice,
+                currentTick,
+                asset,
+                positionIdList
             );
-            uint256 balance1BeforeD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
+            // account is liquidatable
+            uint256 k;
+            while (2 * requiredBalance <= 3 * collateralBalance) {
+                oneWaySwapRnd(
+                    asset == 1
+                        ? int256(uint256((k + 1) * 10 ** 17))
+                        : -int256(uint256((k + 1) * 10 ** 17))
+                );
+                (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+                (collateralBalance, requiredBalance) = panopticHelper.checkCollateral(
+                    panopticPool,
+                    Alice,
+                    currentTick,
+                    asset,
+                    positionIdList
+                );
+                k += 1;
+            }
+            (, currentTick, , , , , ) = pool.slot0();
+            console2.log("after", currentTick);
+
+            console2.log("pass. N steps = ", k);
+            assertTrue(requiredBalance > collateralBalance);
+        }
+
+        {
+            // Charlie: Liquidator
+            // Invoke all interactions with the Collateral Tracker from user Charlie
+            vm.startPrank(Charlie);
+
+            // give Charlie the max amount of tokens
+            _grantTokens(Charlie);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            collateralToken0.deposit(1e12, Charlie);
+            collateralToken1.deposit(1e21, Charlie);
+        }
+
+        {
+            worldState memory dataBefore = worldSnapshot();
 
             vm.warp(block.timestamp + 1000000);
 
             panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
-            uint256 balance0AfterA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1AfterA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
+            worldState memory dataAfter = worldSnapshot();
 
-            uint256 balance0AfterC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1AfterC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0AfterD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1AfterD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
-
-            console2.log("Alice lost money");
+            console2.log("Alice lost all her money");
             {
-                uint256 crossBeforeA = (balance1BeforeA << 96) /
+                console2.log(
+                    dataBefore.AliceBalance0,
+                    dataAfter.AliceBalance0,
+                    dataBefore.AliceBalance1,
+                    dataAfter.AliceBalance1
+                );
+                uint256 crossBeforeA = (dataBefore.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeA * sqrtPriceX96) /
+                    (dataBefore.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterA = (balance1AfterA << 96) /
+                uint256 crossAfterA = (dataAfter.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterA * sqrtPriceX96) /
+                    (dataAfter.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                console2.log(balance0BeforeA, balance0AfterA, balance1BeforeA, balance1AfterA);
+                assertTrue(crossAfterA == 0);
+            }
 
-                console2.log(crossBeforeA, crossAfterA);
-                assertTrue(crossBeforeA > crossAfterA);
+            {
+                console2.log(
+                    "total amount is lower for Diana (protocol loss only for asset side)",
+                    asset
+                );
+                if (asset == 1) {
+                    assertTrue(dataBefore.DianaBalance0 == dataAfter.DianaBalance0);
+                    assertTrue(dataBefore.DianaBalance1 > dataAfter.DianaBalance1);
+                } else {
+                    assertTrue(dataBefore.DianaBalance0 > dataAfter.DianaBalance0);
+                    assertTrue(dataBefore.DianaBalance1 == dataAfter.DianaBalance1);
+                }
             }
             {
-                console2.log("all amounts are the same for Diana (no protocol loss)", asset);
-                console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-                assertApproxEqAbs(balance0AfterD, balance0BeforeD, 1, "rounding 0");
-                assertApproxEqAbs(balance1AfterD, balance1BeforeD, 1, "rounding 1");
-            }
-            {
-                console2.log("the liquidator made money");
-                console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
-                uint256 crossBeforeC = (balance1BeforeC << 96) /
+                console2.log("the liquidator made money, but may lose on asset token");
+                console2.log(
+                    dataBefore.CharlieBalance0,
+                    dataAfter.CharlieBalance0,
+                    dataBefore.CharlieBalance1,
+                    dataAfter.CharlieBalance1
+                );
+                uint256 crossBeforeC = (dataBefore.CharlieBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeC * sqrtPriceX96) /
+                    (dataBefore.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterC = (balance1AfterC << 96) /
+                uint256 crossAfterC = (dataAfter.CharlieBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterC * sqrtPriceX96) /
+                    (dataAfter.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
                 console2.log(crossBeforeC, crossAfterC);
                 assertTrue(crossBeforeC < crossAfterC);
+                if (asset == 0) {
+                    //assertTrue(dataAfter.CharlieBalance0 > dataBefore.CharlieBalance0);
+                    assertTrue(dataAfter.CharlieBalance1 > dataBefore.CharlieBalance1);
+                } else if (asset == 1) {
+                    assertTrue(dataAfter.CharlieBalance0 > dataBefore.CharlieBalance0);
+                    //assertTrue(dataAfter.CharlieBalance1 > dataBefore.CharlieBalance1);
+                }
             }
         }
     }
 
     // pos starts OTM then gets flipped ITM
-    function test_Success_liquidate_ITM_loss_cross(uint256 seed) public {
+    function test_Success_liquidate_ITM_bigLoss_cross(uint256 seed) public {
         {
             // fuzz
             _initWorld(0);
@@ -2793,85 +2961,72 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         {
-            uint256 balance0BeforeA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1BeforeA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
-            uint256 balance0BeforeC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1BeforeC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0BeforeD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1BeforeD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
+            worldState memory dataBefore = worldSnapshot();
 
             vm.warp(block.timestamp + 1000000);
 
             panopticPool.liquidate(Alice, positionIdList, 1e11, 1e20);
             (sqrtPriceX96, currentTick, , , , , ) = pool.slot0();
 
-            uint256 balance0AfterA = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Alice)
-            );
-            uint256 balance1AfterA = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Alice)
-            );
+            worldState memory dataAfter = worldSnapshot();
 
-            uint256 balance0AfterC = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Charlie)
-            );
-            uint256 balance1AfterC = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Charlie)
-            );
-            uint256 balance0AfterD = collateralToken0.previewRedeem(
-                collateralToken0.balanceOf(Diana)
-            );
-            uint256 balance1AfterD = collateralToken1.previewRedeem(
-                collateralToken1.balanceOf(Diana)
-            );
-
-            console2.log("Alice lost money");
+            console2.log("Alice lost all her money");
             {
-                uint256 crossBeforeA = (balance1BeforeA << 96) /
+                console2.log(
+                    dataBefore.AliceBalance0,
+                    dataAfter.AliceBalance0,
+                    dataBefore.AliceBalance1,
+                    dataAfter.AliceBalance1
+                );
+                uint256 crossBeforeA = (dataBefore.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0BeforeA * sqrtPriceX96) /
+                    (dataBefore.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterA = (balance1AfterA << 96) /
+                uint256 crossAfterA = (dataAfter.AliceBalance1 << 96) /
                     sqrtPriceX96 +
-                    (balance0AfterA * sqrtPriceX96) /
+                    (dataAfter.AliceBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                console2.log(balance0BeforeA, balance0AfterA, balance1BeforeA, balance1AfterA);
+                assertTrue(crossAfterA == 0);
+            }
 
-                console2.log(crossBeforeA, crossAfterA);
-                assertTrue(crossBeforeA > crossAfterA);
+            {
+                console2.log(
+                    "total amount is lower for Diana (protocol loss only for asset side)",
+                    asset
+                );
+                if (asset == 1) {
+                    assertTrue(dataBefore.DianaBalance0 == dataAfter.DianaBalance0);
+                    assertTrue(dataBefore.DianaBalance1 > dataAfter.DianaBalance1);
+                } else {
+                    assertTrue(dataBefore.DianaBalance0 > dataAfter.DianaBalance0);
+                    assertTrue(dataBefore.DianaBalance1 == dataAfter.DianaBalance1);
+                }
             }
             {
-                console2.log("all amounts are the same for Diana (protocol loss)", asset);
-                console2.log(balance0AfterD, balance0BeforeD, balance1AfterD, balance1BeforeD);
-                assertTrue(balance0AfterD <= balance0BeforeD);
-                assertTrue(balance1AfterD <= balance1BeforeD);
-            }
-            {
-                console2.log("the liquidator made money");
-                console2.log(balance0AfterC, balance0BeforeC, balance1AfterC, balance1BeforeC);
-                uint160 _sP = sqrtPriceX96;
-                uint256 crossBeforeC = (balance1BeforeC << 96) /
-                    _sP +
-                    (balance0BeforeC * _sP) /
+                console2.log("the liquidator made money, but lose on asset token");
+                console2.log(
+                    dataBefore.CharlieBalance0,
+                    dataAfter.CharlieBalance0,
+                    dataBefore.CharlieBalance1,
+                    dataAfter.CharlieBalance1
+                );
+                uint256 crossBeforeC = (dataBefore.CharlieBalance1 << 96) /
+                    sqrtPriceX96 +
+                    (dataBefore.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
-                uint256 crossAfterC = (balance1AfterC << 96) /
-                    _sP +
-                    (balance0AfterC * _sP) /
+                uint256 crossAfterC = (dataAfter.CharlieBalance1 << 96) /
+                    sqrtPriceX96 +
+                    (dataAfter.CharlieBalance0 * sqrtPriceX96) /
                     2 ** 96;
                 console2.log(crossBeforeC, crossAfterC);
                 assertTrue(crossBeforeC < crossAfterC);
+                if (asset == 0) {
+                    //assertTrue(dataAfter.CharlieBalance0 < dataBefore.CharlieBalance0);
+                    assertTrue(dataAfter.CharlieBalance1 > dataBefore.CharlieBalance1);
+                } else if (asset == 1) {
+                    assertTrue(dataAfter.CharlieBalance0 > dataBefore.CharlieBalance0);
+                    //assertTrue(dataAfter.CharlieBalance1 < dataBefore.CharlieBalance1);
+                }
             }
         }
     }
@@ -6710,6 +6865,58 @@ contract CollateralTrackerTest is Test, PositionUtils {
     struct CallbackData {
         PoolAddress.PoolKey univ3poolKey;
         address payer;
+    }
+
+    struct worldState {
+        uint256 AliceBalance0;
+        uint256 BobBalance0;
+        uint256 CharlieBalance0;
+        uint256 DianaBalance0;
+        uint256 SwapperBalance0;
+        uint256 totalAssets0;
+        uint256 inAmm0;
+        uint256 panopticPoolBalance0;
+        uint256 AliceBalance1;
+        uint256 BobBalance1;
+        uint256 CharlieBalance1;
+        uint256 DianaBalance1;
+        uint256 SwapperBalance1;
+        uint256 totalAssets1;
+        uint256 inAmm1;
+        uint256 panopticPoolBalance1;
+    }
+
+    function worldSnapshot() public returns (worldState memory out) {
+        {
+            out.AliceBalance0 = collateralToken0.previewRedeem(collateralToken0.balanceOf(Alice));
+            out.BobBalance0 = collateralToken0.previewRedeem(collateralToken0.balanceOf(Bob));
+            out.CharlieBalance0 = collateralToken0.previewRedeem(
+                collateralToken0.balanceOf(Charlie)
+            );
+            out.DianaBalance0 = collateralToken0.previewRedeem(collateralToken0.balanceOf(Diana));
+            out.SwapperBalance0 = collateralToken0.previewRedeem(
+                collateralToken0.balanceOf(Swapper)
+            );
+            (uint256 poolAssets, uint256 insideAMM, ) = collateralToken0.getPoolData();
+            out.totalAssets0 = poolAssets;
+            out.inAmm0 = insideAMM;
+            out.panopticPoolBalance0 = IERC20Partial(token0).balanceOf(panopticPoolAddress);
+        }
+        {
+            out.AliceBalance1 = collateralToken1.previewRedeem(collateralToken1.balanceOf(Alice));
+            out.BobBalance1 = collateralToken1.previewRedeem(collateralToken1.balanceOf(Bob));
+            out.CharlieBalance1 = collateralToken1.previewRedeem(
+                collateralToken1.balanceOf(Charlie)
+            );
+            out.DianaBalance1 = collateralToken1.previewRedeem(collateralToken1.balanceOf(Diana));
+            out.SwapperBalance1 = collateralToken1.previewRedeem(
+                collateralToken1.balanceOf(Swapper)
+            );
+            (uint256 poolAssets, uint256 insideAMM, ) = collateralToken1.getPoolData();
+            out.totalAssets1 = poolAssets;
+            out.inAmm1 = insideAMM;
+            out.panopticPoolBalance1 = IERC20Partial(token1).balanceOf(panopticPoolAddress);
+        }
     }
 
     function uniswapV3MintCallback(
