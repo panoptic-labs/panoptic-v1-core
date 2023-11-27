@@ -84,7 +84,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @notice Mutable parameters that can be used to adjust various protocol mechanisms and behaviors.
     /// These parameters are stored in CollateralTracker and are used in various calculations.
     /// They can be updated with the 'updateParameters' function in this contract.
-    /// @dev maintenaceMarginRatio minimum ratio of actual to required collateral that must be maintained to mint a new position (decimals=10000).
+    /// @dev maintenanceMarginRatio minimum ratio of actual to required collateral that must be maintained to mint a new position (decimals=10000).
     /// @dev commissionFee the commission fee (basis points).
     /// @dev ITMSpreadFee additional risk premium charged on intrinsic value of ITM positions defined in basis points as a multiple of the pool fee / 10000.
     /// @dev sellCollateralRatio minimum collateral ratio for selling options when pool utilization < targetPoolUtilization (basis points).
@@ -722,100 +722,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                         ACCOUNTING LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Compute a liquidator's potential bonus during liquidation of an account. The bonus depends on degree of distress (0% bonus at 100% collateral).
-    /// @param account The account to be liquidated.
-    /// @param positionBalanceArray The list of all historical positions held by the 'optionOwner', stored as [[tokenId, balance/poolUtilizationAtMint], ...].
-    /// @param otherTokenData The token data of the other collateral token in the Panoptic Pool (with tokenBalance in right slot and required collateral in the left slot).
-    /// @param twapTick Tick at which the collateral requirement will be evaluated at(Uniswap TWAP tick at time of call).
-    /// @param sqrtPriceX96 The sqrt price to 96 bit precision.
-    /// @param premium The premium of the open positions.
-    /// @return bonusAmounts LeftRight encoding for the bonus paid in each token in the Panoptic Pool to the liquidator.
-    /// @return tokenData LeftRight encoding with tokenbalance, ie assets, (in the right slot) and amount required in collateral (left slot).
-    function computeBonus(
-        address account,
-        uint256[2][] memory positionBalanceArray,
-        uint256 otherTokenData,
-        int24 twapTick,
-        uint160 sqrtPriceX96,
-        int128 premium
-    ) external view returns (int256 bonusAmounts, uint256 tokenData) {
-        // Check status for each token, returns tokenData variable that contains userBalance (right Slot) and
-        // tokens required (left slot) for the account to be healthy (have enough collateral/margin)
-        tokenData = _getAccountMargin(account, twapTick, positionBalanceArray, premium);
-
-        // Need a valid price to compute the bonus
-        if (sqrtPriceX96 == 0) return (bonusAmounts, tokenData);
-
-        // value of the token balance for both tokens 0 and 1:
-        // otherTokenData is token0, which is provided as an input and used to compute the tokenValue when a nonzero sqrtPriceX96 value is provided
-        // computes value as "realValue"/sqrtPrice -> token1.balance/sqrtPrice + token0.balance*sqrtPrice
-        // this avoids squaring sqrtPrice
-        uint256 token1TotalValue;
-        uint256 tokenValue;
-        unchecked {
-            token1TotalValue = (tokenData.rightSlot() * Constants.FP96) / sqrtPriceX96;
-        }
-        unchecked {
-            tokenValue =
-                // token1.balance/sqrtPrice + token0.balance*sqrtPrice
-                token1TotalValue +
-                Math.mulDiv96(otherTokenData.rightSlot(), sqrtPriceX96);
-        }
-
-        // value of the required collateral
-        // otherTokenData is token0, which is provided as an input and used to compute the tokenValue when a nonzero sqrtPriceX96 value is provided
-        // computes value as "realValue"/sqrtPrice -> token1.required/sqrtPrice + token0.required*sqrtPrice
-        uint256 requiredValue;
-        unchecked {
-            requiredValue =
-                (tokenData.leftSlot() * Constants.FP96) /
-                sqrtPriceX96 +
-                Math.mulDiv96(otherTokenData.leftSlot(), sqrtPriceX96);
-        }
-
-        // What fraction of the collateral value is in token1
-        // computes (token1.balance/sqrtPrice) / (token1.balance/sqrtPrice + token0.balance*sqrtPrice)
-        uint256 valueRatio1;
-        unchecked {
-            valueRatio1 =
-                (tokenData.rightSlot() * Constants.FP96 * DECIMALS) /
-                tokenValue /
-                sqrtPriceX96;
-        }
-
-        // Position must be margin called (token value is less than required collateral)
-        if (tokenValue >= requiredValue) revert Errors.NotMarginCalled();
-
-        int128 bonus0;
-        int128 bonus1;
-        unchecked {
-            bonus0 = int128(
-                int256(
-                    otherTokenData.leftSlot() < otherTokenData.rightSlot() // If required is less than balance of that specific token (ie. user uses cross-collateralization), then seize all that collateral and use that as the bonus
-                        ? ((tokenValue) * (DECIMALS - valueRatio1) * Constants.FP96) / sqrtPriceX96 // else, the bonus is just (requiredValue - tokenValue)
-                        : ((requiredValue - tokenValue) *
-                            (DECIMALS - valueRatio1) *
-                            Constants.FP96) / sqrtPriceX96
-                )
-            );
-
-            bonus1 = int128(
-                int256(
-                    tokenData.leftSlot() < tokenData.rightSlot() // If required is less than balance of that specific token (ie. user uses cross-collateralization), then seize all that collateral and use that as the bonus
-                        ? Math.mulDiv96((tokenValue) * (valueRatio1), sqrtPriceX96) // else, the bonus is just (requiredValue - tokenValue)
-                        : Math.mulDiv96((requiredValue - tokenValue) * (valueRatio1), sqrtPriceX96)
-                )
-            );
-
-            // store bonus amounts as actual amounts by dividing by DECIMALS_128
-            bonusAmounts = bonusAmounts.toRightSlot(bonus0 / DECIMALS_128).toLeftSlot(
-                bonus1 / DECIMALS_128
-            );
-        }
-
-        return (bonusAmounts, tokenData);
-    }
-
     /// @notice Get the cost of exercising an option. Used during a forced exercise.
     /// @dev This one computes the cost of calling the forceExercise function on a position:
     /// - The forceExercisor will have to *pay* the exercisee because their position will be closed "against their will"
@@ -943,7 +849,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param atTick Tick to convert values at. This can be the current tick or some TWAP/median tick.
     /// @param collateralToken1 The address of the collateralTracker for token 1.
     /// @return refundAmounts The amount of tokens to refund to the user.
-    function getRefundAmounts(
+    function getExerciseRefund(
         address refunder,
         int256 refundValues,
         int24 atTick,
@@ -1336,7 +1242,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             }
 
             // get collateral of the user (optionOwner) for the current position.
-            tokenData = getAccountMarginDetails(
+            tokenData = _getAccountMargin(
                 environmentContext.caller(),
                 environmentContext.currentTick(),
                 positionBalanceArray,
@@ -1345,7 +1251,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             // multiply the current collateral requirement with the Maintenance margin ratio to prevent minting too close to liquidations
             tokenData = tokenData.toLeftSlot(
-                // no need to use safecast as initial requirement will never be more that (2 ** 128) - 1
+                // no need to use safecast as initial requirement will never be more than (2 ** 128) - 1
                 // calculation gives us the needed buffer to add onto the initial requirement
                 uint128((tokenData.leftSlot() * (s_maintenanceMarginRatio - DECIMALS)) / DECIMALS)
             );
@@ -1359,6 +1265,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param shortAmount The amount of shorts to be exercised (if any).
     /// @param swappedAmount The amount of tokens potentially swapped.
     /// @param currentPositionPremium The position premium.
+    /// @return tokenToPay The amount of ITM funds that were exchanged when closing the position
     /// @return realizedPremium The final premium paid/collected after accounting for available funds.
     function exercise(
         address optionOwner,
@@ -1366,7 +1273,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         int128 shortAmount,
         int128 swappedAmount,
         int128 currentPositionPremium
-    ) external onlyPanopticPool returns (int128 realizedPremium) {
+    ) external onlyPanopticPool returns (int256 tokenToPay, int128 realizedPremium) {
         unchecked {
             // current available assets belonging to PLPs (updated after settlement) excluding any premium paid
             int256 updatedAssets = int256(uint256(s_poolAssets)) - swappedAmount;
@@ -1381,7 +1288,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             );
 
             // add premium to be paid/collected on position close
-            int256 tokenToPay = -realizedPremium;
+            tokenToPay = -realizedPremium;
 
             // if burning ITM and swap occurred, compute tokens to be paid through exercise and add swap fees
             int256 intrinsicValue = swappedAmount - (longAmount - shortAmount);
@@ -1490,21 +1397,27 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // get all collateral required for the incoming list of positions
             tokenRequired = _getTotalRequiredCollateral(atTick, positionBalanceArray);
 
-            // If premium is negative, increase the short premium requirement by the maintenance margin ratio
             if (premiumAllPositions < 0) {
                 unchecked {
-                    tokenRequired +=
-                        (s_maintenanceMarginRatio * uint128(-premiumAllPositions)) /
-                        DECIMALS;
+                    uint128 longPremium = uint128(-premiumAllPositions);
+                    tokenRequired += longPremium;
                 }
             }
         }
 
         // get the user's shares balance (amount of collateral);
-        uint256 collateralAmount = balanceOf[user];
+        uint256 collateralAmount = convertToAssets(balanceOf[user]);
+
+        // add/subtract the accumulated premia to the collateral amount
+        uint256 netBalance = collateralAmount;
+        if (premiumAllPositions > 0) {
+            unchecked {
+                netBalance += uint256(uint128(premiumAllPositions));
+            }
+        }
 
         // store assetBalance and tokens required in tokenData variable
-        tokenData = tokenData.toRightSlot(uint128(convertToAssets(collateralAmount))).toLeftSlot(
+        tokenData = tokenData.toRightSlot(netBalance.toUint128()).toLeftSlot(
             tokenRequired.toUint128()
         );
         return tokenData;

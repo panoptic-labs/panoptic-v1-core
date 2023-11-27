@@ -152,6 +152,10 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// May be configurable on a pool-by-pool basis in the future, but hardcoded for now
     uint32 internal constant TWAP_WINDOW = 600;
 
+    // The maximum allowed delta between the currentTick and the Uniswap TWAP tick during a liquidation (~5% down, ~5.26% up)
+    // Prevents manipulation of the currentTick to liquidate positions at a less favorable price
+    int256 internal constant MAX_TWAP_DELTA_LIQUIDATION = 513;
+
     // The minimum amount of time, in seconds, permitted between mini/median TWAP updates.
     uint256 internal constant MEDIAN_PERIOD = 60;
 
@@ -782,7 +786,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
                     _swapped,
                     _positionBalanceArray
                 );
-            realizedPremium = int256(0).toRightSlot(_oldPositionPremia);
+            realizedPremium = int256(_oldPositionPremia);
         }
         {
             int128 _longAmount = longAmounts.leftSlot();
@@ -933,6 +937,89 @@ contract PanopticPool is ERC1155Holder, Multicall {
         }
     }
 
+    /// @notice Check that the account is liquidatable, get the split of bonus0 and bonus1 amounts.
+    /// @param tokenData0 Leftright encoded word with balance of token0 in the right slot, and required balance in left slot.
+    /// @param tokenData1 Leftright encoded word with balance of token1 in the right slot, and required balance in left slot.
+    /// @param sqrtPriceX96 The current sqrt(price) of the AMM.
+    /// @param netExchanged The net exchanged value of the closed portfolio
+    /// @return bonus0 bonus amount for token0
+    /// @return bonus1 bonus amount for token1
+    function _getBonusSplit(
+        uint256 tokenData0,
+        uint256 tokenData1,
+        uint160 sqrtPriceX96,
+        int256 netExchanged
+    ) internal pure returns (int256 bonus0, int256 bonus1) {
+        (uint256 balanceCross, uint256 thresholdCross, uint256 requiredRatioX128) = PanopticMath
+            .convertCollateralData(tokenData0, tokenData1, 0, sqrtPriceX96);
+
+        unchecked {
+            // compute bonus as min(collateralBalance/2, required-collateralBalance)
+            {
+                uint256 diffCross = thresholdCross - balanceCross;
+                uint256 bonusCross = diffCross < balanceCross / 2 ? diffCross : balanceCross / 2;
+
+                // convert that bonus to tokens 0 and 1
+                bonus0 = int256(Math.mulDiv128(bonusCross, requiredRatioX128));
+
+                bonus1 = int256(
+                    PanopticMath.convert0to1(
+                        Math.mulDiv128(bonusCross, 2 ** 128 - requiredRatioX128),
+                        sqrtPriceX96
+                    )
+                );
+            }
+
+            int256 balance0 = int256(uint256(tokenData0.rightSlot()));
+            int256 balance1 = int256(uint256(tokenData1.rightSlot()));
+
+            int256 paid0 = bonus0 + int256(netExchanged.rightSlot());
+            int256 paid1 = bonus1 + int256(netExchanged.leftSlot());
+
+            // note that "balance0" and "balance1" are the liquidatee's original balances before token delegation by a liquidator
+            // their actual balances at the time of computation may be higher, but these are a buffer representing the amount of tokens we
+            // have to work with before cutting into the liquidator's funds
+            if (paid0 > balance0 && paid1 > balance1) {
+                // liquidatee cannot pay back the liquidator fully in either token, so no protocol loss can be avoided
+                return (bonus0, bonus1);
+            } else if ((paid0 > balance0)) {
+                // liquidatee has insufficient token0 but some token1 left over, so we use what they have left to mitigate token0 losses
+                // we do this by substituting an equivalent value of token1 in our refund to the liquidator, plus a bonus, for the token0 we convert
+                // we want to convert the minimum amount of tokens required to achieve the lowest possible protocol loss (to avoid overpaying on the conversion bonus)
+                // the maximum level of protocol loss mitigation that can be achieved is the liquidatee's excess token1 balance: balance1 - paid1
+                // and paid0 - balance0 is the amount of token0 that the liquidatee is missing, i.e the protocol loss
+                // if the protocol loss is lower than the excess token1 balance, then we can fully mitigate the loss and we should only convert the loss amount
+                // if the protocol loss is higher than the excess token1 balance, we can only mitigate part of the loss, so we should convert only the excess token1 balance
+                // thus, the value converted should be min(balance1 - paid1, paid0 - balance0)
+                bonus1 += Math.min(
+                    balance1 - paid1,
+                    PanopticMath.convert0to1(paid0 - balance0, sqrtPriceX96)
+                );
+                bonus0 -= Math.min(
+                    PanopticMath.convert1to0(balance1 - paid1, sqrtPriceX96),
+                    paid0 - balance0
+                );
+            } else if ((paid1 > balance1)) {
+                // liquidatee has insufficient token1 but some token0 left over, so we use what they have left to mitigate token1 losses
+                // we do this by substituting an equivalent value of token0 in our refund to the liquidator, plus a bonus, for the token1 we convert
+                // we want to convert the minimum amount of tokens required to achieve the lowest possible protocol loss (to avoid overpaying on the conversion bonus)
+                // the maximum level of protocol loss mitigation that can be achieved is the liquidatee's excess token0 balance: balance0 - paid0
+                // and paid1 - balance1 is the amount of token1 that the liquidatee is missing, i.e the protocol loss
+                // if the protocol loss is lower than the excess token0 balance, then we can fully mitigate the loss and we should only convert the loss amount
+                // if the protocol loss is higher than the excess token0 balance, we can only mitigate part of the loss, so we should convert only the excess token0 balance
+                // thus, the value converted should be min(balance0 - paid0, paid1 - balance1)
+                bonus0 += Math.min(
+                    balance0 - paid0,
+                    PanopticMath.convert1to0(paid1 - balance1, sqrtPriceX96)
+                );
+                bonus1 -= Math.min(
+                    PanopticMath.convert0to1(balance0 - paid0, sqrtPriceX96),
+                    paid1 - balance1
+                );
+            }
+        }
+    }
+
     /*//////////////////////////////////////////////////////////////
                          POSITION BURNING LOGIC
     //////////////////////////////////////////////////////////////*/
@@ -947,9 +1034,11 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int24 tickLimitLow,
         int24 tickLimitHigh,
         uint256[] calldata positionIdList
-    ) internal {
+    ) internal returns (int256 netExchanged) {
         for (uint256 i = 0; i < positionIdList.length; ) {
-            _burnOptions(positionIdList[i], owner, tickLimitLow, tickLimitHigh);
+            netExchanged = netExchanged.add(
+                _burnOptions(positionIdList[i], owner, tickLimitLow, tickLimitHigh)
+            );
             unchecked {
                 ++i;
             }
@@ -966,7 +1055,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal {
+    ) internal returns (int256 exchangedAmounts) {
         // Ensure that the current price is within the tick limits
         int24 currentTick;
         (currentTick, , tickLimitLow, tickLimitHigh) = _getPriceAndCheckSlippageViolation(
@@ -977,7 +1066,8 @@ contract PanopticPool is ERC1155Holder, Multicall {
         uint128 positionSize = s_positionBalance[owner][tokenId].rightSlot();
 
         // burn position and do exercise checks
-        int256 premiaOwed = _burnAndHandleExercise(
+        int256 premiaOwed;
+        (premiaOwed, exchangedAmounts) = _burnAndHandleExercise(
             tokenId,
             positionSize,
             owner,
@@ -1027,7 +1117,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         address owner,
         int24 tickLimitLow,
         int24 tickLimitHigh
-    ) internal returns (int256 currentPositionPremia) {
+    ) internal returns (int256 currentPositionPremia, int256 exchangedAmounts) {
         // burn the option in sfpm, switch order of tickLimits to create "swapAtMint" flag
         (, int256 totalSwapped, int24 newTick) = sfpm.burnTokenizedPosition(
             tokenId,
@@ -1055,26 +1145,30 @@ contract PanopticPool is ERC1155Holder, Multicall {
             s_tickSpacing
         );
 
+        exchangedAmounts = currentPositionPremia;
         // exercise the option and take the commission and addData
-        int256 realizedPremium = int256(0).toRightSlot(
-            s_collateralToken0.exercise(
+        {
+            (int256 exchangedAmount0, int128 realizedPremium0) = s_collateralToken0.exercise(
                 owner,
                 longAmounts.rightSlot(),
                 shortAmounts.rightSlot(),
                 totalSwapped.rightSlot(),
                 currentPositionPremia.rightSlot()
-            )
-        );
-
-        currentPositionPremia = realizedPremium.toLeftSlot(
-            s_collateralToken1.exercise(
+            );
+            currentPositionPremia = int256(realizedPremium0);
+            exchangedAmounts = exchangedAmounts.toRightSlot(exchangedAmount0.toInt128());
+        }
+        {
+            (int256 exchangedAmount1, int128 realizedPremium1) = s_collateralToken1.exercise(
                 owner,
                 longAmounts.leftSlot(),
                 shortAmounts.leftSlot(),
                 totalSwapped.leftSlot(),
                 currentPositionPremia.leftSlot()
-            )
-        );
+            );
+            currentPositionPremia = currentPositionPremia.toLeftSlot(realizedPremium1);
+            exchangedAmounts = exchangedAmounts.toLeftSlot(exchangedAmount1.toInt128());
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1248,95 +1342,87 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
     /// @notice Liquidates a distressed account. Will burn all positions and will issue a bonus to the liquidator.
     /// @dev Will revert if: account is not margin called or if the user liquidates themselves.
-    /// @param account Address of the distressed account.
-    /// @param tickLimitLow The lower tick slippagelimit.
-    /// @param tickLimitHigh The upper tick slippagelimit.
+    /// @param liquidatee Address of the distressed account.
     /// @param positionIdList List of positions owned by the user. Written as [tokenId1, tokenId2, ...].
-    function liquidateAccount(
-        address account,
-        int24 tickLimitLow,
-        int24 tickLimitHigh,
-        uint256[] calldata positionIdList
+    /// @param liquidatorPositions List of positions owned by the liquidator. Written as [tokenId1, tokenId2, ...].
+    /// @param delegation0 amount of token0 to be delegated. Must be enough to close the liquidatee's positions
+    /// @param delegation1 amount of token1 to be delegated. Must be enough to close the liquidatee's positions
+    function liquidate(
+        address liquidatee,
+        uint256[] calldata positionIdList,
+        uint256[] calldata liquidatorPositions,
+        uint256 delegation0,
+        uint256 delegation1
     ) external {
-        // validate positionIdList (list of all tokenIds of the account)
-        _validatePositionList(account, positionIdList, 0);
+        address liquidator = msg.sender;
+        address _liquidatee = liquidatee;
+        _validatePositionList(liquidatee, positionIdList, 0);
 
-        // check slippage limits, read current price + tick
-        int24 currentTick;
-        (currentTick, , tickLimitLow, tickLimitHigh) = _getPriceAndCheckSlippageViolation(
-            tickLimitLow,
-            tickLimitHigh
+        int256 netExchanged;
+        uint256 tokenData0;
+        uint256 tokenData1;
+        bool isSolvent;
+        {
+            // Assert the account we are liquidating is actually insolvent
+            uint256[] calldata _pL = positionIdList;
+
+            int24 twapTick = getUniV3TWAP();
+            (, int24 currentTick, , , , , ) = s_univ3pool.slot0();
+            // Enforce maximum delta between TWAP and currentTick to prevent extreme price manipulation
+            //if (Math.abs(int256(currentTick) - int256(twapTick)) > MAX_TWAP_DELTA_LIQUIDATION)
+            //    revert Errors.StaleTWAP();
+
+            (isSolvent, tokenData0, tokenData1, ) = checkSolvency(
+                _liquidatee,
+                currentTick,
+                twapTick,
+                _pL
+            );
+            if (isSolvent) revert Errors.NotMarginCalled();
+
+            // Perform the specified delegation from `msg.sender` to `liquidatee`
+            // Works like a transfer, so the liquidator must possess all the tokens they are delegating, resulting in no net supply change
+            // If not enough tokens are delegated for the positions of `liquidatee` to be closed, the liquidation will fail
+            s_collateralToken0.delegate(liquidator, _liquidatee, delegation0);
+            s_collateralToken1.delegate(liquidator, _liquidatee, delegation1);
+
+            // burn all options from the liquidatee
+            netExchanged = _burnAllOptionsFrom(_liquidatee, 0, 0, _pL);
+        }
+        // compute bonus amounts using latest tick data
+        (, int24 finalTick, , , , , ) = s_univ3pool.slot0();
+        (int256 liquidationBonus0, int256 liquidationBonus1) = _getBonusSplit(
+            tokenData0,
+            tokenData1,
+            Math.getSqrtRatioAtTick(finalTick),
+            netExchanged
         );
 
-        // bonusAmounts the amount of liquidation bonuses going to the liquidator
-        // delegatedAmounts delegate amount that is required to cover the collateral requirements for the entirety of the portfolio (do not consider the existing balance)
-        int256 bonusAmounts;
-        uint256 delegatedAmounts;
-
         {
-            // Compute all premia (long and short)
-            (int256 premia, uint256[2][] memory positionBalanceArray) = _calculateAccumulatedPremia(
-                account,
-                positionIdList,
-                COMPUTE_ALL_PREMIA,
-                currentTick
-            );
-
-            // Compute the TWAP
-            int24 twapTick = getUniV3TWAP();
-            uint160 twapSqrtPrice = Math.getSqrtRatioAtTick(twapTick);
-
-            // this computes the token balance (right slot) and the tokens required (left slot) for token0
-            (, uint256 tokenData0) = s_collateralToken0.computeBonus(
-                account,
-                positionBalanceArray,
-                0,
-                twapTick,
-                0,
-                premia.rightSlot()
-            );
-
-            // this computes the bonus ratio and computes the tokens required for token1
-            uint256 tokenData1;
-            (bonusAmounts, tokenData1) = s_collateralToken1.computeBonus(
-                account,
-                positionBalanceArray,
-                tokenData0,
-                twapTick,
-                twapSqrtPrice,
-                premia.leftSlot()
-            );
-
-            //Add short premia to bonus
-            bonusAmounts = bonusAmounts
-                .toRightSlot(premia.rightSlot() > 0 ? premia.rightSlot() : int128(0))
-                .toLeftSlot(premia.leftSlot() > 0 ? premia.leftSlot() : int128(0));
-
-            // delegate amount that is required to cover the collateral requirements for the entirety of the portfolio (do not consider the existing balance)
-            delegatedAmounts = delegatedAmounts.toRightSlot(tokenData0.leftSlot()).toLeftSlot(
-                tokenData1.leftSlot()
+            // revoke the delegated amount plus the bonus amount.
+            s_collateralToken0.revoke(
+                liquidator,
+                _liquidatee,
+                uint256(int256(delegation0) + liquidationBonus0)
             );
         }
-
-        CollateralTracker collateralToken0 = s_collateralToken0;
-        CollateralTracker collateralToken1 = s_collateralToken1;
-
-        // Liquidator must delegate the notional amount of tokens needed for exercising.
-        collateralToken0.delegate(msg.sender, account, delegatedAmounts.rightSlot());
-        collateralToken1.delegate(msg.sender, account, delegatedAmounts.leftSlot());
-
-        // Rescue and liquidate positions
-        _burnAllOptionsFrom(account, tickLimitLow, tickLimitHigh, positionIdList);
-
-        // compute the amount of tokens that need to be revoked: delegated + bonus.
-        // net gain is bonus amount
-        int256 revokedAmounts = delegatedAmounts.add(bonusAmounts);
-
-        // revoke the funds
-        collateralToken0.revoke(msg.sender, account, uint128(revokedAmounts.rightSlot()));
-        collateralToken1.revoke(msg.sender, account, uint128(revokedAmounts.leftSlot()));
-
-        emit AccountLiquidated(msg.sender, account, bonusAmounts, currentTick);
+        {
+            s_collateralToken1.revoke(
+                liquidator,
+                _liquidatee,
+                uint256(int256(delegation1) + liquidationBonus1)
+            );
+        }
+        {
+            uint256[] calldata _liquidatorPositions = liquidatorPositions;
+            (isSolvent, , , ) = checkSolvency(
+                liquidator,
+                finalTick,
+                finalTick,
+                _liquidatorPositions
+            );
+            if (!isSolvent) revert Errors.MarginCalled();
+        }
     }
 
     /// @notice Force the exercise of a single position. Exercisor will have to pay a small fee do force exercise.
@@ -1345,14 +1431,14 @@ contract PanopticPool is ERC1155Holder, Multicall {
     /// @param tickLimitLow The lower tick slippagelimit
     /// @param tickLimitHigh The upper tick slippagelimit
     /// @param touchedId List of position to be force exercised. Can only contain one tokenId, written as [tokenId]
-    /// @param idsToBurn List of positions to be burned if the force exercisor has open positions
+    /// @param exercisorPositions List of positions for the exercisor
     /// @dev The collateral decrease resulting from burning these positions must be greater than the force exercise fee
     function forceExercise(
         address account,
         int24 tickLimitLow,
         int24 tickLimitHigh,
         uint256[] calldata touchedId,
-        uint256[] calldata idsToBurn
+        uint256[] calldata exercisorPositions
     ) external {
         // revert if multiple positions are specified
         // the reason why the singular touchedId is an array is so it composes well with the rest of the system
@@ -1402,60 +1488,6 @@ contract PanopticPool is ERC1155Holder, Multicall {
             );
         }
 
-        // force exercises result in reduced collateral balance for the exercisor,
-        // and we do not normally allow users to move collateral out of their accounts if they have open positions
-        // thus, wem must enforce there to be a corresponding decrease in collateral requirement at the median tick if this is the case
-        if (numberOfPositions(msg.sender) > 0) {
-            {
-                // compute the collateral requirement of the burned positions
-                (
-                    int256 burntPositionPremium,
-                    uint256[2][] memory positionBalanceArray
-                ) = _calculateAccumulatedPremia(
-                        msg.sender,
-                        idsToBurn,
-                        COMPUTE_ALL_PREMIA,
-                        currentTick
-                    );
-
-                uint256 tokenData0 = s_collateralToken0.getAccountMarginDetails(
-                    msg.sender,
-                    currentTick,
-                    positionBalanceArray,
-                    burntPositionPremium.rightSlot()
-                );
-                uint256 tokenData1 = s_collateralToken1.getAccountMarginDetails(
-                    msg.sender,
-                    currentTick,
-                    positionBalanceArray,
-                    burntPositionPremium.leftSlot()
-                );
-
-                // substitute exercise fee for collateral balance - we are trying to ensure that the exercise fee is smaller than the collateral requirement,
-                // so we can do a reverse "solvency check" by taking the cross-collateral exercise fee as the "balance" and checking if the cross-collateral requirement
-                // from the burnt positions is greater than this
-                tokenData0 = uint256(0).toRightSlot(uint128(-exerciseFees.rightSlot())).toLeftSlot(
-                    tokenData0.leftSlot()
-                );
-                tokenData1 = uint256(0).toRightSlot(uint128(-exerciseFees.leftSlot())).toLeftSlot(
-                    tokenData1.leftSlot()
-                );
-
-                (uint256 exerciseFeesCross, uint256 thresholdCross) = _getSolvencyBalances(
-                    tokenData0,
-                    tokenData1,
-                    Math.getSqrtRatioAtTick(twapTick)
-                );
-
-                // if collateral decrease from position burning is insufficient to cover exercise fees, revert
-                if (exerciseFeesCross > thresholdCross)
-                    revert Errors.InsufficientCollateralDecrease();
-            }
-
-            // otherwise, go ahead and burn the positions from the exercisor
-            _burnAllOptionsFrom(msg.sender, tickLimitLow, tickLimitHigh, idsToBurn);
-        }
-
         // Liquidator must delegate the notional amount of tokens needed for exercising.
         s_collateralToken0.delegate(msg.sender, account, uint128(delegatedAmounts.rightSlot()));
         s_collateralToken1.delegate(msg.sender, account, uint128(delegatedAmounts.leftSlot()));
@@ -1467,7 +1499,7 @@ contract PanopticPool is ERC1155Holder, Multicall {
         int256 refundAmounts = delegatedAmounts.add(exerciseFees);
 
         // redistribute token composition of refund amounts if user doesn't have enough of one token to pay
-        refundAmounts = s_collateralToken0.getRefundAmounts(
+        refundAmounts = s_collateralToken0.getExerciseRefund(
             account,
             refundAmounts,
             twapTick,
@@ -1476,6 +1508,14 @@ contract PanopticPool is ERC1155Holder, Multicall {
 
         s_collateralToken0.refund(account, msg.sender, refundAmounts.rightSlot());
         s_collateralToken1.refund(account, msg.sender, refundAmounts.leftSlot());
+
+        (bool isSolvent, , , ) = checkSolvency(
+            msg.sender,
+            currentTick,
+            currentTick,
+            exercisorPositions
+        );
+        if (!isSolvent) revert Errors.MarginCalled();
 
         emit ForcedExercised(msg.sender, account, touchedId[0], exerciseFees, currentTick);
     }
@@ -1771,5 +1811,52 @@ contract PanopticPool is ERC1155Holder, Multicall {
                 ++leg;
             }
         }
+    }
+
+    /// @notice Checks whether an account is solvent.
+    /// @param account The account to check the solvency of
+    /// @param currentTick The current tick
+    /// @param alternativeTick the alternative tick to evaluate the requred+balances of the position (eg. twap tick).
+    /// @param positionIdList The existing list of active options for the owner.
+    /// @return isSolvent bool which is true when the account is solvent, false otherwise
+    /// @return tokenData0 Leftright encoded word with balance of token0 in the right slot, and required balance in left slot.
+    /// @return tokenData1 Leftright encoded word with balance of token1 in the right slot, and required balance in left slot.
+    /// @return premia The computed premia (LeftRight-packed) of the option position for tokens 0 (right slot) and 1 (left slot).
+    function checkSolvency(
+        address account,
+        int24 currentTick,
+        int24 alternativeTick,
+        uint256[] calldata positionIdList
+    ) public view returns (bool isSolvent, uint256 tokenData0, uint256 tokenData1, int256 premia) {
+        _validatePositionList(account, positionIdList, 0);
+
+        uint256[2][] memory positionBalanceArray;
+        (premia, positionBalanceArray) = _calculateAccumulatedPremia(
+            account,
+            positionIdList,
+            COMPUTE_ALL_PREMIA,
+            currentTick
+        );
+        tokenData0 = s_collateralToken0.getAccountMarginDetails(
+            account,
+            alternativeTick,
+            positionBalanceArray,
+            premia.rightSlot()
+        );
+
+        tokenData1 = s_collateralToken1.getAccountMarginDetails(
+            account,
+            alternativeTick,
+            positionBalanceArray,
+            premia.leftSlot()
+        );
+
+        (uint256 balanceCross, uint256 thresholdCross) = _getSolvencyBalances(
+            tokenData0,
+            tokenData1,
+            Math.getSqrtRatioAtTick(alternativeTick)
+        );
+
+        isSolvent = balanceCross >= thresholdCross ? true : false;
     }
 }
