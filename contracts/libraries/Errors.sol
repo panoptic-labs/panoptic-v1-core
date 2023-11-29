@@ -49,6 +49,9 @@ library Errors {
     /// @notice Invalid input in LeftRight library.
     error LeftRightInputError();
 
+    /// @notice A liquidation was initiated from an account that had one or more positions open
+    error LiquidatorHasOpenPositions();
+
     /// @notice None of the forced exercised legs are exerciseable (they are all in-the-money)
     error NoLegsExercisable();
 
@@ -105,6 +108,10 @@ library Errors {
     /// @notice The tick range given by the strike price and width is invalid
     /// because the upper and lower ticks are not multiples of `tickSpacing`
     error TicksNotInitializable();
+
+    /// @notice The current tick is too far away from the calculated Uniswap TWAP
+    /// This is a safeguard against extreme price manipulation during liquidations
+    error StaleTWAP();
 
     /// @notice Under/Overflow has happened
     error UnderOverFlow();
