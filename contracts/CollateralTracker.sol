@@ -457,7 +457,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @return shares The amount of shares that can be minted.
     function convertToShares(uint256 assets) public view returns (uint256 shares) {
         uint256 supply = totalSupply;
-        return supply == 0 ? assets : Math.mulDivDown(assets, supply, totalAssets());
+        return supply == 0 ? assets : Math.mulDiv(assets, supply, totalAssets());
     }
 
     /// @notice Returns the amount of assets that can be redeemed for the given amount of shares.
@@ -465,7 +465,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @return assets The amount of assets that can be redeemed.
     function convertToAssets(uint256 shares) public view returns (uint256 assets) {
         uint256 supply = totalSupply;
-        return supply == 0 ? shares : Math.mulDivDown(shares, totalAssets(), supply);
+        return supply == 0 ? shares : Math.mulDiv(shares, totalAssets(), supply);
     }
 
     /// @notice returns The maximum deposit amount.
@@ -537,7 +537,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
         // round up depositing assets to avoid protocol loss
         // This prevents minting of shares where the assets provided is rounded down to zero
-        assets = supply == 0 ? shares : Math.mulDivUp(shares, totalAssets(), supply);
+        assets = supply == 0 ? shares : Math.mulDivRoundingUp(shares, totalAssets(), supply);
 
         // compute the MEV tax, which is equal to a single payment of the commissionRate BEFORE adding the funds
         unchecked {
@@ -602,7 +602,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     function previewWithdraw(uint256 assets) public view returns (uint256 shares) {
         uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
 
-        return supply == 0 ? assets : Math.mulDivUp(assets, supply, totalAssets());
+        return supply == 0 ? assets : Math.mulDivRoundingUp(assets, supply, totalAssets());
     }
 
     /// @notice Redeem the amount of shares required to withdraw the specified amount of assets.
@@ -1292,7 +1292,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
             // mint or burn tokens due to minting in-the-money
             if (tokenToPay > 0) {
                 // if user must pay tokens, burn them from user balance
-                uint256 sharesToBurn = Math.mulDivUp(
+                uint256 sharesToBurn = Math.mulDivRoundingUp(
                     uint256(tokenToPay),
                     totalSupply,
                     totalAssets()
@@ -1395,7 +1395,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
             if (tokenToPay > 0) {
                 // if user must pay tokens, burn them from user balance (revert if balance too small)
-                uint256 sharesToBurn = Math.mulDivUp(
+                uint256 sharesToBurn = Math.mulDivRoundingUp(
                     uint256(tokenToPay),
                     totalSupply,
                     totalAssets()
