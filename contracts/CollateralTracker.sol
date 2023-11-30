@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
+// Foundry
+import "forge-std/Test.sol";
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
@@ -842,15 +844,17 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         // we don't need the leg information itself, really just "the number of half ranges" from the strike price:
         uint256 maxNumRangesFromStrike; // technically "maxNum(Half)RangesFromStrike" but the name is long
 
+        // stack rolling
         int24 _currentTick = currentTick;
         int24 _medianTick = medianTick;
+        uint256 _positionId = positionId;
+        uint128 _positionBalance = positionBalance;
 
         unchecked {
             for (uint256 leg = 0; leg < TokenId.countLegs(positionId); ++leg) {
+                console2.log("leg index", leg);
                 // short legs are not counted - exercise is intended to be based on long legs
                 if (positionId.isLong(leg) == 0) continue;
-
-                int24 strike = positionId.strike(leg);
 
                 uint256 currNumRangesFromStrike;
 
@@ -865,9 +869,11 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     /// otherwise rangeUp and rangeDown will be the same
                     int24 width = positionId.width(leg);
                     (rangeDown, rangeUp) = PanopticMath.mulDivAsTicks(width, s_tickSpacing);
+                    console2.log("r width", width);
+                    console2.log(" r s_tickSpacing", s_tickSpacing);
                 }
 
-                if (currentTick < (strike - rangeDown)) {
+                if (_currentTick < (_positionId.strike(leg) - rangeDown)) {
                     /**
                          current      strike
                            tick          │
@@ -877,9 +883,24 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                                 range=width/2
                     */
                     currNumRangesFromStrike = uint256(
-                        (2 * int256(strike - rangeUp - currentTick)) / rangeUp
+                        (2 * int256(_positionId.strike(leg) - rangeUp - _currentTick)) / rangeUp
                     ); // = (strike - range - _currentTick) / (range / 2); the "range/2" are the "half ranges"
-                } else if (currentTick > (strike + rangeUp)) {
+
+                    console2.log("below");
+                    console2.log("r currNumRangesFromStrike", currNumRangesFromStrike);
+                    console2.log("r _positionId.strike(leg)", _positionId.strike(leg));
+                    console2.log("r rangeUp", rangeUp);
+                    console2.log("r _currentTick", _currentTick);
+
+                    console2.log(
+                        "r int256(_positionId.strike(leg) - rangeUp - _currentTick))",
+                        int256(_positionId.strike(leg) - rangeUp - _currentTick)
+                    );
+                    console2.log(
+                        "r int256(_positionId.strike(leg) - rangeUp - _currentTick))",
+                        _positionId.strike(leg) - rangeUp - _currentTick
+                    );
+                } else if (_currentTick > (_positionId.strike(leg) + rangeUp)) {
                     /**
                            strike      current
                               │         tick
@@ -889,37 +910,45 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                             range
                     */
                     currNumRangesFromStrike = uint256(
-                        (2 * int256(currentTick - strike - rangeUp)) / rangeUp
+                        (2 * int256(_currentTick - _positionId.strike(leg) - rangeUp)) / rangeUp
                     );
+
+                    console2.log("above");
                 }
                 maxNumRangesFromStrike = currNumRangesFromStrike > maxNumRangesFromStrike
                     ? currNumRangesFromStrike
                     : maxNumRangesFromStrike;
 
-                uint256 tokenType = positionId.tokenType(leg);
+                //uint256 tokenType = positionId.tokenType(leg);
 
-                uint256 liquidityChunk = PanopticMath.getLiquidityChunk(
-                    positionId,
-                    leg,
-                    positionBalance,
-                    s_tickSpacing
-                );
+                uint256 currentValue0;
+                uint256 currentValue1;
+                uint256 medianValue0;
+                uint256 medianValue1;
+                {
+                    uint256 liquidityChunk = PanopticMath.getLiquidityChunk(
+                        _positionId,
+                        leg,
+                        _positionBalance,
+                        s_tickSpacing
+                    );
 
-                (uint256 currentValue0, uint256 currentValue1) = Math.getAmountsForLiquidity(
-                    _currentTick,
-                    liquidityChunk
-                );
+                    (currentValue0, currentValue1) = Math.getAmountsForLiquidity(
+                        _currentTick,
+                        liquidityChunk
+                    );
 
-                (uint256 medianValue0, uint256 medianValue1) = Math.getAmountsForLiquidity(
-                    _medianTick,
-                    liquidityChunk
-                );
+                    (medianValue0, medianValue1) = Math.getAmountsForLiquidity(
+                        _medianTick,
+                        liquidityChunk
+                    );
+                }
 
                 // compensate user for loss in value if chunk has lost money between current and median tick
                 // note: the delta for one token will be positive and the other will be negative. This cancels out any moves in their positions
                 if (
-                    (tokenType == 0 && currentValue1 < medianValue1) ||
-                    (tokenType == 1 && currentValue0 < medianValue0)
+                    (_positionId.tokenType(leg) == 0 && currentValue1 < medianValue1) ||
+                    (_positionId.tokenType(leg) == 1 && currentValue0 < medianValue0)
                 )
                     exerciseFees = exerciseFees.sub(
                         int256(0)
@@ -931,6 +960,8 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                             )
                     );
             }
+
+            console2.log(" r maxNumRangesFromStrike", maxNumRangesFromStrike);
 
             // note: we HAVE to start with a negative number as the base exercise cost because when shifting a negative number right by n bits,
             // the result is rounded DOWN and NOT toward zero

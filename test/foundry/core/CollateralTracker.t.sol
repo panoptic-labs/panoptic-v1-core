@@ -364,7 +364,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     IUniswapV3Pool constant DAI_USDC_1 = IUniswapV3Pool(0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168);
 
-    IUniswapV3Pool[3] public pools = [USDC_WETH_5, WBTC_ETH_30, MATIC_ETH_30, DAI_USDC_1];
+    // IUniswapV3Pool[4] public pools = [USDC_WETH_5, WBTC_ETH_30, MATIC_ETH_30, DAI_USDC_1];
+
+    IUniswapV3Pool[1] public pools = [DAI_USDC_1];
 
     // Mainnet factory address
     IUniswapV3Factory V3FACTORY = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
@@ -5784,6 +5786,157 @@ contract CollateralTrackerTest is Test, PositionUtils {
             assertEq(tokenData1, calcThresholdCross);
         }
     }
+
+    // check force exercise range changes
+    // check ranges are indeed evaluated at correct lower and upper tick bounds
+
+    // try to force exercise an OTM option
+    // call -> _currentTick < (strike - rangeDown)
+
+    // put -> _currentTick > (strike + rangeUp)
+
+    function test_Success_exerciseCostRanges_OTMCall(
+        uint256 x,
+        uint128 positionSizeSeed,
+        uint256 widthSeed,
+        int256 strikeSeed,
+        int24 atTick
+    ) public {
+        uint128 required;
+
+        {
+            _initWorld(x);
+
+            // initalize a custom Panoptic pool
+            _deployCustomPanopticPool(token0, token1, pool);
+
+            // Invoke all interactions with the Collateral Tracker from user Bob
+            vm.startPrank(Bob);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Bob);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            _mockMaxDeposit(Bob);
+
+            // have Bob sell
+            (width, strike) = PositionUtils.getOTMSW(
+                widthSeed,
+                strikeSeed,
+                uint24(tickSpacing),
+                currentTick,
+                0
+            );
+
+            tokenId = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 0, 0, 0, strike, width);
+            positionIdList.push(tokenId);
+
+            // must be minimum at least 2 so there is enough liquidity to buy
+            positionSize0 = uint128(bound(positionSizeSeed, 2, 2 ** 120));
+
+            _assumePositionValidity(Bob, tokenId, positionSize0);
+
+            panopticPool.mintOptions(
+                positionIdList,
+                positionSize0,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+        }
+
+        {
+            // Alice buys
+            changePrank(Alice);
+
+            // give Bob the max amount of tokens
+            _grantTokens(Alice);
+
+            // approve collateral tracker to move tokens on Bob's behalf
+            IERC20Partial(token0).approve(address(collateralToken0), type(uint128).max);
+            IERC20Partial(token1).approve(address(collateralToken1), type(uint128).max);
+
+            // equal deposits for both collateral token pairs for testing purposes
+            _mockMaxDeposit(Alice);
+
+            tokenId1 = uint256(0).addUniv3pool(poolId).addLeg(0, 1, 1, 1, 0, 0, strike, width);
+            positionIdList1.push(tokenId1);
+
+            _assumePositionValidity(Alice, tokenId1, positionSize0);
+
+            panopticPool.mintOptions(
+                positionIdList1,
+                positionSize0 / 2,
+                type(uint64).max,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
+        }
+
+        // check requirement at fuzzed tick
+        {
+            atTick = int24(bound(atTick, TickMath.MIN_TICK, TickMath.MAX_TICK));
+            atTick = (atTick / tickSpacing) * tickSpacing;
+
+            (legLowerTick, legUpperTick) = tokenId1.asTicks(0, tickSpacing);
+            (int24 rangeUp, int24 rangeDown) = PanopticMath.mulDivAsTicks(width, tickSpacing);
+
+            // strike - rangeDown
+            vm.assume(atTick < legLowerTick);
+
+            (int256 longAmounts, ) = PanopticMath.computeExercisedAmounts(
+                tokenId1,
+                0,
+                positionSize0 / 2,
+                tickSpacing
+            );
+
+            uint256 currNumRangesFromStrike = uint256(
+                (2 * int256(strike - rangeUp - currentTick)) / rangeUp
+            );
+
+            int256 fee = (-1_024 >> currNumRangesFromStrike);
+
+            int256 exerciseFee0 = (longAmounts.rightSlot() * fee) / 10_000;
+            int256 exerciseFee1 = (longAmounts.leftSlot() * fee) / 10_000;
+
+            int256 exerciseFees = collateralToken0.exerciseCost(
+                atTick,
+                atTick, // use the fuzzed tick as the median tick for testing purposes
+                tokenId1,
+                positionSize0 / 2,
+                longAmounts
+            );
+
+            console2.log(" r exerciseFees - right", exerciseFees.rightSlot());
+            console2.log(" r exerciseFees - left", exerciseFees.leftSlot());
+
+            console2.log(" t exerciseFees - right", exerciseFee0);
+            console2.log(" t exerciseFees - left", exerciseFee1);
+            console2.log(" t currNumRangesFromStrike", currNumRangesFromStrike);
+            console2.log(
+                "t int256(strike - rangeUp - currentTick)",
+                int256(strike - rangeUp - atTick)
+            );
+            console2.log("t int256(strike - rangeUp - currentTick)", strike - rangeUp - atTick);
+
+            console2.log("t strike", strike);
+            console2.log("t rangeUp", rangeUp);
+            console2.log("t _currentTick", atTick);
+
+            console2.log("t width", width);
+            console2.log("t s_tickSpacing", tickSpacing);
+        }
+    }
+
+    // try to force exercise an ITM option
+
+    // close a position that is ATM
+    // check additional requirement when ATM
 
     /* Utilization setter */
     function setUtilization(

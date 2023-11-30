@@ -206,4 +206,12 @@ contract PanopticMathHarness is Test {
         int256 result = PanopticMath.convert1to0(amount, sqrtPriceX96);
         return result;
     }
+
+    function mulDivAsTicks(
+        int24 width,
+        int24 tickSpacing
+    ) public pure returns (int24 rangeDown, int24 rangeUp) {
+        (int24 result0, int24 result1) = PanopticMath.mulDivAsTicks(width, tickSpacing);
+        return (result0, result1);
+    }
 }

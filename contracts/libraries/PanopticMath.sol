@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
+// Foundry
+import "forge-std/Test.sol";
 // Interfaces
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Libraries
@@ -466,6 +468,8 @@ library PanopticMath {
         int24 width,
         int24 tickSpacing
     ) external pure returns (int24 rangeDown, int24 rangeUp) {
+        console2.log("width in func", width);
+        console2.log("tickSpacing in func", tickSpacing);
         /// @solidity memory-safe-assembly
         //cache product and denominator
         assembly {

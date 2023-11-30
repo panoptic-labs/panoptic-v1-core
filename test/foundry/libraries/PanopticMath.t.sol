@@ -1548,4 +1548,67 @@ contract PanopticMathTest is Test, PositionUtils {
         assertEq(0, returnedShorts);
         assertEq(expectedLongs, returnedLongs);
     }
+
+    // mul div as ticks
+    function test_Success_mulDivAsTicks_1bps_1TickWide() public {
+        int24 width = 1;
+        int24 tickSpacing = 1;
+
+        (int24 rangeDown, int24 rangeUp) = harness.mulDivAsTicks(width, tickSpacing);
+
+        assertEq(rangeDown, 0, "rangeDown");
+        assertEq(rangeUp, 1, "rangeUp");
+    }
+
+    function test_Success_mulDivAsTicks_allCombos(
+        uint16 widthSeed,
+        uint16 tickSpacing,
+        int24 strike
+    ) public {
+        // bound the width (1 -> 4094)
+        uint24 widthBounded = uint24(bound(widthSeed, 1, 4094));
+
+        // bound the tickSpacing
+        uint24 tickSpacingBounded = uint24(bound(tickSpacing, 1, 1000));
+
+        // get a valid strike
+        strike = int24((strike / int24(tickSpacingBounded)) * int24(tickSpacingBounded));
+
+        // validate bounds
+        vm.assume(strike > TickMath.MIN_TICK && strike < TickMath.MAX_TICK);
+
+        // invoke
+        (int24 rangeDown, int24 rangeUp) = harness.mulDivAsTicks(
+            int24(widthBounded),
+            int24(tickSpacingBounded)
+        );
+
+        // if width is odd and tickSpacing is odd
+        // then actual range will not be a whole number
+        if (widthBounded % 2 == 1 && tickSpacingBounded % 2 == 1) {
+            uint256 mulDivRangeDown = Math.mulDivDown(widthBounded, tickSpacingBounded, 2);
+
+            uint256 mulDivRangeUp = Math.mulDivUp(widthBounded, tickSpacingBounded, 2);
+
+            // check against mulDivRoundDown
+            assertEq(uint24(rangeDown), mulDivRangeDown);
+
+            // check against mulDivRoundUp
+            assertEq(uint24(rangeUp), mulDivRangeUp);
+        } else {
+            int24 range = int24((widthBounded * tickSpacingBounded) / 2);
+
+            int24 lowerTick = strike - range;
+            int24 upperTick = strike + range;
+
+            assertEq(strike - rangeDown, strike - range);
+            assertEq(strike + rangeUp, strike + range);
+        }
+
+        // ensure range is rounded down if width * tickSpacing is odd
+
+        // ensure range is rounded up if width * tickSpacing is odd
+
+        // else even -> rangeDown and rangeUp are both just (width * ts) / 2
+    }
 }
