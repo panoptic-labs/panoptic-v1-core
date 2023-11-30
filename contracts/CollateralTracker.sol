@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
-// Foundry
-import "forge-std/Test.sol";
 // Interfaces
 import {PanopticFactory} from "./PanopticFactory.sol";
 import {PanopticPool} from "./PanopticPool.sol";
@@ -852,7 +850,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
 
         unchecked {
             for (uint256 leg = 0; leg < TokenId.countLegs(positionId); ++leg) {
-                console2.log("leg index", leg);
                 // short legs are not counted - exercise is intended to be based on long legs
                 if (positionId.isLong(leg) == 0) continue;
 
@@ -869,8 +866,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     /// otherwise rangeUp and rangeDown will be the same
                     int24 width = positionId.width(leg);
                     (rangeDown, rangeUp) = PanopticMath.mulDivAsTicks(width, s_tickSpacing);
-                    console2.log("r width", width);
-                    console2.log(" r s_tickSpacing", s_tickSpacing);
                 }
 
                 if (_currentTick < (_positionId.strike(leg) - rangeDown)) {
@@ -885,21 +880,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     currNumRangesFromStrike = uint256(
                         (2 * int256(_positionId.strike(leg) - rangeUp - _currentTick)) / rangeUp
                     ); // = (strike - range - _currentTick) / (range / 2); the "range/2" are the "half ranges"
-
-                    console2.log("below");
-                    console2.log("r currNumRangesFromStrike", currNumRangesFromStrike);
-                    console2.log("r _positionId.strike(leg)", _positionId.strike(leg));
-                    console2.log("r rangeUp", rangeUp);
-                    console2.log("r _currentTick", _currentTick);
-
-                    console2.log(
-                        "r int256(_positionId.strike(leg) - rangeUp - _currentTick))",
-                        int256(_positionId.strike(leg) - rangeUp - _currentTick)
-                    );
-                    console2.log(
-                        "r int256(_positionId.strike(leg) - rangeUp - _currentTick))",
-                        _positionId.strike(leg) - rangeUp - _currentTick
-                    );
                 } else if (_currentTick > (_positionId.strike(leg) + rangeUp)) {
                     /**
                            strike      current
@@ -912,8 +892,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                     currNumRangesFromStrike = uint256(
                         (2 * int256(_currentTick - _positionId.strike(leg) - rangeUp)) / rangeUp
                     );
-
-                    console2.log("above");
                 }
                 maxNumRangesFromStrike = currNumRangesFromStrike > maxNumRangesFromStrike
                     ? currNumRangesFromStrike
@@ -960,8 +938,6 @@ contract CollateralTracker is ERC20Minimal, Multicall {
                             )
                     );
             }
-
-            console2.log(" r maxNumRangesFromStrike", maxNumRangesFromStrike);
 
             // note: we HAVE to start with a negative number as the base exercise cost because when shifting a negative number right by n bits,
             // the result is rounded DOWN and NOT toward zero
