@@ -1574,6 +1574,28 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param atTick Tick to convert values at. This can be the current tick or the Uniswap pool TWAP tick.
     /// @param poolUtilization The utilization of the Panoptic pool (balance of buying and selling).
     /// @return tokenRequired total required tokens for all legs of the specified tokenId.
+    function getRequiredCollateralAtTickSinglePosition(
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 atTick,
+        uint128 poolUtilization
+    ) external view returns (uint256 tokenRequired) {
+        return
+            _getRequiredCollateralAtTickSinglePosition(
+                tokenId,
+                positionSize,
+                atTick,
+                poolUtilization
+            );
+    }
+
+    /// @notice Get the required amount of collateral tokens corresponding to a specific single position 'tokenId' at a price 'tick'.
+    /// The required collateral of an account depends on the price ('tick') in the AMM pool: if in the position's favor less collateral needed, etc.
+    /// @param tokenId The option position.
+    /// @param positionSize The size of the option position.
+    /// @param atTick Tick to convert values at. This can be the current tick or the Uniswap pool TWAP tick.
+    /// @param poolUtilization The utilization of the Panoptic pool (balance of buying and selling).
+    /// @return tokenRequired total required tokens for all legs of the specified tokenId.
     function _getRequiredCollateralAtTickSinglePosition(
         uint256 tokenId,
         uint128 positionSize,

@@ -1,21 +1,33 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.18;
 
+// Foundry
+import "forge-std/Test.sol";
 // Interfaces
 import {PanopticPool} from "@contracts/PanopticPool.sol";
+import {CollateralTracker} from "@contracts/CollateralTracker.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
+import {Math} from "@libraries/Math.sol";
 // Custom types
 import {TokenId} from "@types/TokenId.sol";
+import {LeftRight} from "@types/LeftRight.sol";
+import {Errors} from "@libraries/Errors.sol";
 
 /// @title Utility contract for token ID construction and advanced queries.
 /// @author Axicon Labs Limited
 contract PanopticHelper {
+    // enables packing of types within int128|int128 or uint128|uint128 containers.
+    using LeftRight for int256;
+    using LeftRight for uint256;
+
     using TokenId for uint256;
 
     SemiFungiblePositionManager internal immutable SFPM;
+
+    uint256 internal constant DECIMALS = 10_000;
 
     struct Leg {
         uint64 poolId;
@@ -28,6 +40,24 @@ contract PanopticHelper {
         int24 strike;
         int24 width;
     }
+
+    // 1, 5, 10, 25, 50, 75, 100
+    int256[7] sizingPercentages = [
+        int256(1),
+        int256(5),
+        int256(10),
+        int256(25),
+        int256(50),
+        int256(75),
+        int256(100)
+    ];
+
+    // max room for error in tokens
+    int256 constant epsilon = 10;
+
+    /// @notice Decimals for computation (1 bps (basis point) precision: 0.01%)
+    /// int type for composability with signed integer based mathematical operations.
+    int128 internal constant DECIMALS_128 = 10_000;
 
     /// @notice Construct the PanopticHelper contract
     /// @param _SFPM address of the SemiFungiblePositionManager
@@ -71,6 +101,414 @@ contract PanopticHelper {
 
         // convert (using atTick) and return the total collateral balance and required balance in terms of tokenType
         return PanopticMath.convertCollateralData(tokenData0, tokenData1, tokenType, atTick);
+    }
+
+    /// @notice Get the collateral status/margin details for a single position, not taking ITM amounts into account.
+    /// @dev This can be used to check the amount of tokens required for that specific collateral type.
+    /// @param tokenId The option position.
+    /// @param positionSize The size of the option position.
+    /// @param atTick Tick to convert values at.
+    /// @return tokensRequired Required tokens for that new position
+    function getPositionCollateralRequirement(
+        PanopticPool pool,
+        uint256 tokenId,
+        uint256 tokenType,
+        uint128 positionSize,
+        int24 atTick
+    ) public view returns (uint256 tokensRequired) {
+        unchecked {
+            // update pool utilization, taking new inAMM amounts into account
+            uint128 poolUtilization;
+            CollateralTracker collateralToken = tokenType == 0
+                ? pool.collateralToken0()
+                : pool.collateralToken1();
+
+            (, , int128 currentPoolUtilization) = collateralToken.getPoolData();
+
+            (int256 longAmounts, int256 shortAmounts) = PanopticMath.computeExercisedAmounts(
+                tokenId,
+                0,
+                positionSize,
+                pool.univ3pool().tickSpacing()
+            );
+
+            (int256 longAmount, int256 shortAmount) = tokenType == 0
+                ? (longAmounts.rightSlot(), shortAmounts.rightSlot())
+                : (longAmounts.leftSlot(), shortAmounts.leftSlot());
+
+            int256 deltaBalance = shortAmount - longAmount;
+
+            int128 newPoolUtilization = int128(
+                currentPoolUtilization +
+                    (deltaBalance * DECIMALS_128) /
+                    int256(collateralToken.totalAssets())
+            );
+
+            tokenType == 0
+                ? poolUtilization = uint128(newPoolUtilization)
+                : poolUtilization = (uint128(newPoolUtilization) << 64);
+
+            // Compute the tokens required using new pool utilization
+            tokensRequired = collateralToken.getRequiredCollateralAtTickSinglePosition(
+                tokenId,
+                positionSize,
+                atTick,
+                poolUtilization
+            );
+        }
+    }
+
+    /// @notice Get the collateral status/margin details for a single position, includes offsetting effect of ITM positions.
+    /// @dev This can be used to check the amount of tokens required for that specific collateral type, with the ITM amounts being
+    /// @dev credited or deducted from the tokenRequired.
+    /// @param tokenId The option position.
+    /// @param positionSize The size of the option position.
+    /// @param atTick Tick to convert values at. This can be the current tick or the Uniswap pool TWAP tick.
+    /// @return totalTokensRequired Required tokens for that new position
+    /// @return itmAmount Amount of tokens that are ITM
+    function getITMPositionCollateralRequirement(
+        PanopticPool pool,
+        uint256 tokenId,
+        uint256 tokenType,
+        uint128 positionSize,
+        int24 atTick
+    ) public view returns (int256 totalTokensRequired, int256 itmAmount) {
+        // get tokens required for the current tokenId position
+        // if the amount moved is 0 the required tokens are 0
+        uint256 tokensRequired = getPositionCollateralRequirement(
+            pool,
+            tokenId,
+            tokenType,
+            positionSize,
+            atTick
+        );
+
+        // compute ITM amounts
+        (int256 itmAmount0, int256 itmAmount1) = PanopticMath.getNetITMAmountsForPosition(
+            tokenId,
+            positionSize,
+            pool.univ3pool().tickSpacing(),
+            atTick
+        );
+
+        // use the ITM amount for the current collateral token
+        itmAmount = tokenType == 0 ? itmAmount0 : itmAmount1;
+
+        // * estimate swapped amounts based on ITM amounts
+
+        // deduct ITM amounts from tokens required
+        // final requirement can be negative due to an off by ~1-5 token precision loss error
+        totalTokensRequired = tokensRequired.toInt256() - itmAmount;
+    }
+
+    /// @notice Compute the collateral requirement of a given tokenId at the given tick
+    /// @param tokenId The tokenId to check collateral requirement for
+    /// @param positionSize the size of the new position
+    /// @param atTick At what price is the collateral requirement evaluated at
+    /// @return requiredCollateral0 The collateral requirement for token0
+    /// @return requiredCollateral1 The collateral requirement for token0
+    function computeCollateralRequirement(
+        PanopticPool pool,
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 atTick
+    ) public view returns (uint256 requiredCollateral0, uint256 requiredCollateral1) {
+        // Query the required collateral amounts for the two tokens
+        requiredCollateral0 = getPositionCollateralRequirement(
+            pool,
+            tokenId,
+            0, // tokenType
+            positionSize,
+            atTick
+        );
+        // Query the required collateral amounts for the two tokens
+        requiredCollateral1 = getPositionCollateralRequirement(
+            pool,
+            tokenId,
+            1, // tokenType
+            positionSize,
+            atTick
+        );
+    }
+
+    /// @notice Compute the collateral requirement of a given tokenId at the given tick, considering the ITM amounts
+    /// @param pool The PanopticPool instance to check collateral on
+    /// @param positionSize the size of the new position
+    /// @param atTick At what price is the collateral requirement evaluated at
+    /// @return requiredCollateralITM0 The collateral requirement for token0
+    /// @return requiredCollateralITM1 The collateral requirement for token0
+    function computeCollateralRequirementITM(
+        PanopticPool pool,
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 atTick
+    ) public view returns (int256 requiredCollateralITM0, int256 requiredCollateralITM1) {
+        // Query the required collateral amounts for the two tokens
+        (requiredCollateralITM0, ) = getITMPositionCollateralRequirement(
+            pool,
+            tokenId,
+            0, // tokenType
+            positionSize,
+            atTick
+        );
+        // Query the required collateral amounts for the two tokens
+        (requiredCollateralITM1, ) = getITMPositionCollateralRequirement(
+            pool,
+            tokenId,
+            1, // tokenType
+            positionSize,
+            atTick
+        );
+    }
+
+    /// @notice Compute the max position size given a tokenId using the bisection method.
+    /// @param pool The PanopticPool instance to check collateral on
+    /// @param account Address of the user that owns the positions
+    /// @param positionIdList List of positions. Written as [tokenId1, tokenId2, ...]
+    /// @param tokenId The tokenId to check collateral requirement for
+    /// @param atTick At what price is the collateral requirement evaluated at
+    /// @param tokenType whether to return the values in term of token0 or token1
+    /// @param maintenanceMarginRatio minimum ratio of actual-to-required collateral that must be maintained to mint a new position (decimals=10000).
+    /// @return maxPositionSizes the array of max position sizes in order of sizing percentage [1, 5, 10, 15, 25, 50, 75, 100]
+    function computeMaxPositionSize(
+        PanopticPool pool,
+        address account,
+        uint256[] calldata positionIdList,
+        uint256 tokenId,
+        int24 atTick,
+        uint256 tokenType,
+        uint256 maintenanceMarginRatio
+    ) public view returns (int256[7] memory maxPositionSizes) {
+        // stack rolling
+        PanopticPool _pool = pool;
+
+        // available collateral being the user's collateral balance less the base requirement and minting
+        // margin buffer
+        uint256 availableCollateral;
+        {
+            // collateral balance and required collateral depending on token type
+            (uint256 collateralBalance, uint256 requiredCollateral) = checkCollateral(
+                _pool,
+                account,
+                atTick,
+                tokenType,
+                positionIdList
+            );
+
+            availableCollateral =
+                collateralBalance -
+                (requiredCollateral * maintenanceMarginRatio) /
+                DECIMALS;
+        }
+
+        // populate max position sizes
+        for (uint i; i < 7; ) {
+            // upper and lower bounds
+            int256 a = 1;
+            int256 b = type(int80).max;
+            int256 c; // 0 by default
+
+            // check if initial solution resides within bounds of 'a' and 'b'
+            {
+                int256[3] memory solutions = _bisectionBaseCase(
+                    _pool,
+                    tokenId,
+                    atTick,
+                    tokenType,
+                    [a, b, c],
+                    availableCollateral,
+                    i // sizing index
+                );
+
+                if (solutions[0] * solutions[1] >= 0) {
+                    revert("failure, invalid bounds");
+                }
+            }
+
+            while (b - a >= epsilon) {
+                // Find middle point
+                c = (a + b) / 2;
+
+                int256[3] memory solutions = _bisectionBaseCase(
+                    _pool,
+                    tokenId,
+                    atTick,
+                    tokenType,
+                    [a, b, c],
+                    availableCollateral,
+                    i // sizing index
+                );
+
+                console2.log("solution 1", solutions[0]);
+                console2.log("solution 2", solutions[1]);
+                console2.log("solution 3", solutions[2]);
+
+                // Check if middle point is root
+                if (solutions[2] == 0) {
+                    break;
+                    // preforms (a * b) < 0 without multiplication to avoid an overflow
+                    // max constraint of 256 bits
+                } else if (
+                    (solutions[2] < 0 && solutions[0] > 0) || (solutions[2] > 0 && solutions[0] < 0)
+                ) {
+                    // Decide the side to repeat the steps
+                    b = c;
+                    console2.log("new b", b);
+                } else {
+                    a = c;
+                    console2.log("new a", a);
+                }
+            }
+
+            maxPositionSizes[i] = c;
+
+            unchecked {
+                i++;
+            }
+        }
+    }
+
+    /// @notice Compute the max position size given a tokenId using the bisection method.
+    /// @param pool The PanopticPool instance to check collateral on
+    /// @param tokenId The tokenId to check collateral requirement for
+    /// @param atTick At what price is the collateral requirement evaluated at
+    /// @param tokenType whether to return the values in term of token0 or token1
+    /// @param positionSizes The position sizes to evaluate the collateral requirement passed in
+    /// @param availableCollateral the interacting user's free collateral balances (total balancde - total requirements for open positions)
+    /// @param sizingIndex The ratio of the available collateral being used to determine the maximum position size for
+    /// @return solutions the collateral requirements for the corresponding position details passed in
+    function _bisectionBaseCase(
+        PanopticPool pool,
+        uint256 tokenId,
+        int24 atTick,
+        uint256 tokenType,
+        int256[3] memory positionSizes,
+        uint256 availableCollateral,
+        uint256 sizingIndex
+    ) internal view returns (int256[3] memory solutions) {
+        // stack rolling
+        int24 _atTick = atTick;
+
+        //uint256 totalLegs = tokenId.countLegs();
+        for (uint i; i < 3; i++) {
+            // validate the upper bounds of the amount moved
+            // if the notional is above 128 bits then this is an invalid position
+            // {
+            //     uint256[4] memory amountsMoved = totalAmountsMoved(
+            //         tokenId,
+            //         uint128(uint256(positionSizes[i])),
+            //         pool.univ3pool().tickSpacing()
+            //     );
+
+            //     for (uint i; i < totalLegs; i++) {
+            //         uint256 currAmountMoved = amountsMoved[i];
+
+            //         if (currAmountMoved.leftSlot() == 0 || currAmountMoved.rightSlot() == 0) {
+
+            //             break;
+            //         }
+            //     }
+            // }
+            // console2.log("after validation");
+            console2.log("positionSizes[i]", positionSizes[i]);
+
+            int256 requiredCollateralITM0;
+            int256 requiredCollateralITM1;
+            {
+                // Query the required collateral amounts for token0
+                (requiredCollateralITM0, ) = getITMPositionCollateralRequirement(
+                    pool,
+                    tokenId,
+                    0,
+                    uint128(uint256(positionSizes[i])),
+                    _atTick
+                );
+                // Query the required collateral amounts for token1
+                (requiredCollateralITM1, ) = getITMPositionCollateralRequirement(
+                    pool,
+                    tokenId,
+                    1,
+                    uint128(uint256(positionSizes[i])),
+                    _atTick
+                );
+            }
+
+            // get current price
+            uint160 sqrtPriceX96 = Math.getSqrtRatioAtTick(_atTick);
+
+            // convert to get all in token0 or token1
+            int256 totalRequirement = tokenType == 0
+                ? requiredCollateralITM0 +
+                    PanopticMath.convert1to0(requiredCollateralITM1, sqrtPriceX96)
+                : requiredCollateralITM1 +
+                    PanopticMath.convert0to1(requiredCollateralITM0, sqrtPriceX96);
+
+            solutions[i] =
+                ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100) -
+                totalRequirement;
+
+            console2.log("availableCollateral", availableCollateral);
+            console2.log(
+                "((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100)",
+                ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100)
+            );
+            console2.log("sizingPercentages[sizingIndex]", sizingPercentages[sizingIndex]);
+            console2.log("totalRequirement", totalRequirement);
+            console2.log(
+                "solution",
+                ((int256(availableCollateral) * sizingPercentages[sizingIndex]) / 100)
+            );
+        }
+    }
+
+    /// @notice this function returns the amounts moved for a legs of a tokenId without revert
+    /// if the initial position size passed into a position is too small, it reverts due to the notional value being insufficient
+    /// this helper returns the amounts without restriction
+    /// @param tokenId The tokenId to check collateral requirement for
+    /// @param positionSize the number of option contracts held in this position (each contract can control multiple tokens)
+    /// @param tickSpacing the tick spacing of the underlying UniV3 pool
+    /// @return amountsMoved the total amounts moved for all legs with each value being a LeftRight encoded variable containing the amount0 and the amount1 value controlled by this option position's leg
+    function totalAmountsMoved(
+        uint256 tokenId,
+        uint128 positionSize,
+        int24 tickSpacing
+    ) public view returns (uint256[4] memory amountsMoved) {
+        uint256 totalLegs = tokenId.countLegs();
+        for (uint i; i < totalLegs; ) {
+            // get the tick range for this leg in order to get the strike price (the underlying price)
+            (int24 tickLower, int24 tickUpper) = tokenId.asTicks(i, tickSpacing);
+
+            // positionSize: how many option contracts we have.
+
+            uint128 amount0;
+            uint128 amount1;
+            unchecked {
+                if (tokenId.asset(i) == 0) {
+                    // contractSize: is then the product of how many option contracts we have and the amount of underlying controlled per contract
+                    amount0 = positionSize * uint128(tokenId.optionRatio(i)); // in terms of the underlying tokens/shares
+                    // notional is then "how many underlying tokens are controlled (contractSize) * (the price for each token -- strike price):
+                    amount1 = (
+                        PanopticMath.convert0to1(
+                            amount0,
+                            Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2)
+                        )
+                    ).toUint128(); // how many tokens are controlled by this option position
+                } else {
+                    amount1 = positionSize * uint128(tokenId.optionRatio(i));
+                    amount0 = (
+                        PanopticMath.convert1to0(
+                            amount1,
+                            Math.getSqrtRatioAtTick((tickUpper + tickLower) / 2)
+                        )
+                    ).toUint128();
+                }
+            }
+            amountsMoved[i] = uint256(0).toRightSlot(amount0).toLeftSlot(amount1);
+
+            unchecked {
+                i++;
+            }
+        }
     }
 
     /// @notice Returns the net assets (balance - maintenance margin) of a given account on a given pool.
