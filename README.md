@@ -95,7 +95,7 @@ Meanwhile, force exercisers and liquidators can perform their respective roles w
 ```ml
 contracts/
 ├── CollateralTracker — "ERC4626 vault where token liquidity from Panoptic Liquidity Providers (PLPs) and collateral for option positions are deposited and collateral requirements are computed"
-├── PanopticFactory — "Handles deployment new Panoptic instances on top of Uniswap pools, initial liquidity deployments, and NFT rewards for deployers"
+├── PanopticFactory — "Handles deployment of new Panoptic instances on top of Uniswap pools, initial liquidity deployments, and NFT rewards for deployers"
 ├── PanopticPool — "Coordinates all options trading activity - minting, burning, rolling, force exercises, liquidations"
 ├── SemiFungiblePositionManager — "The 'engine' of Panoptic - manages all Uniswap V3 positions in the protocol as well as being a more advanced, gas-efficient alternative to NFPM for Uniswap LPs"
 ├── tokens
@@ -107,7 +107,7 @@ contracts/
 │   ├── TickStateCallContext — "Implementation for a custom data type that can hold a current and a median Uniswap pool tick, as well as a caller"
 │   ├── LeftRight — "Implementation for a set of custom data types that can hold two 128-bit numbers"
 │   ├── LiquidityChunk — "Implementation for a custom data type that can represent a liquidity chunk of a given size in Uniswap - containing a tickLower, tickUpper, and liquidity"
-│   └── TokenId — "Implemenation for the custom data type used in the SFPM and Panoptic to encode position data in 256-bit ERC1155 tokenIds - holds a pool identifier and up to four full position legs"
+│   └── TokenId — "Implementation for the custom data type used in the SFPM and Panoptic to encode position data in 256-bit ERC1155 tokenIds - holds a pool identifier and up to four full position legs"
 ├── libraries
 │   ├── CallbackLib — "Library for verifying and decoding Uniswap callbacks"
 │   ├── Constants — "Library of Constants used in Panoptic"
