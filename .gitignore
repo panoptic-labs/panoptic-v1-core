@@ -5,6 +5,7 @@ coverage
 coverage.json
 typechain
 
+metadata/out/*
 # Yarn files
 yarn-error.log
 
@@ -22,3 +23,5 @@ tenderly.yaml
 
 deployments
 broadcast
+out
+docs

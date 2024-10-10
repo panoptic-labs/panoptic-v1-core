@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 import {MathHarness} from "./harnesses/MathHarness.sol";
 import {Errors} from "@libraries/Errors.sol";
-import {LiquidityChunk} from "@types/LiquidityChunk.sol";
+import {LiquidityChunk, LiquidityChunkLibrary} from "@types/LiquidityChunk.sol";
 import {LiquidityAmounts} from "v3-periphery/libraries/LiquidityAmounts.sol";
 import {TickMath} from "v3-core/libraries/TickMath.sol";
 import {FullMath} from "v3-core/libraries/FullMath.sol";
@@ -62,6 +62,16 @@ contract MathTest is Test {
         assertEq(harness.toUint128(toDowncast), toDowncast);
     }
 
+    function test_Success_toUint128Capped(uint256 toDowncast) public {
+        vm.assume(toDowncast <= type(uint128).max);
+        assertEq(harness.toUint128Capped(toDowncast), toDowncast);
+    }
+
+    function test_Success_Cap_toUint128Capped(uint256 toDowncast) public {
+        vm.assume(toDowncast > type(uint128).max);
+        assertEq(harness.toUint128Capped(toDowncast), type(uint128).max);
+    }
+
     function test_Fail_toUint128_Overflow(uint256 toDowncast) public {
         vm.assume(toDowncast > type(uint128).max);
         vm.expectRevert(Errors.CastingError.selector);
@@ -79,7 +89,28 @@ contract MathTest is Test {
         harness.toInt128(toCast);
     }
 
-    function test_Success_sort(int24[] memory data) public {
+    // CASTING
+    function test_Success_ToInt256(uint256 x) public {
+        if (x > uint256(type(int256).max)) {
+            vm.expectRevert(Errors.CastingError.selector);
+            harness.toInt256(x);
+        } else {
+            int256 y = harness.toInt256(x);
+            assertEq(y, int256(x));
+        }
+    }
+
+    function test_Success_ToInt128(int256 x) public {
+        if (x > type(int128).max || x < type(int128).min) {
+            vm.expectRevert(Errors.CastingError.selector);
+            harness.toInt128(x);
+        } else {
+            int128 y = harness.toInt128(x);
+            assertEq(int128(x), y);
+        }
+    }
+
+    function test_Success_sort(int256[] memory data) public {
         vm.assume(data.length != 0);
         // Compare against an alternative sorting implementation
         // Bubble sort
@@ -87,7 +118,7 @@ contract MathTest is Test {
         for (uint256 i = 0; i < l; i++) {
             for (uint256 j = i + 1; j < l; j++) {
                 if (data[i] > data[j]) {
-                    int24 temp = data[i];
+                    int256 temp = data[i];
                     data[i] = data[j];
                     data[j] = temp;
                 }
@@ -125,9 +156,37 @@ contract MathTest is Test {
         harness.mulDiv96(input, input);
     }
 
+    function test_Success_mulDiv128(uint128 a, uint128 b) public {
+        uint256 expectedResult = FullMath.mulDiv(a, b, 2 ** 128);
+        uint256 returnedResult = harness.mulDiv128(a, b);
+
+        assertEq(expectedResult, returnedResult);
+    }
+
+    function test_Fail_mulDiv128() public {
+        uint256 input = type(uint256).max;
+
+        vm.expectRevert();
+        harness.mulDiv128(input, input);
+    }
+
+    function test_Success_mulDiv128RoundingUp(uint128 a, uint128 b) public {
+        uint256 expectedResult = FullMath.mulDivRoundingUp(a, b, 2 ** 128);
+        uint256 returnedResult = harness.mulDiv128RoundingUp(a, b);
+
+        assertEq(expectedResult, returnedResult);
+    }
+
     function test_Success_mulDiv192(uint128 a, uint128 b) public {
         uint256 expectedResult = FullMath.mulDiv(a, b, 2 ** 192);
         uint256 returnedResult = harness.mulDiv192(a, b);
+
+        assertEq(expectedResult, returnedResult);
+    }
+
+    function test_success_mulDiv192RoundingUp(uint128 a, uint128 b) public {
+        uint256 expectedResult = FullMath.mulDivRoundingUp(a, b, 2 ** 192);
+        uint256 returnedResult = harness.mulDiv192RoundingUp(a, b);
 
         assertEq(expectedResult, returnedResult);
     }
@@ -137,6 +196,18 @@ contract MathTest is Test {
 
         vm.expectRevert();
         harness.mulDiv192(input, input);
+    }
+
+    function test_Success_unsafeDivRoundingUp(uint256 a, uint256 b) public {
+        uint256 divRes;
+        uint256 modRes;
+        assembly ("memory-safe") {
+            divRes := div(a, b)
+            modRes := mod(a, b)
+        }
+        unchecked {
+            assertEq(harness.unsafeDivRoundingUp(a, b), modRes > 0 ? divRes + 1 : divRes);
+        }
     }
 
     function test_Fail_getSqrtRatioAtTick() public {
@@ -162,11 +233,9 @@ contract MathTest is Test {
             a
         );
 
-        uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
-        chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
-        chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
-
-        uint256 returnedResult = harness.getAmount0ForLiquidity(chunk);
+        uint256 returnedResult = harness.getAmount0ForLiquidity(
+            LiquidityChunkLibrary.createChunk(int24(-14), int24(10), a)
+        );
 
         assertEq(uniV3Result, returnedResult);
     }
@@ -178,11 +247,9 @@ contract MathTest is Test {
             a
         );
 
-        uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
-        chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
-        chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
-
-        uint256 returnedResult = harness.getAmount1ForLiquidity(chunk);
+        uint256 returnedResult = harness.getAmount1ForLiquidity(
+            LiquidityChunkLibrary.createChunk(int24(-14), int24(10), a)
+        );
 
         assertEq(uniV3Result, returnedResult);
     }
@@ -195,13 +262,9 @@ contract MathTest is Test {
             a
         );
 
-        uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), a);
-        chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
-        chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
-
         (uint256 returnedResult0, uint256 returnedResult1) = harness.getAmountsForLiquidity(
             int24(2),
-            chunk
+            LiquidityChunkLibrary.createChunk(int24(-14), int24(10), a)
         );
 
         assertEq(uniV3Result0, returnedResult0);
@@ -215,11 +278,9 @@ contract MathTest is Test {
             a
         );
 
-        uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), 0);
-        chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
-        chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
-
-        uint256 returnedResult = harness.getLiquidityForAmount0(chunk, a);
+        uint256 returnedResult = harness
+            .getLiquidityForAmount0(int24(-14), int24(10), a)
+            .liquidity();
 
         assertEq(uniV3Result, returnedResult);
     }
@@ -231,11 +292,9 @@ contract MathTest is Test {
             a
         );
 
-        uint256 chunk = LiquidityChunk.addLiquidity(uint256(0), 0);
-        chunk = LiquidityChunk.addTickLower(chunk, int24(-14));
-        chunk = LiquidityChunk.addTickUpper(chunk, int24(10));
-
-        uint256 returnedResult = harness.getLiquidityForAmount1(chunk, a);
+        uint256 returnedResult = harness
+            .getLiquidityForAmount1(int24(-14), int24(10), a)
+            .liquidity();
 
         assertEq(uniV3Result, returnedResult);
     }

@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 // Interfaces
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC20Partial} from "@tokens/interfaces/IERC20Partial.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
-// OpenZeppelin libraries
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+// Libraries
+import {PanopticMath} from "@libraries/PanopticMath.sol";
 
 /// @title InteractionHelper - contains helper functions for external interactions such as approvals.
 /// @notice Used to delegate logic with multiple external calls.
 /// @dev Generally employed when there is a need to save or reuse bytecode size
-// on a core contract (calls take a significant amount of logic).
+/// on a core contract (calls take a significant amount of logic).
 /// @author Axicon Labs Limited
 library InteractionHelper {
     /// @notice Function that performs approvals on behalf of the PanopticPool for CollateralTracker and SemiFungiblePositionManager.
-    /// @param sfpm the SemiFungiblePositionManager being approved for both token0 and token1
-    /// @param ct0 the CollateralTracker (token0) being approved for token0
-    /// @param ct1 the CollateralTracker (token1) being approved for token1
-    /// @param token0 the token0 (in Uniswap) being approved for
-    /// @param token1 the token1 (in Uniswap) being approved for
+    /// @param sfpm The SemiFungiblePositionManager being approved for both token0 and token1
+    /// @param ct0 The CollateralTracker (token0) being approved for token0
+    /// @param ct1 The CollateralTracker (token1) being approved for token1
+    /// @param token0 The token0 (in Uniswap) being approved for
+    /// @param token1 The token1 (in Uniswap) being approved for
     function doApprovals(
         SemiFungiblePositionManager sfpm,
         CollateralTracker ct0,
@@ -39,12 +39,12 @@ library InteractionHelper {
 
     /// @notice Computes the name of a CollateralTracker based on the token composition and fee of the underlying Uniswap Pool.
     /// @dev Some tokens do not have proper symbols so error handling is required - this logic takes up significant bytecode size, which is why it is in a library.
-    /// @param token0 the token0 in the Uniswap Pool
-    /// @param token1 the token1 in the Uniswap Pool
-    /// @param isToken0 whether the collateral token computing the name is for token0 or token1
-    /// @param fee the fee of the Uniswap pool in basis points
-    /// @param prefix a constant string appended to the start of the token name
-    /// @return the complete name of the collateral token calling this function
+    /// @param token0 The token0 in the Uniswap Pool
+    /// @param token1 The token1 in the Uniswap Pool
+    /// @param isToken0 Whether the collateral token computing the name is for token0 or token1
+    /// @param fee The fee of the Uniswap pool in hundredths of basis points
+    /// @param prefix A constant string appended to the start of the token name
+    /// @return The complete name of the collateral token calling this function
     function computeName(
         address token0,
         address token1,
@@ -52,21 +52,9 @@ library InteractionHelper {
         uint24 fee,
         string memory prefix
     ) external view returns (string memory) {
-        // get the underlying token symbols
-        // it's not guaranteed that they support the metadata extension
-        // so we need to let them fail and return placeholder if not
-        string memory symbol0;
-        string memory symbol1;
-        try IERC20Metadata(token0).symbol() returns (string memory _symbol) {
-            symbol0 = _symbol;
-        } catch {
-            symbol0 = "???";
-        }
-        try IERC20Metadata(token1).symbol() returns (string memory _symbol) {
-            symbol1 = _symbol;
-        } catch {
-            symbol1 = "???";
-        }
+        string memory symbol0 = PanopticMath.safeERC20Symbol(token0);
+        string memory symbol1 = PanopticMath.safeERC20Symbol(token1);
+
         unchecked {
             return
                 string.concat(
@@ -78,32 +66,25 @@ library InteractionHelper {
                     "/",
                     symbol1,
                     " ",
-                    Strings.toString(fee),
-                    "bps"
+                    PanopticMath.uniswapFeeToString(fee)
                 );
         }
     }
 
-    /// @notice returns symbol as prefixed symbol of underlying token.
-    /// @param token the address of the underlying token used to compute the symbol
-    /// @param prefix a constant string appended to the symbol of the underlying token to create the final symbol
-    /// @return _symbol the symbol of the token
+    /// @notice Returns symbol as prefixed symbol of underlying token.
+    /// @param token The address of the underlying token used to compute the symbol
+    /// @param prefix A constant string appended to the symbol of the underlying token to create the final symbol
+    /// @return The symbol of the token
     function computeSymbol(
         address token,
         string memory prefix
-    ) external view returns (string memory _symbol) {
-        // not guaranteed that token supports metadada extension
-        // so we need to let call fail and return placeholder if not
-        try IERC20Metadata(token).symbol() returns (string memory tokenSymbol) {
-            return string.concat(prefix, tokenSymbol);
-        } catch {
-            return string.concat(prefix, "???");
-        }
+    ) external view returns (string memory) {
+        return string.concat(prefix, PanopticMath.safeERC20Symbol(token));
     }
 
-    /// @notice returns decimals of underlying token (0 if not present).
-    /// @param token the address of the underlying token used to compute the decimals
-    /// @return decimals the decimals of the token
+    /// @notice Returns decimals of underlying token (0 if not present).
+    /// @param token The address of the underlying token used to compute the decimals
+    /// @return The decimals of the token
     function computeDecimals(address token) external view returns (uint8) {
         // not guaranteed that token supports metadada extension
         // so we need to let call fail and return placeholder if not

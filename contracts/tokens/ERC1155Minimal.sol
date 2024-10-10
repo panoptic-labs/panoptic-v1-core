@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 // OpenZeppelin libraries
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
@@ -7,17 +7,18 @@ import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155
 /// @title Minimalist ERC1155 implementation without metadata.
 /// @author Axicon Labs Limited
 /// @author Modified from Solmate (https://github.com/transmissions11/solmate/blob/v7/src/tokens/ERC1155.sol)
+/// @dev Not compliant to the letter, does not include any metadata functionality.
 abstract contract ERC1155 {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted when only a single token is transferred
-    /// @param operator the user who initiated the transfer
-    /// @param from the user who sent the tokens
-    /// @param to the user who received the tokens
-    /// @param id the ERC1155 token id
-    /// @param amount the amount of tokens transferred
+    /// @notice Emitted when only a single token is transferred.
+    /// @param operator The user who initiated the transfer
+    /// @param from The user who sent the tokens
+    /// @param to The user who received the tokens
+    /// @param id The ERC1155 token id
+    /// @param amount The amount of tokens transferred
     event TransferSingle(
         address indexed operator,
         address indexed from,
@@ -26,12 +27,12 @@ abstract contract ERC1155 {
         uint256 amount
     );
 
-    /// @notice Emitted when multiple tokens are transferred from one user to another
-    /// @param operator the user who initiated the transfer
-    /// @param from the user who sent the tokens
-    /// @param to the user who received the tokens
-    /// @param ids the ERC1155 token ids
-    /// @param amounts the amounts of tokens transferred
+    /// @notice Emitted when multiple tokens are transferred from one user to another.
+    /// @param operator The user who initiated the transfer
+    /// @param from The user who sent the tokens
+    /// @param to The user who received the tokens
+    /// @param ids The ERC1155 token ids
+    /// @param amounts The amounts of tokens transferred
     event TransferBatch(
         address indexed operator,
         address indexed from,
@@ -40,30 +41,33 @@ abstract contract ERC1155 {
         uint256[] amounts
     );
 
-    /// @notice Emitted when an operator is approved to transfer all tokens on behalf of a user
+    /// @notice Emitted when the approval status of an operator to transfer all tokens on behalf of a user is modified.
+    /// @param owner The user who approved or disapproved `operator` to transfer their tokens
+    /// @param operator The user who was approved or disapproved to transfer all tokens on behalf of `owner`
+    /// @param approved Whether `operator` is approved or disapproved to transfer all tokens on behalf of `owner`
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
 
-    // emitted when a user attempts to transfer tokens they do not own nor are approved to transfer
+    /// @notice Emitted when a user attempts to transfer tokens they do not own nor are approved to transfer.
     error NotAuthorized();
 
-    // emitted when an attempt is made to initiate a transfer to a recipient that fails to signal support for ERC1155
+    /// @notice Emitted when an attempt is made to initiate a transfer to a contract recipient that fails to signal support for ERC1155.
     error UnsafeRecipient();
 
     /*//////////////////////////////////////////////////////////////
                              ERC1155 STORAGE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Token balances for each user
-    /// @dev indexed by user, then by token id
+    /// @notice Token balances for each user.
+    /// @dev Indexed by user, then by token id.
     mapping(address account => mapping(uint256 tokenId => uint256 balance)) public balanceOf;
 
-    /// @notice Approved addresses for each user
-    /// @dev indexed by user, then by operator
-    /// @dev operator is approved to transfer all tokens on behalf of user
+    /// @notice Approved addresses for each user.
+    /// @dev Indexed by user, then by operator.
+    /// @dev Operator is approved to transfer all tokens on behalf of user.
     mapping(address owner => mapping(address operator => bool approvedForAll))
         public isApprovedForAll;
 
@@ -71,29 +75,29 @@ abstract contract ERC1155 {
                               ERC1155 LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Approve or revoke approval for an operator to transfer all tokens on behalf of the caller
-    /// @param operator the address to approve or revoke approval for
-    /// @param approved true to approve, false to revoke approval
+    /// @notice Approve or revoke approval for `operator` to transfer all tokens on behalf of the caller.
+    /// @param operator The address to approve or revoke approval for
+    /// @param approved True to approve, false to revoke approval
     function setApprovalForAll(address operator, bool approved) public {
         isApprovedForAll[msg.sender][operator] = approved;
 
         emit ApprovalForAll(msg.sender, operator, approved);
     }
 
-    /// @notice Transfer a single token from one user to another
-    /// @dev supports token approvals
-    /// @param from the user to transfer tokens from
-    /// @param to the user to transfer tokens to
-    /// @param id the ERC1155 token id to transfer
-    /// @param amount the amount of tokens to transfer
-    /// @param data optional data to include in the receive hook
+    /// @notice Transfer a single token from one user to another.
+    /// @dev Supports approved token transfers.
+    /// @param from The user to transfer tokens from
+    /// @param to The user to transfer tokens to
+    /// @param id The ERC1155 token id to transfer
+    /// @param amount The amount of tokens to transfer
+    /// @param data Optional data to include in the `onERC1155Received` hook
     function safeTransferFrom(
         address from,
         address to,
         uint256 id,
         uint256 amount,
         bytes calldata data
-    ) public {
+    ) public virtual {
         if (!(msg.sender == from || isApprovedForAll[from][msg.sender])) revert NotAuthorized();
 
         balanceOf[from][id] -= amount;
@@ -102,8 +106,6 @@ abstract contract ERC1155 {
         unchecked {
             balanceOf[to][id] += amount;
         }
-
-        afterTokenTransfer(from, to, id, amount);
 
         emit TransferSingle(msg.sender, from, to, id, amount);
 
@@ -117,14 +119,14 @@ abstract contract ERC1155 {
         }
     }
 
-    /// @notice Transfer multiple tokens from one user to another
-    /// @dev supports token approvals
-    /// @dev ids and amounts must be of equal length
-    /// @param from the user to transfer tokens from
-    /// @param to the user to transfer tokens to
-    /// @param ids the ERC1155 token ids to transfer
-    /// @param amounts the amounts of tokens to transfer
-    /// @param data optional data to include in the receive hook
+    /// @notice Transfer multiple tokens from one user to another.
+    /// @dev Supports approved token transfers.
+    /// @dev `ids` and `amounts` must be of equal length.
+    /// @param from The user to transfer tokens from
+    /// @param to The user to transfer tokens to
+    /// @param ids The ERC1155 token ids to transfer
+    /// @param amounts The amounts of tokens to transfer
+    /// @param data Optional data to include in the `onERC1155Received` hook
     function safeBatchTransferFrom(
         address from,
         address to,
@@ -156,8 +158,6 @@ abstract contract ERC1155 {
             }
         }
 
-        afterTokenTransfer(from, to, ids, amounts);
-
         emit TransferBatch(msg.sender, from, to, ids, amounts);
 
         if (to.code.length != 0) {
@@ -170,11 +170,11 @@ abstract contract ERC1155 {
         }
     }
 
-    /// @notice Query balances for multiple users and tokens at once
-    /// @dev owners and ids must be of equal length
-    /// @param owners the users to query balances for
-    /// @param ids the ERC1155 token ids to query
-    /// @return balances the balances for each user-token pair in the same order as the input
+    /// @notice Query balances for multiple users and tokens at once.
+    /// @dev `owners` and `ids` should be of equal length.
+    /// @param owners The list of users to query balances for
+    /// @param ids The list of ERC1155 token ids to query
+    /// @return balances The balances for each owner-id pair in the same order as the input arrays
     function balanceOfBatch(
         address[] calldata owners,
         uint256[] calldata ids
@@ -194,9 +194,9 @@ abstract contract ERC1155 {
                               ERC165 LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Signal support for ERC165 and ERC1155
-    /// @param interfaceId the interface to check for support
-    /// @return supported true if the interface is supported
+    /// @notice Signal support for ERC165 and ERC1155.
+    /// @param interfaceId The interface to check for support
+    /// @return Whether the interface is supported
     function supportsInterface(bytes4 interfaceId) public pure returns (bool) {
         return
             interfaceId == 0x01ffc9a7 || // ERC165 Interface ID for ERC165
@@ -207,10 +207,10 @@ abstract contract ERC1155 {
                         INTERNAL MINT/BURN LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Internal utility to mint tokens to a user's account
-    /// @param to the user to mint tokens to
-    /// @param id the ERC1155 token id to mint
-    /// @param amount the amount of tokens to mint
+    /// @notice Internal utility to mint tokens to a user's account.
+    /// @param to The user to mint tokens to
+    /// @param id The ERC1155 token id to mint
+    /// @param amount The amount of tokens to mint
     function _mint(address to, uint256 id, uint256 amount) internal {
         // balance will never overflow
         unchecked {
@@ -229,43 +229,13 @@ abstract contract ERC1155 {
         }
     }
 
-    /// @notice Internal utility to burn tokens from a user's account
-    /// @param from the user to burn tokens from
-    /// @param id the ERC1155 token id to mint
-    /// @param amount the amount of tokens to burn
+    /// @notice Internal utility to burn tokens from a user's account.
+    /// @param from The user to burn tokens from
+    /// @param id The ERC1155 token id to mint
+    /// @param amount The amount of tokens to burn
     function _burn(address from, uint256 id, uint256 amount) internal {
         balanceOf[from][id] -= amount;
 
         emit TransferSingle(msg.sender, from, address(0), id, amount);
     }
-
-    /*//////////////////////////////////////////////////////////////
-                            TRANSFER HOOKS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Internal hook to be called after a batch token transfer
-    /// @dev this can be implemented in a child contract to add additional logic
-    /// @param from the user to transfer tokens from
-    /// @param to the user to transfer tokens to
-    /// @param ids the ERC1155 token ids being transferred
-    /// @param amounts the amounts of tokens to transfer
-    function afterTokenTransfer(
-        address from,
-        address to,
-        uint256[] memory ids,
-        uint256[] memory amounts
-    ) internal virtual;
-
-    /// @notice Internal hook to be called after a single token transfer
-    /// @dev this can be implemented in a child contract to add additional logic
-    /// @param from the user to transfer tokens from
-    /// @param to the user to transfer tokens to
-    /// @param id the ERC1155 token id being transferred
-    /// @param amount the amount of tokens to transfer
-    function afterTokenTransfer(
-        address from,
-        address to,
-        uint256 id,
-        uint256 amount
-    ) internal virtual;
 }

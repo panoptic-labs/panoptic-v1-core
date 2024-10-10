@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import {ERC1155} from "@tokens/ERC1155Minimal.sol";
@@ -13,20 +13,6 @@ contract ERC1155MinimalHarness is ERC1155 {
     function mint(address account, uint256 id, uint256 amount) public {
         _mint(account, id, amount);
     }
-
-    function afterTokenTransfer(
-        address from,
-        address to,
-        uint256[] memory ids,
-        uint256[] memory amounts
-    ) internal virtual override {}
-
-    function afterTokenTransfer(
-        address from,
-        address to,
-        uint256 id,
-        uint256 amount
-    ) internal virtual override {}
 }
 
 contract ERC1155Minimal is Test {
@@ -40,7 +26,7 @@ contract ERC1155Minimal is Test {
         }
     }
 
-    function fixedToDynamic(uint256[10] memory x) internal view returns (uint256[] memory) {
+    function fixedToDynamic(uint256[10] memory x) internal pure returns (uint256[] memory) {
         uint256[] memory y = new uint256[](10);
         for (uint256 i = 0; i < 10; i++) {
             y[i] = x[i];
@@ -48,7 +34,7 @@ contract ERC1155Minimal is Test {
         return y;
     }
 
-    function fixedToDynamic(address[10] memory x) internal view returns (address[] memory) {
+    function fixedToDynamic(address[10] memory x) internal pure returns (address[] memory) {
         address[] memory y = new address[](10);
         for (uint256 i = 0; i < 10; i++) {
             y[i] = x[i];
@@ -56,7 +42,7 @@ contract ERC1155Minimal is Test {
         return y;
     }
 
-    function expand(address value, uint256 size) internal view returns (address[] memory) {
+    function expand(address value, uint256 size) internal pure returns (address[] memory) {
         address[] memory result = new address[](size);
         for (uint256 i = 0; i < size; i++) {
             result[i] = value;
@@ -211,7 +197,7 @@ contract ERC1155Minimal is Test {
         vm.assume(approvee.code.length == 0);
         token.mint(id, amount);
         token.setApprovalForAll(approvee, true);
-        changePrank(approvee);
+        vm.startPrank(approvee);
         token.safeTransferFrom(address(1), approvee, id, amount, "");
         assertEq(token.balanceOf(approvee, id), amount);
     }
@@ -223,7 +209,7 @@ contract ERC1155Minimal is Test {
     ) public {
         vm.assume(approvee.code.length == 0);
         token.mint(id, amount);
-        changePrank(approvee);
+        vm.startPrank(approvee);
         vm.expectRevert("NotAuthorized()");
         token.safeTransferFrom(address(1), approvee, id, amount, "");
     }
@@ -239,7 +225,7 @@ contract ERC1155Minimal is Test {
             token.mint(ids[i], amounts[i]);
         }
         token.setApprovalForAll(approvee, true);
-        changePrank(approvee);
+        vm.startPrank(approvee);
         token.safeBatchTransferFrom(
             address(1),
             approvee,
@@ -263,7 +249,7 @@ contract ERC1155Minimal is Test {
         for (uint256 i = 0; i < ids.length; i++) {
             token.mint(ids[i], amounts[i]);
         }
-        changePrank(approvee);
+        vm.startPrank(approvee);
         vm.expectRevert("NotAuthorized()");
         token.safeBatchTransferFrom(
             address(1),

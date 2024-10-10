@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 import "@types/TokenId.sol";
 
@@ -19,10 +19,6 @@ contract TokenIdHarness {
     int256 public constant BITMASK_INT24 = 0xFFFFFF;
     // Setting the width to its max possible value (2**12-1) indicates a full-range liquidity chunk and not a width of 4095 ticks
     int24 public constant MAX_LEG_WIDTH = 4095; // int24 because that's the strike and width formats
-    // this mask in hex has a 1 bit in each location except in the strike+width of the tokenId:
-    // this ROLL_MASK will make sure that two tokens will have the exact same parameters
-    uint256 public constant ROLL_MASK =
-        0xFFF_000000000FFF_000000000FFF_000000000FFF_FFFFFFFFFFFFFFFF;
     // this mask in hex has a 1 bit in each location except in the riskPartner of the 48bits on a position's tokenId:
     // this RISK_PARTNER_MASK will make sure that two tokens will have the exact same parameters
     uint256 public constant RISK_PARTNER_MASK = 0xFFFFFFFFF3FF;
@@ -38,8 +34,18 @@ contract TokenIdHarness {
      * @param self the option position Id.
      * @return the poolId (Panoptic's uni v3 pool fingerprint) of the Uniswap v3 pool
      */
-    function univ3pool(uint256 self) public view returns (uint64) {
-        uint64 r = TokenId.univ3pool(self);
+    function poolId(TokenId self) public pure returns (uint64) {
+        uint64 r = TokenIdLibrary.poolId(self);
+        return r;
+    }
+
+    /**
+     * @notice The tickSpacing of the Uniswap v3 Pool for this position
+     * @param self the option position Id.
+     * @return the tickSpacing of the Uniswap v3 pool
+     */
+    function tickSpacing(TokenId self) public pure returns (int24) {
+        int24 r = TokenIdLibrary.tickSpacing(self);
         return r;
     }
 
@@ -55,8 +61,8 @@ contract TokenIdHarness {
      * @dev The final mod: "% 2" = takes the leftmost bit of the pattern.
      * @return 0 if asset is token0, 1 if asset is token1
      */
-    function asset(uint256 self, uint256 legIndex) public view returns (uint256) {
-        uint256 r = TokenId.asset(self, legIndex);
+    function asset(TokenId self, uint256 legIndex) public pure returns (uint256) {
+        uint256 r = TokenIdLibrary.asset(self, legIndex);
         return r;
     }
 
@@ -66,8 +72,8 @@ contract TokenIdHarness {
      * @param legIndex the leg index of this position (in {0,1,2,3}).
      * @dev The final mod: "% 2**7" = takes the rightmost (2 ** 7 = 128) 7 bits of the pattern.
      */
-    function optionRatio(uint256 self, uint256 legIndex) public view returns (uint256) {
-        uint256 r = TokenId.optionRatio(self, legIndex);
+    function optionRatio(TokenId self, uint256 legIndex) public pure returns (uint256) {
+        uint256 r = TokenIdLibrary.optionRatio(self, legIndex);
         return r;
     }
 
@@ -77,8 +83,8 @@ contract TokenIdHarness {
      * @param legIndex the leg index of this position (in {0,1,2,3}).
      * @return 1 if long; 0 if not long.
      */
-    function isLong(uint256 self, uint256 legIndex) public view returns (uint256) {
-        uint256 r = TokenId.isLong(self, legIndex);
+    function isLong(TokenId self, uint256 legIndex) public pure returns (uint256) {
+        uint256 r = TokenIdLibrary.isLong(self, legIndex);
         return r;
     }
 
@@ -88,8 +94,8 @@ contract TokenIdHarness {
      * @param legIndex the leg index of this position (in {0,1,2,3}).
      * @return 1 if the token moved is token1 or 0 if the token moved is token0
      */
-    function tokenType(uint256 self, uint256 legIndex) public view returns (uint256) {
-        uint256 r = TokenId.tokenType(self, legIndex);
+    function tokenType(TokenId self, uint256 legIndex) public pure returns (uint256) {
+        uint256 r = TokenIdLibrary.tokenType(self, legIndex);
         return r;
     }
 
@@ -105,8 +111,8 @@ contract TokenIdHarness {
      * @param legIndex the leg index of this position (in {0,1,2,3}).
      * @return the leg index of `legIndex`'s risk partner.
      */
-    function riskPartner(uint256 self, uint256 legIndex) public view returns (uint256) {
-        uint256 r = TokenId.riskPartner(self, legIndex);
+    function riskPartner(TokenId self, uint256 legIndex) public pure returns (uint256) {
+        uint256 r = TokenIdLibrary.riskPartner(self, legIndex);
         return r;
     }
 
@@ -116,8 +122,8 @@ contract TokenIdHarness {
      * @param legIndex the leg index of this position (in {0,1,2,3}).
      * @return the strike price (the underlying price of the leg).
      */
-    function strike(uint256 self, uint256 legIndex) public view returns (int24) {
-        int24 r = TokenId.strike(self, legIndex);
+    function strike(TokenId self, uint256 legIndex) public pure returns (int24) {
+        int24 r = TokenIdLibrary.strike(self, legIndex);
         return r;
     }
 
@@ -128,8 +134,8 @@ contract TokenIdHarness {
      * @param legIndex the leg index of this position (in {0,1,2,3}).
      * @return the width of the position.
      */
-    function width(uint256 self, uint256 legIndex) public view returns (int24) {
-        int24 r = TokenId.width(self, legIndex);
+    function width(TokenId self, uint256 legIndex) public pure returns (int24) {
+        int24 r = TokenIdLibrary.width(self, legIndex);
         return r;
     }
 
@@ -146,8 +152,18 @@ contract TokenIdHarness {
      * @param self the option position Id.
      * @return the tokenId with the Uniswap V3 pool added to it.
      */
-    function addUniv3pool(uint256 self, uint64 _poolId) public view returns (uint256) {
-        uint256 r = TokenId.addUniv3pool(self, _poolId);
+    function addPoolId(TokenId self, uint64 _poolId) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.addPoolId(self, _poolId);
+        return r;
+    }
+
+    /**
+     * @notice Add the Uniswap v3 Pool pointed to by this option position.
+     * @param self the option position Id.
+     * @return the tokenId with the Uniswap V3 pool added to it.
+     */
+    function addTickSpacing(TokenId self, int24 _tickSpacing) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.addTickSpacing(self, _tickSpacing);
         return r;
     }
 
@@ -163,11 +179,11 @@ contract TokenIdHarness {
      * @return the tokenId with numerarire added to the incoming leg index
      */
     function addAsset(
-        uint256 self,
+        TokenId self,
         uint256 _asset,
         uint256 legIndex
-    ) public view returns (uint256) {
-        uint256 r = TokenId.addAsset(self, _asset, legIndex);
+    ) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.addAsset(self, _asset, legIndex);
         return r;
     }
 
@@ -179,11 +195,11 @@ contract TokenIdHarness {
      * @return the tokenId with optionRatio added to the incoming leg index
      */
     function addOptionRatio(
-        uint256 self,
+        TokenId self,
         uint256 _optionRatio,
         uint256 legIndex
-    ) public view returns (uint256) {
-        uint256 r = TokenId.addOptionRatio(self, _optionRatio, legIndex);
+    ) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.addOptionRatio(self, _optionRatio, legIndex);
         return r;
     }
 
@@ -196,11 +212,11 @@ contract TokenIdHarness {
      * @return the tokenId with isLong added to its relevant leg
      */
     function addIsLong(
-        uint256 self,
+        TokenId self,
         uint256 _isLong,
         uint256 legIndex
-    ) public view returns (uint256) {
-        uint256 r = TokenId.addIsLong(self, _isLong, legIndex);
+    ) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.addIsLong(self, _isLong, legIndex);
         return r;
     }
 
@@ -211,11 +227,11 @@ contract TokenIdHarness {
      * @return the tokenId with tokenType added to its relevant leg.
      */
     function addTokenType(
-        uint256 self,
+        TokenId self,
         uint256 _tokenType,
         uint256 legIndex
-    ) public view returns (uint256) {
-        uint256 r = TokenId.addTokenType(self, _tokenType, legIndex);
+    ) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.addTokenType(self, _tokenType, legIndex);
         return r;
     }
 
@@ -226,11 +242,11 @@ contract TokenIdHarness {
      * @return the tokenId with riskPartner added to its relevant leg.
      */
     function addRiskPartner(
-        uint256 self,
+        TokenId self,
         uint256 _riskPartner,
         uint256 legIndex
-    ) public view returns (uint256) {
-        uint256 r = TokenId.addRiskPartner(self, _riskPartner, legIndex);
+    ) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.addRiskPartner(self, _riskPartner, legIndex);
         return r;
     }
 
@@ -241,11 +257,11 @@ contract TokenIdHarness {
      * @return the tokenId with strike price tick added to its relevant leg
      */
     function addStrike(
-        uint256 self,
+        TokenId self,
         int24 _strike,
         uint256 legIndex
-    ) public view returns (uint256) {
-        uint256 r = TokenId.addStrike(self, _strike, legIndex);
+    ) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.addStrike(self, _strike, legIndex);
         return r;
     }
 
@@ -255,14 +271,14 @@ contract TokenIdHarness {
      * @param legIndex the leg index of this position (in {0,1,2,3}).
      * @return the tokenId with width added to its relevant leg
      */
-    function addWidth(uint256 self, int24 _width, uint256 legIndex) public view returns (uint256) {
+    function addWidth(TokenId self, int24 _width, uint256 legIndex) public pure returns (TokenId) {
         // % 4096 -> take 12 bits from the incoming 16 bits (there's no uint12)
-        uint256 r = TokenId.addWidth(self, _width, legIndex);
+        TokenId r = TokenIdLibrary.addWidth(self, _width, legIndex);
         return r;
     }
 
     /**
-     * @notice Add a leg to the tokenId.
+     * @notice Add a leg to the TokenIdLibrary.
      * @param self the tokenId in the SFPM representing an option position.
      * @param legIndex the leg index of this position (in {0,1,2,3}).
      * @param _optionRatio the relative size of the leg.
@@ -275,7 +291,7 @@ contract TokenIdHarness {
      * @return tokenId the tokenId with the leg added
      */
     function addLeg(
-        uint256 self,
+        TokenId self,
         uint256 legIndex,
         uint256 _optionRatio,
         uint256 _asset,
@@ -284,8 +300,8 @@ contract TokenIdHarness {
         uint256 _riskPartner,
         int24 _strike,
         int24 _width
-    ) public view returns (uint256 tokenId) {
-        uint256 r = TokenId.addLeg(
+    ) public pure returns (TokenId tokenId) {
+        TokenId r = TokenIdLibrary.addLeg(
             self,
             legIndex,
             _optionRatio,
@@ -310,12 +326,12 @@ contract TokenIdHarness {
     /**
      * @notice Flip all the `isLong` positions in the legs in the `tokenId` option position.
      * @dev uses XOR on existing isLong bits.
-     * @dev useful during rolling an option position where we need to burn and mint. So we need to take
+     * /// @dev useful when we need to take an existing tokenId but now burn it.
      * an existing tokenId but now burn it. The way to do this is to simply flip it to a short instead.
      * @param self the tokenId in the SFPM representing an option position.
      */
-    function flipToBurnToken(uint256 self) public view returns (uint256) {
-        uint256 r = TokenId.flipToBurnToken(self);
+    function flipToBurnToken(TokenId self) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.flipToBurnToken(self);
         return r;
     }
 
@@ -325,8 +341,8 @@ contract TokenIdHarness {
      * @param self the tokenId in the SFPM representing an option position.
      * @return the number of long positions (in the range {0,...,4}).
      */
-    function countLongs(uint256 self) public view returns (uint256) {
-        uint256 r = TokenId.countLongs(self);
+    function countLongs(TokenId self) public pure returns (uint256) {
+        uint256 r = TokenIdLibrary.countLongs(self);
         return r;
     }
 
@@ -335,16 +351,14 @@ contract TokenIdHarness {
      * @dev NOTE does not extract liquidity which is the third piece of information in a LiquidityChunk.
      * @param self the option position id.
      * @param legIndex the leg index of the position (in {0,1,2,3}).
-     * @param tickSpacing the tick spacing of the underlying Univ3 pool.
      * @return legLowerTick the lower tick of the leg/liquidity chunk.
      * @return legUpperTick the upper tick of the leg/liquidity chunk.
      */
     function asTicks(
-        uint256 self,
-        uint256 legIndex,
-        int24 tickSpacing
-    ) public view returns (int24 legLowerTick, int24 legUpperTick) {
-        (legLowerTick, legUpperTick) = TokenId.asTicks(self, legIndex, tickSpacing);
+        TokenId self,
+        uint256 legIndex
+    ) public pure returns (int24 legLowerTick, int24 legUpperTick) {
+        (legLowerTick, legUpperTick) = TokenIdLibrary.asTicks(self, legIndex);
     }
 
     /**
@@ -354,79 +368,9 @@ contract TokenIdHarness {
      * @dev ASSUMPTION: For any leg, the option ratio is always > 0 (the leg always has a number of contracts associated with it).
      * @return the number of legs in the option position.
      */
-    function countLegs(uint256 self) public view returns (uint256) {
-        uint256 r = TokenId.countLegs(self);
+    function countLegs(TokenId self) public pure returns (uint256) {
+        uint256 r = TokenIdLibrary.countLegs(self);
         return r;
-    }
-
-    /**
-     * @notice Validate an option position and all its active legs; return the underlying AMM address.
-     * @dev used to validate a position tokenId and its legs.
-     * @param self the option position id.
-     * @return univ3PoolAddressId the first 64 bits of the underlying Uniswap V3 address.
-     */
-    function validate(uint256 self) public view returns (uint64 univ3PoolAddressId) {
-        uint64 r = TokenId.validate(self);
-        return r;
-    }
-
-    /**
-     * @notice Make sure that an option position `self`'s all active legs are out-of-the-money (OTM). Revert if not.
-     * @dev OTMness depends on where the current price tick is in the AMM relative to the tick bounds of the leg.
-     * @param self the option position Id (tokenId)
-     * @param currentTick the current tick corresponding to the current price in the Univ3 pool.
-     * @param tickSpacing the tick spacing of the Univ3 pool.
-     */
-    function ensureIsOTM(uint256 self, int24 currentTick, int24 tickSpacing) public view {
-        TokenId.ensureIsOTM(self, currentTick, tickSpacing);
-    }
-
-    /**
-     * @notice Validate that a position `self` and its legs/chunks are exercisable.
-     * @dev At least one long leg must be far-out-of-the-money (i.e. price is outside its range).
-     * @param self the option position Id (tokenId)
-     * @param currentTick the current tick corresponding to the current price in the Univ3 pool.
-     * @param tickSpacing the tick spacing of the Univ3 pool used to compute the width of the chunks.
-     */
-    function validateIsExercisable(uint256 self, int24 currentTick, int24 tickSpacing) public view {
-        TokenId.validateIsExercisable(self, currentTick, tickSpacing);
-    }
-
-    /**
-     *
-     */
-    /*
-    /* LOGIC FOR ROLLING AN OPTION POSITION.
-    /*
-    /*****************************************************************/
-
-    /**
-     * @notice Validate that a roll didn't change unexpected parameters.
-     * @notice Does NOT revert if invalid; returns the validation check as a boolean.
-     * @dev Call this on an old tokenId when rolling into a new TokenId.
-     *      this checks that the new tokenId is valid in structure.
-     * @param oldTokenId the old tokenId that is being rolled into a new position.
-     * @param newTokenId the new tokenId that the old position is being rolled into.
-     * @return true of the rolled token (newTokenId) is valid in structure.
-     */
-    function rolledTokenIsValid(uint256 oldTokenId, uint256 newTokenId) public view returns (bool) {
-        bool r = TokenId.rolledTokenIsValid(oldTokenId, newTokenId);
-        return r;
-    }
-
-    /**
-     * @notice Roll an option position from an old TokenId to a position with parameters from the newTokenId.
-     * @dev a roll in general burns existing legs and re-mints the legs.
-     * @param oldTokenId the old option position that we are rolling into a new position.
-     * @param newTokenId the new option position that we are rolling into.
-     * @return burnTokenId the details of the legs to burn as part of the roll.
-     * @return mintTokenId the details of the legs to mint as part of the roll.
-     */
-    function constructRollTokenIdWith(
-        uint256 oldTokenId,
-        uint256 newTokenId
-    ) public view returns (uint256 burnTokenId, uint256 mintTokenId) {
-        (burnTokenId, mintTokenId) = TokenId.constructRollTokenIdWith(oldTokenId, newTokenId);
     }
 
     /**
@@ -444,25 +388,27 @@ contract TokenIdHarness {
      * @param i the leg index to reset, in {0,1,2,3}
      * @return `self` with the `i`th leg zeroed including optionRatio and asset.
      */
-    function clearLeg(uint256 self, uint256 i) public view returns (uint256) {
-        uint256 r = TokenId.clearLeg(self, i);
+    function clearLeg(TokenId self, uint256 i) public pure returns (TokenId) {
+        TokenId r = TokenIdLibrary.clearLeg(self, i);
         return r;
     }
 
-    /// @notice Roll (by copying) over the information from `other`'s leg index `src` to `self`'s leg index `dst`.
-    /// @notice to leg index `dst` in `self`.
-    /// @param self the destination tokenId of the roll
-    /// @param other the source tokenId of the roll
-    /// @param src the leg index in `other` we are rolling/copying over to `self`s `dst` leg index
-    /// @param dst the leg index in `self` we are rolling/copying into from `other`s `src` leg index
-    /// @return `self` with its `dst` leg index overwritten by the `src` leg index of `other`
-    function rollTokenInfo(
-        uint256 self,
-        uint256 other,
-        uint256 src,
-        uint256 dst
-    ) public view returns (uint256) {
-        uint256 r = TokenId.rollTokenInfo(self, other, src, dst);
-        return r;
+    /**
+     * @notice Validate an option position and all its active legs; return the underlying AMM address.
+     * @dev used to validate a position tokenId and its legs.
+     * @param self the option position id.
+     */
+    function validate(TokenId self) public pure {
+        TokenIdLibrary.validate(self);
+    }
+
+    /**
+     * @notice Validate that a position `self` and its legs/chunks are exercisable.
+     * @dev At least one long leg must be far-out-of-the-money (i.e. price is outside its range).
+     * @param self the option position Id (tokenId)
+     * @param currentTick the current tick corresponding to the current price in the Univ3 pool.
+     */
+    function validateIsExercisable(TokenId self, int24 currentTick) public pure {
+        TokenIdLibrary.validateIsExercisable(self, currentTick);
     }
 }
