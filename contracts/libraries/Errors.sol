@@ -1,117 +1,96 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 /// @title Custom Errors library.
 /// @author Axicon Labs Limited
+/// @notice Contains all custom error messages used in Panoptic.
 library Errors {
-    /// Errors are alphabetically ordered
-
-    /// @notice The tokenID being burned during a roll is not the last index of the positionIdList (if provided)
-    /// @dev We check this because we need to know where the old tokenId is, so we can replace it with the new one when checking collateral
-    error BurnedTokenIdNotLastIndex();
+    /// @notice PanopticPool: The account is not solvent enough to perform the desired action
+    error AccountInsolvent();
 
     /// @notice Casting error
     /// @dev e.g. uint128(uint256(a)) fails
     error CastingError();
 
-    /// @notice Collateral token has already been initialized
+    /// @notice CollateralTracker: Collateral token has already been initialized
     error CollateralTokenAlreadyInitialized();
 
-    /// @notice The amount of shares (or assets) deposited is too high
+    /// @notice CollateralTracker: The amount of shares (or assets) deposited is larger than the maximum permitted
     error DepositTooLarge();
 
-    /// @notice The Effective Liquidity is above the Threshold
-    /// Effective liquidity measures how much new liquidity is minted relative to how much is already in the pool
+    /// @notice PanopticPool: The effective liquidity (X32) is greater than min(`MAX_SPREAD`, `USER_PROVIDED_THRESHOLD`) during a long mint or short burn
+    /// @dev Effective liquidity measures how much new liquidity is minted relative to how much is already in the pool
     error EffectiveLiquidityAboveThreshold();
 
-    /// @notice Attempted to withdraw/redeem more than available liquidity/used wrong function with open positions
+    /// @notice CollateralTracker: Attempted to withdraw/redeem more than available liquidity, owned shares, or open positions would allow for
     error ExceedsMaximumRedemption();
 
-    /// @notice PanopticPool: List of option positions is invalid
+    /// @notice PanopticPool: The provided list of option positions is incorrect or invalid
     error InputListFail();
 
-    /// @notice Emitted during a force exercise if the positions a user with open positions burns do not fully offset the decrease in collateral due to exercise fees
-    error InsufficientCollateralDecrease();
-
-    /// @notice Tick is not between MIN_TICK and MAX_TICK
+    /// @notice Tick is not between `MIN_TICK` and `MAX_TICK`
     error InvalidTick();
-
-    /// @notice A mint or swap callback was attempted from an address that did not match the canonical Uniswap V3 pool with the claimed features
-    error InvalidUniswapCallback();
 
     /// @notice The result of a notional value conversion is too small (=0) or too large (>2^128-1)
     error InvalidNotionalValue();
 
-    /// @notice Invalid TokenId parameter detected
-    /// @param parameterType poolId=0, ratio=1, tokenType=2, risk_partner=3 , strike=4, width=5
+    /// @notice The TokenId provided by the user is malformed or invalid
+    /// @param parameterType poolId=0, ratio=1, tokenType=2, risk_partner=3, strike=4, width=5, two identical strike/width/tokenType chunks=6
     error InvalidTokenIdParameter(uint256 parameterType);
 
-    /// @notice Invalid input in LeftRight library.
-    error LeftRightInputError();
+    /// @notice A mint or swap callback was attempted from an address that did not match the canonical Uniswap V3 pool with the claimed features
+    error InvalidUniswapCallback();
 
-    /// @notice None of the forced exercised legs are exerciseable (they are all in-the-money)
+    /// @notice PanopticPool: None of the legs in a position are force-exercisable (they are all either short or ATM long)
     error NoLegsExercisable();
 
-    /// @notice Not a valid option roll; some parameters differ that shouldn't (e.g. optionRatio, etc.)
-    error NotATokenRoll();
+    /// @notice PanopticPool: The leg is not long, so premium cannot be settled through `settleLongPremium`
+    error NotALongLeg();
 
-    /// @notice PanopticPool: Position does not have enough collateral
-    error NotEnoughCollateral();
-
-    /// @notice max token amounts for position exceed 128 bits.
-    error PositionTooLarge();
-
-    /// @notice There is not enough liquidity to buy an option
+    /// @notice PanopticPool: There is not enough available liquidity in the chunk for one of the long legs to be created (or for one of the short legs to be closed)
     error NotEnoughLiquidity();
 
-    /// @notice Position is not margin called and is therefore still solvent
+    /// @notice PanopticPool: Position is still solvent and cannot be liquidated
     error NotMarginCalled();
 
-    /// @notice Caller needs to be the owner
-    /// @dev unauthorized access attempted
-    error NotOwner();
-
-    /// @notice The caller is not the Panoptic Pool
+    /// @notice CollateralTracker: The caller for a permissioned function is not the Panoptic Pool
     error NotPanopticPool();
 
-    /// @notice User's option balance is zero or does not exist
-    error OptionsBalanceZero();
-
-    /// @notice Options is not out-the-money (OTM)
-    error OptionsNotOTM();
-
-    /// @notice Uniswap pool has already been initialized in the SFPM
+    /// @notice Uniswap pool has already been initialized in the SFPM or created in the factory
     error PoolAlreadyInitialized();
 
-    /// @notice PanopticPool: Option position already minted
+    /// @notice PanopticPool: A position with the given token ID has already been minted by the caller and is still open
     error PositionAlreadyMinted();
 
-    /// @notice PanopticPool: The user has open/active option positions.
-    /// @dev for example, collateral cannot be moved if a user has active positions
+    /// @notice CollateralTracker: The user has open/active option positions, so they cannot transfer collateral shares
     error PositionCountNotZero();
 
-    /// @notice PanopticPool: Current tick not within range
+    /// @notice SFPM: The maximum token deltas (excluding swaps) for a position exceed (2^127 - 5) at some valid price
+    error PositionTooLarge();
+
+    /// @notice The current tick in the pool (post-ITM-swap) has fallen outside a user-defined open interval slippage range
     error PriceBoundFail();
 
-    /// @notice Function has been called while reentrancy lock is active
-    error ReentrantCall();
+    /// @notice An oracle price is too far away from another oracle price or the current tick
+    /// @dev This is a safeguard against price manipulation during option mints, burns, and liquidations
+    error StaleTWAP();
 
-    /// @notice Too many positions open (above limit per account)
+    /// @notice PanopticPool: An account has reached the maximum number of open positions and cannnot mint another
     error TooManyPositionsOpen();
 
-    /// @notice Transfer failed
+    /// @notice ERC20 or SFPM (ERC1155) token transfer did not complete successfully
     error TransferFailed();
 
     /// @notice The tick range given by the strike price and width is invalid
     /// because the upper and lower ticks are not multiples of `tickSpacing`
     error TicksNotInitializable();
 
-    /// @notice Under/Overflow has happened
+    /// @notice An operation in a library has failed due to an underflow or overflow
     error UnderOverFlow();
 
-    /// @notice Uniswap v3 pool itself has not been initialized and therefore does not exist.
+    /// @notice The Uniswap Pool has not been created, so it cannot be used in the SFPM or have a PanopticPool created for it by the factory
     error UniswapPoolNotInitialized();
 
-    /// @notice The Uniswap pool's `tickSpacing` is not defined by 2 * swapFee/100 and therefore is not supported.
-    error UniswapPoolNotSupported();
+    /// @notice SFPM: Mints/burns of zero-liquidity chunks in Uniswap are not supported
+    error ZeroLiquidity();
 }

@@ -1,221 +1,196 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 // Libraries
 import {Errors} from "@libraries/Errors.sol";
+import {Math} from "@libraries/Math.sol";
+
+type LeftRightUnsigned is uint256;
+using LeftRightLibrary for LeftRightUnsigned global;
+
+type LeftRightSigned is int256;
+using LeftRightLibrary for LeftRightSigned global;
 
 /// @title Pack two separate data (each of 128bit) into a single 256-bit slot; 256bit-to-128bit packing methods.
 /// @author Axicon Labs Limited
-/// @notice we want a compact representation of 256 bits of data. So we split it into two separate
-/// @notice 128-bit chunks "left" and "right".
-/// @notice The background here is that if an integer is explicitly converted to a smaller type,
-/// @notice higher-order bits are cut off. For example: uint32 a = 0x12345678; uint16 b = uint16(a); // b will be 0x5678 now
-library LeftRight {
-    using LeftRight for uint256;
-    using LeftRight for int256;
+/// @notice Simple data type that divides a 256-bit word into two 128-bit slots.
+library LeftRightLibrary {
+    using Math for uint256;
+
+    /// @notice AND bitmask to isolate the left half of a uint256.
+    uint256 internal constant LEFT_HALF_BIT_MASK =
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000000000000000000000000000;
+
+    /// @notice AND bitmask to isolate the left half of an int256.
+    int256 internal constant LEFT_HALF_BIT_MASK_INT =
+        int256(uint256(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000000000000000000000000000));
+
+    /// @notice AND bitmask to isolate the right half of an int256.
     int256 internal constant RIGHT_HALF_BIT_MASK = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
     /*//////////////////////////////////////////////////////////////
-                              RIGHT SLOT
+                               RIGHT SLOT
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Get the "right" slot from a uint256 bit pattern.
-    /// @param self The uint256 (full 256 bits) to be cut in its right half
-    /// @return the right half of self (128 bits)
-    function rightSlot(uint256 self) internal pure returns (uint128) {
-        return uint128(self);
+    /// @notice Get the "right" slot from a bit pattern.
+    /// @param self The 256 bit value to extract the right half from
+    /// @return The right half of `self`
+    function rightSlot(LeftRightUnsigned self) internal pure returns (uint128) {
+        return uint128(LeftRightUnsigned.unwrap(self));
     }
 
-    /// @notice Get the "right" slot from an int256 bit pattern.
-    /// @param self The int256 (full 256 bits) to be cut in its right half
-    /// @return the right half self (128 bits)
-    function rightSlot(int256 self) internal pure returns (int128) {
-        return int128(self);
+    /// @notice Get the "right" slot from a bit pattern.
+    /// @param self The 256 bit value to extract the right half from
+    /// @return The right half of `self`
+    function rightSlot(LeftRightSigned self) internal pure returns (int128) {
+        return int128(LeftRightSigned.unwrap(self));
     }
 
-    /// @dev All toRightSlot functions add bits to the right slot without clearing it first
-    /// @dev Typically, the slot is already clear when writing to it, but if it is not, the bits will be added to the existing bits
-    /// @dev Therefore, the assumption must not be made that the bits will be cleared while using these helpers
+    // All toRightSlot functions add bits to the right slot without clearing it first
+    // Typically, the slot is already clear when writing to it, but if it is not, the bits will be added to the existing bits
+    // Therefore, the assumption must not be made that the bits will be cleared while using these helpers
+    // Note that the values *within* the slots are allowed to overflow, but overflows are contained and will not leak into the other slot
 
-    /// @notice Write the "right" slot to a uint256.
-    /// @param self the original full uint256 bit pattern to be written to
-    /// @param right the bit pattern to write into the full pattern in the right half
-    /// @return self with incoming right added (not overwritten, but added) to its right 128 bits
-    function toRightSlot(uint256 self, uint128 right) internal pure returns (uint256) {
+    /// @notice Add to the "right" slot in a 256-bit pattern.
+    /// @param self The 256-bit pattern to be written to
+    /// @param right The value to be added to the right slot
+    /// @return `self` with `right` added (not overwritten, but added) to the value in its right 128 bits
+    function toRightSlot(
+        LeftRightUnsigned self,
+        uint128 right
+    ) internal pure returns (LeftRightUnsigned) {
         unchecked {
-            return self + uint256(right);
+            // prevent the right slot from leaking into the left one in the case of an overflow
+            // ff + 1 = (1)00, but we want just ff + 1 = 00
+            return
+                LeftRightUnsigned.wrap(
+                    (LeftRightUnsigned.unwrap(self) & LEFT_HALF_BIT_MASK) +
+                        uint256(uint128(LeftRightUnsigned.unwrap(self)) + right)
+                );
         }
     }
 
-    /// @notice Write the "right" slot to a uint256.
-    /// @param self the original full uint256 bit pattern to be written to
-    /// @param right the bit pattern to write into the full pattern in the right half
-    /// @return self with right added to its right 128 bits
-    function toRightSlot(uint256 self, int128 right) internal pure returns (uint256) {
-        if (right < 0) revert Errors.LeftRightInputError();
-        unchecked {
-            return self + uint256(int256(right));
-        }
-    }
-
-    /// @notice Write the "right" slot to an int256.
-    /// @param self the original full int256 bit pattern to be written to
-    /// @param right the bit pattern to write into the full pattern in the right half
-    /// @return self with right added to its right 128 bits
-    function toRightSlot(int256 self, uint128 right) internal pure returns (int256) {
-        unchecked {
-            return self + int256(uint256(right));
-        }
-    }
-
-    /// @notice Write the "right" slot to an int256.
-    /// @param self the original full int256 bit pattern to be written to
-    /// @param right the bit pattern to write into the full pattern in the right half
-    /// @return self with right added to its right 128 bits
-    function toRightSlot(int256 self, int128 right) internal pure returns (int256) {
+    /// @notice Add to the "right" slot in a 256-bit pattern.
+    /// @param self The 256-bit pattern to be written to
+    /// @param right The value to be added to the right slot
+    /// @return `self` with `right` added (not overwritten, but added) to the value in its right 128 bits
+    function toRightSlot(
+        LeftRightSigned self,
+        int128 right
+    ) internal pure returns (LeftRightSigned) {
         // bit mask needed in case rightHalfBitPattern < 0 due to 2's complement
         unchecked {
-            return self + (int256(right) & RIGHT_HALF_BIT_MASK);
+            // prevent the right slot from leaking into the left one in the case of a positive sign change
+            // ff + 1 = (1)00, but we want just ff + 1 = 00
+            return
+                LeftRightSigned.wrap(
+                    (LeftRightSigned.unwrap(self) & LEFT_HALF_BIT_MASK_INT) +
+                        (int256(int128(LeftRightSigned.unwrap(self)) + right) & RIGHT_HALF_BIT_MASK)
+                );
         }
     }
 
     /*//////////////////////////////////////////////////////////////
-                              LEFT SLOT
+                               LEFT SLOT
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Get the "left" half from a uint256 bit pattern.
-    /// @param self The uint256 (full 256 bits) to be cut in its left half
-    /// @return the left half (128 bits)
-    function leftSlot(uint256 self) internal pure returns (uint128) {
-        return uint128(self >> 128);
+    /// @notice Get the "left" slot from a bit pattern.
+    /// @param self The 256 bit value to extract the left half from
+    /// @return The left half of `self`
+    function leftSlot(LeftRightUnsigned self) internal pure returns (uint128) {
+        return uint128(LeftRightUnsigned.unwrap(self) >> 128);
     }
 
-    /// @notice Get the "left" half from an int256 bit pattern.
-    /// @param self The int256 (full 256 bits) to be cut in its left half
-    /// @return the left half (128 bits)
-    function leftSlot(int256 self) internal pure returns (int128) {
-        return int128(self >> 128);
+    /// @notice Get the "left" slot from a bit pattern.
+    /// @param self The 256 bit value to extract the left half from
+    /// @return The left half of `self`
+    function leftSlot(LeftRightSigned self) internal pure returns (int128) {
+        return int128(LeftRightSigned.unwrap(self) >> 128);
     }
 
-    /// @dev All toLeftSlot functions add bits to the left slot without clearing it first
-    /// @dev Typically, the slot is already clear when writing to it, but if it is not, the bits will be added to the existing bits
-    /// @dev Therefore, the assumption must not be made that the bits will be cleared while using these helpers
+    /// All toLeftSlot functions add bits to the left slot without clearing it first
+    // Typically, the slot is already clear when writing to it, but if it is not, the bits will be added to the existing bits
+    // Therefore, the assumption must not be made that the bits will be cleared while using these helpers
+    // Note that the values *within* the slots are allowed to overflow, but overflows are contained and will not leak into the other slot
 
-    /// @notice Write the "left" slot to a uint256 bit pattern.
-    /// @param self the original full uint256 bit pattern to be written to
-    /// @param left the bit pattern to write into the full pattern in the right half
-    /// @return self with left added to its left 128 bits
-    function toLeftSlot(uint256 self, uint128 left) internal pure returns (uint256) {
+    /// @notice Add to the "left" slot in a 256-bit pattern.
+    /// @param self The 256-bit pattern to be written to
+    /// @param left The value to be added to the left slot
+    /// @return `self` with `left` added (not overwritten, but added) to the value in its left 128 bits
+    function toLeftSlot(
+        LeftRightUnsigned self,
+        uint128 left
+    ) internal pure returns (LeftRightUnsigned) {
         unchecked {
-            return self + (uint256(left) << 128);
+            return LeftRightUnsigned.wrap(LeftRightUnsigned.unwrap(self) + (uint256(left) << 128));
         }
     }
 
-    /// @notice Write the "left" slot to an int256 bit pattern.
-    /// @param self the original full int256 bit pattern to be written to
-    /// @param left the bit pattern to write into the full pattern in the right half
-    /// @return self with left added to its left 128 bits
-    function toLeftSlot(int256 self, uint128 left) internal pure returns (int256) {
+    /// @notice Add to the "left" slot in a 256-bit pattern.
+    /// @param self The 256-bit pattern to be written to
+    /// @param left The value to be added to the left slot
+    /// @return `self` with `left` added (not overwritten, but added) to the value in its left 128 bits
+    function toLeftSlot(LeftRightSigned self, int128 left) internal pure returns (LeftRightSigned) {
         unchecked {
-            return self + (int256(int128(left)) << 128);
-        }
-    }
-
-    /// @notice Write the "left" slot to an int256 bit pattern.
-    /// @param self the original full int256 bit pattern to be written to
-    /// @param left the bit pattern to write into the full pattern in the right half
-    /// @return self with left added to its left 128 bits
-    function toLeftSlot(int256 self, int128 left) internal pure returns (int256) {
-        unchecked {
-            return self + (int256(left) << 128);
+            return LeftRightSigned.wrap(LeftRightSigned.unwrap(self) + (int256(left) << 128));
         }
     }
 
     /*//////////////////////////////////////////////////////////////
-                            MATH HELPERS
+                              MATH HELPERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Add two uint256 bit LeftRight-encoded words; revert on overflow or underflow.
-    /// @param x the augend
-    /// @param y the addend
-    /// @return z the sum x + y
-    function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
+    /// @notice Add two LeftRight-encoded words; revert on overflow or underflow.
+    /// @param x The augend
+    /// @param y The addend
+    /// @return z The sum `x + y`
+    function add(
+        LeftRightUnsigned x,
+        LeftRightUnsigned y
+    ) internal pure returns (LeftRightUnsigned z) {
         unchecked {
             // adding leftRight packed uint128's is same as just adding the values explictily
             // given that we check for overflows of the left and right values
-            z = x + y;
+            z = LeftRightUnsigned.wrap(LeftRightUnsigned.unwrap(x) + LeftRightUnsigned.unwrap(y));
 
             // on overflow z will be less than either x or y
             // type cast z to uint128 to isolate the right slot and if it's lower than a value it's comprised of (x)
             // then an overflow has occured
-            if (z < x || (uint128(z) < uint128(x))) revert Errors.UnderOverFlow();
+            if (
+                LeftRightUnsigned.unwrap(z) < LeftRightUnsigned.unwrap(x) ||
+                (uint128(LeftRightUnsigned.unwrap(z)) < uint128(LeftRightUnsigned.unwrap(x)))
+            ) revert Errors.UnderOverFlow();
         }
     }
 
-    /// @notice Subtract two uint256 bit LeftRight-encoded words; revert on overflow or underflow.
-    /// @param x the minuend
-    /// @param y the subtrahend
-    /// @return z the difference x - y
-    function sub(uint256 x, uint256 y) internal pure returns (uint256 z) {
+    /// @notice Subtract two LeftRight-encoded words; revert on overflow or underflow.
+    /// @param x The minuend
+    /// @param y The subtrahend
+    /// @return z The difference `x - y`
+    function sub(
+        LeftRightUnsigned x,
+        LeftRightUnsigned y
+    ) internal pure returns (LeftRightUnsigned z) {
         unchecked {
             // subtracting leftRight packed uint128's is same as just subtracting the values explictily
             // given that we check for underflows of the left and right values
-            z = x - y;
+            z = LeftRightUnsigned.wrap(LeftRightUnsigned.unwrap(x) - LeftRightUnsigned.unwrap(y));
 
             // on underflow z will be greater than either x or y
             // type cast z to uint128 to isolate the right slot and if it's higher than a value that was subtracted from (x)
             // then an underflow has occured
-            if (z > x || (uint128(z) > uint128(x))) revert Errors.UnderOverFlow();
+            if (
+                LeftRightUnsigned.unwrap(z) > LeftRightUnsigned.unwrap(x) ||
+                (uint128(LeftRightUnsigned.unwrap(z)) > uint128(LeftRightUnsigned.unwrap(x)))
+            ) revert Errors.UnderOverFlow();
         }
     }
 
-    /// @notice Multiply two uint256 bit LeftRight-encoded words; revert on overflow.
-    /// @param x the multiplicand
-    /// @param y the multiplier
-    /// @return z the product x/// y
-    function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        unchecked {
-            // left slot
-            uint256 leftProd256 = uint256(x.leftSlot()) * uint256(y.leftSlot());
-            uint128 leftProd128 = uint128(leftProd256);
-
-            // right slot
-            uint256 rightProd256 = uint256(x.rightSlot()) * uint256(y.rightSlot());
-            uint128 rightProd128 = uint128(rightProd256);
-
-            // under/overflow checks
-            if (leftProd128 != leftProd256 || rightProd128 != rightProd256)
-                revert Errors.UnderOverFlow();
-
-            // if no error then return
-            // shift leftProd128 from its original position right, to the left slot
-            //          128 | 128
-            //  leftProd128 | rightProd128
-            return rightProd256.toLeftSlot(leftProd128);
-        }
-    }
-
-    /// @notice Divide two uint256 bit LeftRight-encoded words; revert on division by zero.
-    /// @param x the numerator
-    /// @param y the denominator
-    /// @return z the ratio x / y
-    function div(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        unchecked {
-            // cache on stack reused values for efficiency
-            uint128 yLeftSlot = y.leftSlot();
-            uint128 yRightSlot = y.rightSlot();
-
-            if ((yLeftSlot == 0) || (yRightSlot == 0)) revert Errors.LeftRightInputError();
-
-            return z.toRightSlot(x.rightSlot() / yRightSlot).toLeftSlot(x.leftSlot() / yLeftSlot);
-        }
-    }
-
-    /// @notice Add uint256 to an int256 LeftRight-encoded word; revert on overflow or underflow.
-    /// @param x the augend
-    /// @param y the addend
-    /// @return z (int256) the sum x + y
-    function add(uint256 x, int256 y) internal pure returns (int256 z) {
+    /// @notice Add two LeftRight-encoded words; revert on overflow or underflow.
+    /// @param x The augend
+    /// @param y The addend
+    /// @return z The sum `x + y`
+    function add(LeftRightUnsigned x, LeftRightSigned y) internal pure returns (LeftRightSigned z) {
         unchecked {
             int256 left = int256(uint256(x.leftSlot())) + y.leftSlot();
             int128 left128 = int128(left);
@@ -231,11 +206,11 @@ library LeftRight {
         }
     }
 
-    /// @notice Add two int256 bit LeftRight-encoded words; revert on overflow.
-    /// @param x the augend
-    /// @param y the addend
-    /// @return z the sum x + y
-    function add(int256 x, int256 y) internal pure returns (int256 z) {
+    /// @notice Add two LeftRight-encoded words; revert on overflow or underflow.
+    /// @param x The augend
+    /// @param y The addend
+    /// @return z The sum `x + y`
+    function add(LeftRightSigned x, LeftRightSigned y) internal pure returns (LeftRightSigned z) {
         unchecked {
             int256 left256 = int256(x.leftSlot()) + y.leftSlot();
             int128 left128 = int128(left256);
@@ -249,11 +224,11 @@ library LeftRight {
         }
     }
 
-    /// @notice Subtract two int256 bit LeftRight-encoded words; revert on overflow.
-    /// @param x the minuend
-    /// @param y the subtrahend
-    /// @return z the difference x - y
-    function sub(int256 x, int256 y) internal pure returns (int256 z) {
+    /// @notice Subtract two LeftRight-encoded words; revert on overflow or underflow.
+    /// @param x The minuend
+    /// @param y The subtrahend
+    /// @return z The difference `x - y`
+    function sub(LeftRightSigned x, LeftRightSigned y) internal pure returns (LeftRightSigned z) {
         unchecked {
             int256 left256 = int256(x.leftSlot()) - y.leftSlot();
             int128 left128 = int128(left256);
@@ -267,82 +242,60 @@ library LeftRight {
         }
     }
 
-    /// @notice Multiply two int256 bit LeftRight-encoded words; revert on overflow.
-    /// @param x the multiplicand
-    /// @param y the multiplier
-    /// @return z the product x * y
-    function mul(int256 x, int256 y) internal pure returns (int256 z) {
+    /// @notice Subtract two LeftRight-encoded words; revert on overflow or underflow.
+    /// @notice For each slot, rectify difference `x - y` to 0 if negative.
+    /// @param x The minuend
+    /// @param y The subtrahend
+    /// @return z The difference `x - y`
+    function subRect(
+        LeftRightSigned x,
+        LeftRightSigned y
+    ) internal pure returns (LeftRightSigned z) {
         unchecked {
-            int256 leftProd256 = int256(x.leftSlot()) * int256(y.leftSlot());
-            int128 leftProd128 = int128(leftProd256);
+            int256 left256 = int256(x.leftSlot()) - y.leftSlot();
+            int128 left128 = int128(left256);
 
-            int256 rightProd256 = int256(x.rightSlot()) * int256(y.rightSlot());
-            int128 rightProd128 = int128(rightProd256);
+            int256 right256 = int256(x.rightSlot()) - y.rightSlot();
+            int128 right128 = int128(right256);
 
-            // under/overflow checks
-            if (leftProd128 != leftProd256 || rightProd128 != rightProd256)
-                revert Errors.UnderOverFlow();
+            if (left128 != left256 || right128 != right256) revert Errors.UnderOverFlow();
 
-            // if no error then return
-            // shift leftProd128 from its original position right, to the left slot
-            //          128 | 128
-            //  leftProd128 | rightProd128
-            return z.toRightSlot(rightProd128).toLeftSlot(leftProd128);
+            return
+                z.toRightSlot(int128(Math.max(right128, 0))).toLeftSlot(
+                    int128(Math.max(left128, 0))
+                );
         }
     }
 
-    /// @notice Divide two int256 bit LeftRight-encoded words; revert on division by zero.
-    /// @param x the numerator
-    /// @param y the denominator
-    /// @return z the ratio x / y
-    function div(int256 x, int256 y) internal pure returns (int256 z) {
-        unchecked {
-            // cache on stack reused values for efficiency
-            int128 xLeftSlot = x.leftSlot();
-            int128 xRightSlot = x.rightSlot();
+    /// @notice Adds two sets of LeftRight-encoded words, freezing both right slots if either overflows, and vice versa.
+    /// @dev Used for linked accumulators, so if the accumulator for one side overflows for a token, both cease to accumulate.
+    /// @param x The first augend
+    /// @param dx The addend for `x`
+    /// @param y The second augend
+    /// @param dy The addend for `y`
+    /// @return The sum `x + dx`
+    /// @return The sum `y + dy`
+    function addCapped(
+        LeftRightUnsigned x,
+        LeftRightUnsigned dx,
+        LeftRightUnsigned y,
+        LeftRightUnsigned dy
+    ) internal pure returns (LeftRightUnsigned, LeftRightUnsigned) {
+        uint128 z_xR = (uint256(x.rightSlot()) + dx.rightSlot()).toUint128Capped();
+        uint128 z_xL = (uint256(x.leftSlot()) + dx.leftSlot()).toUint128Capped();
+        uint128 z_yR = (uint256(y.rightSlot()) + dy.rightSlot()).toUint128Capped();
+        uint128 z_yL = (uint256(y.leftSlot()) + dy.leftSlot()).toUint128Capped();
 
-            // store as int256 so that the result of division is stored as an int256
-            // this way we can check if the left/right values don't fit into int128 slots
-            int256 yLeftSlot = y.leftSlot();
-            int256 yRightSlot = y.rightSlot();
+        bool r_Enabled = !(z_xR == type(uint128).max || z_yR == type(uint128).max);
+        bool l_Enabled = !(z_xL == type(uint128).max || z_yL == type(uint128).max);
 
-            // quotient values (result of division)
-            int256 leftQuotient256 = xLeftSlot / yLeftSlot;
-            int256 rightQuotient256 = xRightSlot / yRightSlot;
-            int128 leftQuotient128 = int128(leftQuotient256);
-            int128 rightQuotient128 = int128(rightQuotient256);
-
-            // if downcasted value does not match original value then an overflow has occured
-            if (leftQuotient128 != leftQuotient256 || rightQuotient128 != rightQuotient256)
-                revert Errors.UnderOverFlow();
-
-            return z.toRightSlot(rightQuotient128).toLeftSlot(leftQuotient128);
-        }
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            SAFE CASTING
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Cast an int256 to an int128, revert on overflow or underflow.
-    /// @param self the int256 to be downcasted to int128
-    /// @return selfAsInt128 the downcasted integer, now of type int128
-    function toInt128(int256 self) internal pure returns (int128 selfAsInt128) {
-        if (!((selfAsInt128 = int128(self)) == self)) revert Errors.CastingError();
-    }
-
-    /// @notice Downcast uint256 to a uint128, revert on overflow
-    /// @param self the uint256 to be downcasted to uint128
-    /// @return selfAsUint128 the downcasted uint256 now as uint128
-    function toUint128(uint256 self) internal pure returns (uint128 selfAsUint128) {
-        if (!((selfAsUint128 = uint128(self)) == self)) revert Errors.CastingError();
-    }
-
-    /// @notice Cast a uint256 to an int256, revert on overflow
-    /// @param self the uint256 to be downcasted to uint128
-    /// @return the incoming uint256 but now of type int256
-    function toInt256(uint256 self) internal pure returns (int256) {
-        if (self > uint256(type(int256).max)) revert Errors.CastingError();
-        return int256(self);
+        return (
+            LeftRightUnsigned.wrap(r_Enabled ? z_xR : x.rightSlot()).toLeftSlot(
+                l_Enabled ? z_xL : x.leftSlot()
+            ),
+            LeftRightUnsigned.wrap(r_Enabled ? z_yR : y.rightSlot()).toLeftSlot(
+                l_Enabled ? z_yL : y.leftSlot()
+            )
+        );
     }
 }

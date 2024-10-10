@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
-import {LeftRight} from "@types/LeftRight.sol";
+import {LeftRightLibrary, LeftRightUnsigned, LeftRightSigned} from "@types/LeftRight.sol";
 
 /// @title LeftRightHarness: A harness to expose the LeftRight library for code coverage analysis.
 /// @notice Replicates the interface of the LeftRight library, passing through any function calls
@@ -16,8 +16,8 @@ contract LeftRightHarness {
      * @param self The uint256 (full 256 bits) to be cut in its right half.
      * @return the right half of self (128 bits).
      */
-    function rightSlot(uint256 self) public view returns (uint128) {
-        uint128 r = LeftRight.rightSlot(self);
+    function rightSlot(LeftRightUnsigned self) public pure returns (uint128) {
+        uint128 r = LeftRightLibrary.rightSlot(self);
         return r;
     }
 
@@ -26,8 +26,8 @@ contract LeftRightHarness {
      * @param self The int256 (full 256 bits) to be cut in its right half.
      * @return the right half self (128 bits).
      */
-    function rightSlot(int256 self) public view returns (int128) {
-        int128 r = LeftRight.rightSlot(self);
+    function rightSlot(LeftRightSigned self) public pure returns (int128) {
+        int128 r = LeftRightLibrary.rightSlot(self);
         return r;
     }
 
@@ -41,19 +41,11 @@ contract LeftRightHarness {
      * @param right the bit pattern to write into the full pattern in the right half.
      * @return self with incoming right added (not overwritten, but added) to its right 128 bits.
      */
-    function toRightSlot(uint256 self, uint128 right) public view returns (uint256) {
-        uint256 r = LeftRight.toRightSlot(self, right);
-        return r;
-    }
-
-    /**
-     * @notice Write the "right" slot to a uint256.
-     * @param self the original full uint256 bit pattern to be written to.
-     * @param right the bit pattern to write into the full pattern in the right half.
-     * @return self with right added to its right 128 bits.
-     */
-    function toRightSlot(uint256 self, int128 right) public view returns (uint256) {
-        uint256 r = LeftRight.toRightSlot(self, right);
+    function toRightSlot(
+        LeftRightUnsigned self,
+        uint128 right
+    ) public pure returns (LeftRightUnsigned) {
+        LeftRightUnsigned r = LeftRightLibrary.toRightSlot(self, right);
         return r;
     }
 
@@ -63,19 +55,8 @@ contract LeftRightHarness {
      * @param right the bit pattern to write into the full pattern in the right half.
      * @return self with right added to its right 128 bits.
      */
-    function toRightSlot(int256 self, uint128 right) public view returns (int256) {
-        int256 r = LeftRight.toRightSlot(self, right);
-        return r;
-    }
-
-    /**
-     * @notice Write the "right" slot to an int256.
-     * @param self the original full int256 bit pattern to be written to.
-     * @param right the bit pattern to write into the full pattern in the right half.
-     * @return self with right added to its right 128 bits.
-     */
-    function toRightSlot(int256 self, int128 right) public view returns (int256) {
-        int256 r = LeftRight.toRightSlot(self, right);
+    function toRightSlot(LeftRightSigned self, int128 right) public pure returns (LeftRightSigned) {
+        LeftRightSigned r = LeftRightLibrary.toRightSlot(self, right);
         return r;
     }
 
@@ -88,8 +69,8 @@ contract LeftRightHarness {
      * @param self The uint256 (full 256 bits) to be cut in its left half.
      * @return the left half (128 bits).
      */
-    function leftSlot(uint256 self) public view returns (uint128) {
-        uint128 r = LeftRight.leftSlot(self);
+    function leftSlot(LeftRightUnsigned self) public pure returns (uint128) {
+        uint128 r = LeftRightLibrary.leftSlot(self);
         return r;
     }
 
@@ -98,8 +79,8 @@ contract LeftRightHarness {
      * @param self The int256 (full 256 bits) to be cut in its left half.
      * @return the left half (128 bits).
      */
-    function leftSlot(int256 self) public view returns (int128) {
-        int128 r = LeftRight.leftSlot(self);
+    function leftSlot(LeftRightSigned self) public pure returns (int128) {
+        int128 r = LeftRightLibrary.leftSlot(self);
         return r;
     }
 
@@ -113,8 +94,11 @@ contract LeftRightHarness {
      * @param left the bit pattern to write into the full pattern in the right half.
      * @return self with left added to its left 128 bits.
      */
-    function toLeftSlot(uint256 self, uint128 left) public view returns (uint256) {
-        uint256 r = LeftRight.toLeftSlot(self, left);
+    function toLeftSlot(
+        LeftRightUnsigned self,
+        uint128 left
+    ) public pure returns (LeftRightUnsigned) {
+        LeftRightUnsigned r = LeftRightLibrary.toLeftSlot(self, left);
         return r;
     }
 
@@ -124,19 +108,8 @@ contract LeftRightHarness {
      * @param left the bit pattern to write into the full pattern in the right half.
      * @return self with left added to its left 128 bits.
      */
-    function toLeftSlot(int256 self, uint128 left) public view returns (int256) {
-        int256 r = LeftRight.toLeftSlot(self, left);
-        return r;
-    }
-
-    /**
-     * @notice Write the "left" slot to an int256 bit pattern.
-     * @param self the original full int256 bit pattern to be written to.
-     * @param left the bit pattern to write into the full pattern in the right half.
-     * @return self with left added to its left 128 bits.
-     */
-    function toLeftSlot(int256 self, int128 left) public view returns (int256) {
-        int256 r = LeftRight.toLeftSlot(self, left);
+    function toLeftSlot(LeftRightSigned self, int128 left) public pure returns (LeftRightSigned) {
+        LeftRightSigned r = LeftRightLibrary.toLeftSlot(self, left);
         return r;
     }
 
@@ -150,8 +123,8 @@ contract LeftRightHarness {
      * @param y the addend
      * @return z the sum x + y
      */
-    function add(uint256 x, uint256 y) public view returns (uint256) {
-        uint256 r = LeftRight.add(x, y);
+    function add(LeftRightUnsigned x, LeftRightUnsigned y) public pure returns (LeftRightUnsigned) {
+        LeftRightUnsigned r = LeftRightLibrary.add(x, y);
         return r;
     }
 
@@ -161,30 +134,8 @@ contract LeftRightHarness {
      * @param y the subtrahend
      * @return z the difference x - y
      */
-    function sub(uint256 x, uint256 y) public view returns (uint256) {
-        uint256 r = LeftRight.sub(x, y);
-        return r;
-    }
-
-    /**
-     * @notice Multiply two uint256 bit LeftRight-encoded words; revert on overflow.
-     * @param x the multiplicand
-     * @param y the multiplier
-     * @return z the product x * y
-     */
-    function mul(uint256 x, uint256 y) public view returns (uint256) {
-        uint256 r = LeftRight.mul(x, y);
-        return r;
-    }
-
-    /**
-     * @notice Divide two uint256 bit LeftRight-encoded words; revert on division by zero.
-     * @param x the numerator
-     * @param y the denominator
-     * @return z the ratio x / y
-     */
-    function div(uint256 x, uint256 y) public view returns (uint256) {
-        uint256 r = LeftRight.div(x, y);
+    function sub(LeftRightUnsigned x, LeftRightUnsigned y) public pure returns (LeftRightUnsigned) {
+        LeftRightUnsigned r = LeftRightLibrary.sub(x, y);
         return r;
     }
 
@@ -194,8 +145,8 @@ contract LeftRightHarness {
      * @param y the addend
      * @return z (int256) the sum x + y
      */
-    function add(uint256 x, int256 y) public view returns (int256) {
-        int256 r = LeftRight.add(x, y);
+    function add(LeftRightUnsigned x, LeftRightSigned y) public pure returns (LeftRightSigned) {
+        LeftRightSigned r = LeftRightLibrary.add(x, y);
         return r;
     }
 
@@ -205,8 +156,8 @@ contract LeftRightHarness {
      * @param y the addend
      * @return z the sum x + y
      */
-    function add(int256 x, int256 y) public view returns (int256) {
-        int256 r = LeftRight.add(x, y);
+    function add(LeftRightSigned x, LeftRightSigned y) public pure returns (LeftRightSigned) {
+        LeftRightSigned r = LeftRightLibrary.add(x, y);
         return r;
     }
 
@@ -216,64 +167,29 @@ contract LeftRightHarness {
      * @param y the subtrahend
      * @return z the difference x - y
      */
-    function sub(int256 x, int256 y) public view returns (int256) {
-        int256 r = LeftRight.sub(x, y);
+    function sub(LeftRightSigned x, LeftRightSigned y) public pure returns (LeftRightSigned) {
+        LeftRightSigned r = LeftRightLibrary.sub(x, y);
         return r;
     }
 
     /**
-     * @notice Multiply two int256 bit LeftRight-encoded words; revert on overflow.
-     * @param x the multiplicand
-     * @param y the multiplier
-     * @return z the product x * y
+     * @notice Subtract two int256 bit LeftRight-encoded words; rectify to 0 on negative result.
+     * @param x the minuend
+     * @param y the subtrahend
+     * @return z the difference x - y
      */
-    function mul(int256 x, int256 y) public view returns (int256) {
-        int256 r = LeftRight.mul(x, y);
+    function subRect(LeftRightSigned x, LeftRightSigned y) public pure returns (LeftRightSigned) {
+        LeftRightSigned r = LeftRightLibrary.subRect(x, y);
         return r;
     }
 
-    /**
-     * @notice Divide two int256 bit LeftRight-encoded words; revert on division by zero.
-     * @param x the numerator
-     * @param y the denominator
-     * @return z the ratio x / y
-     */
-    function div(int256 x, int256 y) public view returns (int256) {
-        int256 r = LeftRight.div(x, y);
-        return r;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            SAFE CASTING
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Cast an int256 to an int128, revert on overflow or underflow.
-     * @param self the int256 to be downcasted to int128.
-     * @return selfAsInt128 the downcasted integer, now of type int128
-     */
-    function toInt128(int256 self) public view returns (int128) {
-        int128 r = LeftRight.toInt128(self);
-        return r;
-    }
-
-    /**
-     * @notice Downcast uint256 to a uint128, revert on overflow
-     * @param self the uint256 to be downcasted to uint128.
-     * @return selfAsUint128 the downcasted uint256 now as uint128
-     */
-    function toUint128(uint256 self) public view returns (uint128) {
-        uint128 r = LeftRight.toUint128(self);
-        return r;
-    }
-
-    /**
-     * @notice Cast a uint256 to an int256, revert on overflow
-     * @param self the uint256 to be downcasted to uint128.
-     * @return the incoming uint256 but now of type int256.
-     */
-    function toInt256(uint256 self) public view returns (int256) {
-        int256 r = LeftRight.toInt256(self);
-        return r;
+    function addCapped(
+        LeftRightUnsigned x,
+        LeftRightUnsigned dx,
+        LeftRightUnsigned y,
+        LeftRightUnsigned dy
+    ) public pure returns (LeftRightUnsigned, LeftRightUnsigned) {
+        (LeftRightUnsigned r1, LeftRightUnsigned r2) = LeftRightLibrary.addCapped(x, dx, y, dy);
+        return (r1, r2);
     }
 }

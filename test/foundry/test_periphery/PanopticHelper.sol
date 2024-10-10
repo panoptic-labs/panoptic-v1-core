@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity =0.8.18;
+pragma solidity ^0.8.24;
 
 // Interfaces
+import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
+import {Math} from "@libraries/Math.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
 // Custom types
-import {TokenId} from "@types/TokenId.sol";
+import {LeftRightUnsigned} from "@types/LeftRight.sol";
+import {TokenId, TokenIdLibrary} from "@types/TokenId.sol";
+import {LiquidityChunk} from "@types/LiquidityChunk.sol";
+import {PositionBalance, PositionBalanceLibrary} from "@types/PositionBalance.sol";
 
 /// @title Utility contract for token ID construction and advanced queries.
 /// @author Axicon Labs Limited
 contract PanopticHelper {
-    using TokenId for uint256;
-
     SemiFungiblePositionManager internal immutable SFPM;
 
     struct Leg {
@@ -40,7 +43,6 @@ contract PanopticHelper {
     /// @param pool The PanopticPool instance to check collateral on
     /// @param account Address of the user that owns the positions
     /// @param atTick At what price is the collateral requirement evaluated at
-    /// @param tokenType whether to return the values in term of token0 or token1
     /// @param positionIdList List of positions. Written as [tokenId1, tokenId2, ...]
     /// @return collateralBalance the total combined balance of token0 and token1 for a user in terms of tokenType
     /// @return requiredCollateral The combined collateral requirement for a user in terms of tokenType
@@ -48,29 +50,187 @@ contract PanopticHelper {
         PanopticPool pool,
         address account,
         int24 atTick,
-        uint256 tokenType,
-        uint256[] calldata positionIdList
+        TokenId[] calldata positionIdList
     ) public view returns (uint256, uint256) {
         // Compute premia for all options (includes short+long premium)
-        (int128 premium0, int128 premium1, uint256[2][] memory positionBalanceArray) = pool
-            .calculateAccumulatedFeesBatch(account, positionIdList);
+        (
+            LeftRightUnsigned shortPremium,
+            LeftRightUnsigned longPremium,
+            uint256[2][] memory positionBalanceArray
+        ) = pool.getAccumulatedFeesAndPositionsData(account, false, positionIdList);
 
         // Query the current and required collateral amounts for the two tokens
-        uint256 tokenData0 = pool.collateralToken0().getAccountMarginDetails(
+        LeftRightUnsigned tokenData0 = pool.collateralToken0().getAccountMarginDetails(
             account,
             atTick,
             positionBalanceArray,
-            premium0
+            shortPremium.rightSlot(),
+            longPremium.rightSlot()
         );
-        uint256 tokenData1 = pool.collateralToken1().getAccountMarginDetails(
+        LeftRightUnsigned tokenData1 = pool.collateralToken1().getAccountMarginDetails(
             account,
             atTick,
             positionBalanceArray,
-            premium1
+            shortPremium.leftSlot(),
+            longPremium.leftSlot()
         );
 
         // convert (using atTick) and return the total collateral balance and required balance in terms of tokenType
-        return PanopticMath.convertCollateralData(tokenData0, tokenData1, tokenType, atTick);
+        return
+            PanopticMath.getCrossBalances(tokenData0, tokenData1, Math.getSqrtRatioAtTick(atTick));
+    }
+
+    /// @notice Calculate NAV of user's option portfolio at a given tick.
+    /// @param pool The PanopticPool instance to check collateral on
+    /// @param account Address of the user that owns the positions
+    /// @param atTick The tick to calculate the value at
+    /// @param positionIdList A list of all positions the user holds on that pool
+    /// @return value0 The amount of token0 owned by portfolio
+    /// @return value1 The amount of token1 owned by portfolio
+    function getPortfolioValue(
+        PanopticPool pool,
+        address account,
+        int24 atTick,
+        TokenId[] calldata positionIdList
+    ) external view returns (int256 value0, int256 value1) {
+        // Compute premia for all options (includes short+long premium)
+        (, , uint256[2][] memory positionBalanceArray) = pool.getAccumulatedFeesAndPositionsData(
+            account,
+            false,
+            positionIdList
+        );
+
+        for (uint256 k = 0; k < positionIdList.length; ) {
+            TokenId tokenId = positionIdList[k];
+            uint128 positionSize = LeftRightUnsigned.wrap(positionBalanceArray[k][1]).rightSlot();
+            uint256 numLegs = tokenId.countLegs();
+            for (uint256 leg = 0; leg < numLegs; ) {
+                LiquidityChunk liquidityChunk = PanopticMath.getLiquidityChunk(
+                    tokenId,
+                    leg,
+                    positionSize
+                );
+
+                (uint256 amount0, uint256 amount1) = Math.getAmountsForLiquidity(
+                    atTick,
+                    liquidityChunk
+                );
+
+                if (tokenId.isLong(leg) == 0) {
+                    unchecked {
+                        value0 += int256(amount0);
+                        value1 += int256(amount1);
+                    }
+                } else {
+                    unchecked {
+                        value0 -= int256(amount0);
+                        value1 -= int256(amount1);
+                    }
+                }
+
+                unchecked {
+                    ++leg;
+                }
+            }
+            unchecked {
+                ++k;
+            }
+        }
+    }
+
+    /// @notice Returns the total number of contracts owned by `account` and the pool utilization at mint for a specified `tokenId.
+    /// @param pool The PanopticPool instance corresponding to the pool specified in `TokenId`
+    /// @param account The address of the account on which to retrieve `balance` and `poolUtilization`
+    /// @return balance Number of contracts of `tokenId` owned by the user
+    /// @return poolUtilization0 The utilization of token0 in the Panoptic pool at mint
+    /// @return poolUtilization1 The utilization of token1 in the Panoptic pool at mint
+    function optionPositionInfo(
+        PanopticPool pool,
+        address account,
+        TokenId tokenId
+    ) external view returns (uint128, uint16, uint16) {
+        TokenId[] memory tokenIdList = new TokenId[](1);
+        tokenIdList[0] = tokenId;
+
+        (, , uint256[2][] memory positionBalanceArray) = pool.getAccumulatedFeesAndPositionsData(
+            account,
+            false,
+            tokenIdList
+        );
+
+        PositionBalance balanceAndUtilization = PositionBalance.wrap(positionBalanceArray[0][1]);
+
+        return (
+            balanceAndUtilization.positionSize(),
+            uint16(balanceAndUtilization.utilizations()),
+            uint16(balanceAndUtilization.utilizations() >> 16)
+        );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          ORACLE CALCULATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Returns the median of the last `cardinality` average prices over `period` observations from `univ3pool`.
+    /// @dev Used when we need a manipulation-resistant TWAP price.
+    /// @dev Uniswap observations snapshot the closing price of the last block before the first interaction of a given block.
+    /// @dev The maximum frequency of observations is 1 per block, but there is no guarantee that the pool will be observed at every block.
+    /// @dev Each period has a minimum length of blocktime * period, but may be longer if the Uniswap pool is relatively inactive.
+    /// @dev The final price used in the array (of length `cardinality`) is the average of all observations comprising `period` (which is itself a number of observations).
+    /// @dev Thus, the minimum total time window is `cardinality` * `period` * `blocktime`.
+    /// @param univ3pool The Uniswap pool to get the median observation from
+    /// @param cardinality The number of `periods` to in the median price array, should be odd.
+    /// @param period The number of observations to average to compute one entry in the median price array
+    /// @return The median of `cardinality` observations spaced by `period` in the Uniswap pool
+    function computeMedianObservedPrice(
+        IUniswapV3Pool univ3pool,
+        uint256 cardinality,
+        uint256 period
+    ) external view returns (int24) {
+        (, , uint16 observationIndex, uint16 observationCardinality, , , ) = univ3pool.slot0();
+
+        (int24 medianTick, ) = PanopticMath.computeMedianObservedPrice(
+            univ3pool,
+            observationIndex,
+            observationCardinality,
+            cardinality,
+            period
+        );
+        return medianTick;
+    }
+
+    /// @notice Takes a packed structure representing a sorted 8-slot queue of ticks and returns the median of those values.
+    /// @dev Also inserts the latest Uniswap observation into the buffer, resorts, and returns if the last entry is at least `period` seconds old.
+    /// @param period The minimum time in seconds that must have passed since the last observation was inserted into the buffer
+    /// @param medianData The packed structure representing the sorted 8-slot queue of ticks
+    /// @param univ3pool The Uniswap pool to retrieve observations from
+    /// @return The median of the provided 8-slot queue of ticks in `medianData`
+    /// @return The updated 8-slot queue of ticks with the latest observation inserted if the last entry is at least `period` seconds old (returns 0 otherwise)
+    function computeInternalMedian(
+        uint256 period,
+        uint256 medianData,
+        IUniswapV3Pool univ3pool
+    ) external view returns (int24, uint256) {
+        (, , uint16 observationIndex, uint16 observationCardinality, , , ) = univ3pool.slot0();
+
+        (int24 _medianTick, uint256 _medianData) = PanopticMath.computeInternalMedian(
+            observationIndex,
+            observationCardinality,
+            period,
+            medianData,
+            univ3pool
+        );
+        return (_medianTick, _medianData);
+    }
+
+    /// @notice Computes the twap of a Uniswap V3 pool using data from its oracle.
+    /// @dev Note that our definition of TWAP differs from a typical mean of prices over a time window.
+    /// @dev We instead observe the average price over a series of time intervals, and define the TWAP as the median of those averages.
+    /// @param univ3pool The Uniswap pool from which to compute the TWAP.
+    /// @param twapWindow The time window to compute the TWAP over.
+    /// @return The final calculated TWAP tick.
+    function twapFilter(IUniswapV3Pool univ3pool, uint32 twapWindow) external view returns (int24) {
+        return PanopticMath.twapFilter(univ3pool, twapWindow);
     }
 
     /// @notice Returns the net assets (balance - maintenance margin) of a given account on a given pool.
@@ -84,15 +244,20 @@ contract PanopticHelper {
         address pool,
         address account,
         int24 tick,
-        uint256[] calldata positionIdList
+        TokenId[] calldata positionIdList
     ) internal view returns (int256) {
         (uint256 balanceCross, uint256 requiredCross) = checkCollateral(
             PanopticPool(pool),
             account,
             tick,
-            0,
             positionIdList
         );
+
+        // convert to token0 to ensure consistent units
+        if (tick > 0) {
+            balanceCross = PanopticMath.convert1to0(balanceCross, Math.getSqrtRatioAtTick(tick));
+            requiredCross = PanopticMath.convert1to0(requiredCross, Math.getSqrtRatioAtTick(tick));
+        }
 
         return int256(balanceCross) - int256(requiredCross);
     }
@@ -100,12 +265,12 @@ contract PanopticHelper {
     /// @notice Unwraps the contents of the tokenId into its legs.
     /// @param tokenId the input tokenId
     /// @return legs an array of leg structs
-    function unwrapTokenId(uint256 tokenId) public view returns (Leg[] memory) {
+    function unwrapTokenId(TokenId tokenId) public view returns (Leg[] memory) {
         uint256 numLegs = tokenId.countLegs();
         Leg[] memory legs = new Leg[](numLegs);
 
-        uint64 poolId = tokenId.validate();
-        address UniswapV3Pool = address(SFPM.getUniswapV3PoolFromId(tokenId.univ3pool()));
+        uint64 poolId = tokenId.poolId();
+        address UniswapV3Pool = address(SFPM.getUniswapV3PoolFromId(tokenId.poolId()));
         for (uint256 i = 0; i < numLegs; ++i) {
             legs[i].poolId = poolId;
             legs[i].UniswapV3Pool = UniswapV3Pool;
@@ -129,7 +294,7 @@ contract PanopticHelper {
     function findLiquidationPriceDown(
         address pool,
         address account,
-        uint256[] calldata positionIdList
+        TokenId[] calldata positionIdList
     ) public view returns (int24 liquidationTick) {
         // initialize right and left bounds from current tick
         (, int24 currentTick, , , , , ) = PanopticPool(pool).univ3pool().slot0();
@@ -177,7 +342,7 @@ contract PanopticHelper {
     function findLiquidationPriceUp(
         address pool,
         address account,
-        uint256[] calldata positionIdList
+        TokenId[] calldata positionIdList
     ) public view returns (int24 liquidationTick) {
         // initialize right and left bounds from current tick
         (, int24 currentTick, , , , , ) = PanopticPool(pool).univ3pool().slot0();
@@ -227,7 +392,7 @@ contract PanopticHelper {
     /// @param width width of the leg
     /// @return tokenId with the leg initialized
     function addCallLeg(
-        uint256 tokenId,
+        TokenId tokenId,
         uint256 legIndex,
         uint256 optionRatio,
         uint256 asset,
@@ -235,9 +400,9 @@ contract PanopticHelper {
         uint256 riskPartner,
         int24 strike,
         int24 width
-    ) internal pure returns (uint256) {
+    ) internal pure returns (TokenId) {
         return
-            TokenId.addLeg(
+            TokenIdLibrary.addLeg(
                 tokenId,
                 legIndex,
                 optionRatio,
@@ -261,7 +426,7 @@ contract PanopticHelper {
     /// @param width width of the leg
     /// @return tokenId with the leg initialized
     function addPutLeg(
-        uint256 tokenId,
+        TokenId tokenId,
         uint256 legIndex,
         uint256 optionRatio,
         uint256 asset,
@@ -269,9 +434,9 @@ contract PanopticHelper {
         uint256 riskPartner,
         int24 strike,
         int24 width
-    ) internal pure returns (uint256) {
+    ) internal pure returns (TokenId) {
         return
-            TokenId.addLeg(
+            TokenIdLibrary.addLeg(
                 tokenId,
                 legIndex,
                 optionRatio,
@@ -304,9 +469,9 @@ contract PanopticHelper {
         uint256 isLong,
         uint256 optionRatio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // A strangle is composed of
         // 1. a call with a higher strike price
@@ -355,9 +520,9 @@ contract PanopticHelper {
         uint256 isLong,
         uint256 optionRatio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // A straddle is composed of
         // 1. a call with an identical strike price
@@ -388,9 +553,9 @@ contract PanopticHelper {
         uint256 asset,
         uint256 optionRatio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // A call spread is composed of
         // 1. a long call with a lower strike price
@@ -421,9 +586,9 @@ contract PanopticHelper {
         uint256 asset,
         uint256 optionRatio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // A put spread is composed of
         // 1. a long put with a higher strike price
@@ -456,9 +621,9 @@ contract PanopticHelper {
         uint256 asset,
         uint256 optionRatio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // A call diagonal spread is composed of
         // 1. a long call with a (lower/higher) strike price and (lower/higher) width(expiry)
@@ -509,9 +674,9 @@ contract PanopticHelper {
         uint256 asset,
         uint256 optionRatio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // A bearish diagonal spread is composed of
         // 1. a long put with a (higher/lower) strike price and (lower/higher) width(expiry)
@@ -560,7 +725,7 @@ contract PanopticHelper {
         uint256 asset,
         uint256 optionRatio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // calendar spread is a diagonal spread where the legs have identical strike prices
         // so we can create one using the diagonal spread function
         tokenId = createCallDiagonalSpread(
@@ -593,7 +758,7 @@ contract PanopticHelper {
         uint256 asset,
         uint256 optionRatio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // calendar spread is a diagonal spread where the legs have identical strike prices
         // so we can create one using the diagonal spread function
         tokenId = createPutDiagonalSpread(
@@ -624,7 +789,7 @@ contract PanopticHelper {
         int24 putStrike,
         int24 wingWidth,
         uint256 asset
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // an iron condor is composed of
         // 1. a call spread
         // 2. a put spread
@@ -642,14 +807,19 @@ contract PanopticHelper {
         );
 
         // put spread
-        tokenId += createPutSpread(
-            address(0),
-            width,
-            putStrike - wingWidth,
-            putStrike,
-            asset,
-            1,
-            2
+        tokenId = TokenId.wrap(
+            TokenId.unwrap(tokenId) +
+                TokenId.unwrap(
+                    createPutSpread(
+                        address(0),
+                        width,
+                        putStrike - wingWidth,
+                        putStrike,
+                        asset,
+                        1,
+                        2
+                    )
+                )
         );
     }
 
@@ -669,7 +839,7 @@ contract PanopticHelper {
         int24 shortCallStrike,
         int24 shortPutStrike,
         uint256 asset
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // a jade lizard is composed of
         // 1. a short strangle
         // 2. a long call
@@ -695,7 +865,7 @@ contract PanopticHelper {
         int24 longCallStrike,
         int24 straddleStrike,
         uint256 asset
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // a big lizard is composed of
         // 1. a short straddle
         // 2. a long call
@@ -723,7 +893,7 @@ contract PanopticHelper {
         int24 shortCallStrike,
         int24 shortPutStrike,
         uint256 asset
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // a super bull is composed of
         // 1. a long call spread
         // 2. a short put
@@ -751,7 +921,7 @@ contract PanopticHelper {
         int24 shortPutStrike,
         int24 shortCallStrike,
         uint256 asset
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // a super bear is composed of
         // 1. a long put spread
         // 2. a short call
@@ -777,7 +947,7 @@ contract PanopticHelper {
         int24 strike,
         int24 wingWidth,
         uint256 asset
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // an iron butterfly is composed of
         // 1. a long call spread
         // 2. a short put spread
@@ -786,7 +956,12 @@ contract PanopticHelper {
         tokenId = createCallSpread(univ3pool, width, strike, strike + wingWidth, asset, 1, 0);
 
         // short put spread
-        tokenId += createPutSpread(address(0), width, strike, strike - wingWidth, asset, 1, 2);
+        tokenId = TokenId.wrap(
+            TokenId.unwrap(tokenId) +
+                TokenId.unwrap(
+                    createPutSpread(address(0), width, strike, strike - wingWidth, asset, 1, 2)
+                )
+        );
     }
 
     /// @notice creates a ratio spread w/ long call and multiple short calls.
@@ -808,9 +983,9 @@ contract PanopticHelper {
         uint256 asset,
         uint256 ratio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // a call ratio spread is composed of
         // 1. a long call
@@ -841,9 +1016,9 @@ contract PanopticHelper {
         uint256 asset,
         uint256 ratio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // a put ratio spread is composed of
         // 1. a long put
@@ -874,9 +1049,9 @@ contract PanopticHelper {
         uint256 asset,
         uint256 ratio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // a call ZEBRA(zero extrinsic value back ratio spread) spread is composed of
         // 1. a short call
@@ -907,9 +1082,9 @@ contract PanopticHelper {
         uint256 asset,
         uint256 ratio,
         uint256 start
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addUniv3pool(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
 
         // a put ZEBRA(zero extrinsic value back ratio spread) spread is composed of
         // 1. a short put
@@ -938,7 +1113,7 @@ contract PanopticHelper {
         int24 shortStrike,
         uint256 asset,
         uint256 ratio
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // a ZEEHBS(Zero extrinsic hedged back spread) is composed of
         // 1. a call ZEBRA spread
         // 2. a put ZEBRA spread
@@ -947,14 +1122,19 @@ contract PanopticHelper {
         tokenId = createCallZEBRASpread(univ3pool, width, longStrike, shortStrike, asset, ratio, 0);
 
         // put ZEBRA
-        tokenId += createPutZEBRASpread(
-            address(0),
-            width,
-            longStrike,
-            shortStrike,
-            asset,
-            ratio,
-            2
+        tokenId = TokenId.wrap(
+            TokenId.unwrap(tokenId) +
+                TokenId.unwrap(
+                    createPutZEBRASpread(
+                        address(0),
+                        width,
+                        longStrike,
+                        shortStrike,
+                        asset,
+                        ratio,
+                        2
+                    )
+                )
         );
     }
 
@@ -974,7 +1154,7 @@ contract PanopticHelper {
         int24 shortStrike,
         uint256 asset,
         uint256 ratio
-    ) public view returns (uint256 tokenId) {
+    ) public view returns (TokenId tokenId) {
         // a BATS(double ratio spread) is composed of
         // 1. a call ratio spread
         // 2. a put ratio spread
@@ -983,14 +1163,19 @@ contract PanopticHelper {
         tokenId = createCallRatioSpread(univ3pool, width, longStrike, shortStrike, asset, ratio, 0);
 
         // put ratio spread
-        tokenId += createPutRatioSpread(
-            address(0),
-            width,
-            longStrike,
-            shortStrike,
-            asset,
-            ratio,
-            2
+        tokenId = TokenId.wrap(
+            TokenId.unwrap(tokenId) +
+                TokenId.unwrap(
+                    createPutRatioSpread(
+                        address(0),
+                        width,
+                        longStrike,
+                        shortStrike,
+                        asset,
+                        ratio,
+                        2
+                    )
+                )
         );
     }
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 // Libraries
 import {Errors} from "@libraries/Errors.sol";
@@ -13,6 +13,11 @@ library SafeTransferLib {
                             ERC20 OPERATIONS
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Safely transfers ERC20 tokens from one address to another.
+    /// @param token The address of the ERC20 token
+    /// @param from The address to transfer tokens from
+    /// @param to The address to transfer tokens to
+    /// @param amount The amount of tokens to transfer
     function safeTransferFrom(address token, address from, address to, uint256 amount) internal {
         bool success;
 
@@ -40,6 +45,10 @@ library SafeTransferLib {
         if (!success) revert Errors.TransferFailed();
     }
 
+    /// @notice Safely transfers ERC20 tokens to a specified address.
+    /// @param token The address of the ERC20 token
+    /// @param to The address to transfer tokens to
+    /// @param amount The amount of tokens to transfer
     function safeTransfer(address token, address to, uint256 amount) internal {
         bool success;
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import {IERC20Partial} from "@tokens/interfaces/IERC20Partial.sol";
@@ -10,6 +10,10 @@ import {ISwapRouter} from "v3-periphery/interfaces/ISwapRouter.sol";
 import {PoolAddress} from "v3-periphery/libraries/PoolAddress.sol";
 import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 import {TransferHelper} from "v3-periphery/libraries/TransferHelper.sol";
+import {PanopticMath} from "@libraries/PanopticMath.sol";
+import {CollateralTracker} from "@contracts/CollateralTracker.sol";
+import {Math} from "@libraries/Math.sol";
+import {LeftRightUnsigned, LeftRightSigned} from "@types/LeftRight.sol";
 
 contract MiniPositionManager {
     struct CallbackData {
@@ -135,7 +139,20 @@ contract PositionUtils is Test {
         uint256 ts_,
         int24 currentTick,
         int24 width
-    ) public view returns (int24 strikeOffset, int24 minTick, int24 maxTick) {
+    ) public pure returns (int24 strikeOffset, int24 minTick, int24 maxTick) {
+        int256 ts = int256(ts_);
+
+        strikeOffset = int24(width % 2 == 0 ? int256(0) : ts / 2);
+
+        minTick = int24(((currentTick - 4096 * 10) / ts) * ts);
+        maxTick = int24(((currentTick + 4096 * 10) / ts) * ts);
+    }
+
+    function getContextFull(
+        uint256 ts_,
+        int24 currentTick,
+        int24 width
+    ) public pure returns (int24 strikeOffset, int24 minTick, int24 maxTick) {
         int256 ts = int256(ts_);
 
         strikeOffset = int24(width % 2 == 0 ? int256(0) : ts / 2);
@@ -149,16 +166,23 @@ contract PositionUtils is Test {
         int256 strikeSeed,
         uint256 ts_,
         int24 currentTick
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         int256 ts = int256(ts_);
 
-        width = int24(int256(bound(widthSeed, 1, 2048)));
-        int24 oneSidedRange = int24((width * ts) / 2);
+        width = ts == 1
+            ? width = int24(int256(bound(widthSeed, 1, 2048)))
+            : int24(int256(bound(widthSeed, 1, 2048)));
 
-        (int24 strikeOffset, int24 minTick, int24 maxTick) = getContext(ts_, currentTick, width);
+        int24 rangeDown;
+        int24 rangeUp;
+        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, int24(ts));
 
-        int24 lowerBound = int24(minTick + oneSidedRange - strikeOffset);
-        int24 upperBound = int24(maxTick - oneSidedRange - strikeOffset);
+        (int24 strikeOffset, int24 minTick, int24 maxTick) = ts == 1
+            ? getContextFull(ts_, currentTick, width)
+            : getContext(ts_, currentTick, width);
+
+        int24 lowerBound = int24(minTick + rangeDown - strikeOffset);
+        int24 upperBound = int24(maxTick - rangeUp - strikeOffset);
 
         // strike MUST be defined as a multiple of tickSpacing because the range extends out equally on both sides,
         // based on the width being divisibly by 2, it is then offset by either ts or ts / 2
@@ -172,29 +196,36 @@ contract PositionUtils is Test {
         int256 strikeSeed,
         uint256 ts_,
         int24 currentTick
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         int256 ts = int256(ts_);
 
-        width = int24(int256(bound(widthSeed, 1, 1024)));
-        int24 oneSidedRange = int24((width * ts) / 2);
+        width = ts == 1
+            ? width = int24(int256(bound(widthSeed, 1, 1024)))
+            : int24(int256(bound(widthSeed, 1, (1024 * 10) / uint256(ts))));
 
-        (int24 strikeOffset, int24 minTick, int24 maxTick) = getContext(ts_, currentTick, width);
+        int24 rangeDown;
+        int24 rangeUp;
+        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, int24(ts));
+
+        (int24 strikeOffset, int24 minTick, int24 maxTick) = ts == 1
+            ? getContextFull(ts_, currentTick, width)
+            : getContext(ts_, currentTick, width);
 
         // add (1 * ts) to minimum because range is exclusive of upper tick in UniV3
         // i.e TL <= CT < TU
         // so ensuring that TU is never included in the range
         int24 lowerBound = int24(
-            currentTick - oneSidedRange < minTick + oneSidedRange
-                ? minTick + oneSidedRange
-                : currentTick - oneSidedRange
+            currentTick - rangeUp < minTick + rangeDown
+                ? minTick + rangeDown
+                : currentTick - rangeUp
         ) +
             int24(ts) -
             strikeOffset;
 
         int24 upperBound = int24(
-            currentTick + oneSidedRange > maxTick - oneSidedRange
-                ? maxTick - oneSidedRange
-                : currentTick + oneSidedRange
+            currentTick + rangeDown > maxTick - rangeUp
+                ? maxTick - rangeUp
+                : currentTick + rangeDown
         ) - strikeOffset;
 
         // strike MUST be defined as a multiple of tickSpacing because the range extends out equally on both sides,
@@ -207,7 +238,7 @@ contract PositionUtils is Test {
     function getMinWidthInRangeSW(
         uint256 ts_,
         int24 currentTick
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         int256 ts = int256(ts_);
         // round current tick down to closest initializable tick, then add ts/2 to get strike
         strike = int24((currentTick / ts) * ts + ts / 2);
@@ -219,13 +250,17 @@ contract PositionUtils is Test {
         int256 strikeSeed,
         uint256 ts_,
         int24 currentTick
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         int256 ts = int256(ts_);
 
-        width = int24(int256(bound(widthSeed, 1, 1024)));
+        width = ts == 1
+            ? width = int24(int256(bound(widthSeed, 1, 1024)))
+            : int24(int256(bound(widthSeed, 1, (1024 * 10) / uint256(ts))));
         int24 oneSidedRange = int24((width * ts) / 2);
 
-        (int24 strikeOffset, int24 minTick, int24 maxTick) = getContext(ts_, currentTick, width);
+        (int24 strikeOffset, int24 minTick, int24 maxTick) = ts == 1
+            ? getContextFull(ts_, currentTick, width)
+            : getContext(ts_, currentTick, width);
 
         // add (1 * ts) to minimum because range is exclusive of upper tick in UniV3
         // i.e TL <= CT < TU
@@ -258,13 +293,21 @@ contract PositionUtils is Test {
         uint256 ts_,
         int24 currentTick,
         uint256 tokenType
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         int256 ts = int256(ts_);
 
-        width = int24(int256(bound(widthSeed, 1, 2048)));
+        width = ts == 1
+            ? width = int24(int256(bound(widthSeed, 1, 2048)))
+            : int24(int256(bound(widthSeed, 1, (2048 * 10) / uint256(ts))));
         int24 oneSidedRange = int24((width * ts) / 2);
 
-        (int24 strikeOffset, int24 minTick, int24 maxTick) = getContext(ts_, currentTick, width);
+        int24 rangeDown;
+        int24 rangeUp;
+        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, int24(ts));
+
+        (int24 strikeOffset, int24 minTick, int24 maxTick) = ts == 1
+            ? getContextFull(ts_, currentTick, width)
+            : getContext(ts_, currentTick, width);
 
         int24 lowerBound = tokenType == 0
             ? int24(currentTick + ts + oneSidedRange - strikeOffset)
@@ -272,6 +315,15 @@ contract PositionUtils is Test {
         int24 upperBound = tokenType == 0
             ? int24(maxTick - oneSidedRange - strikeOffset)
             : int24(currentTick - oneSidedRange - strikeOffset);
+
+        if (ts == 1) {
+            lowerBound = tokenType == 0
+                ? int24(currentTick + ts + rangeDown - strikeOffset)
+                : int24(minTick + rangeDown - strikeOffset);
+            upperBound = tokenType == 0
+                ? int24(maxTick - rangeUp - strikeOffset)
+                : int24(currentTick - rangeUp - strikeOffset);
+        }
 
         // strike MUST be defined as a multiple of tickSpacing because the range extends out equally on both sides,
         // based on the width being divisibly by 2, it is then offset by either ts or ts / 2
@@ -286,13 +338,21 @@ contract PositionUtils is Test {
         uint256 ts_,
         int24 currentTick,
         uint256 tokenType
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         int256 ts = int256(ts_);
 
-        width = int24(int256(bound(widthSeed, 1, 2048)));
+        width = ts == 1
+            ? width = int24(int256(bound(widthSeed, 1, 2048)))
+            : int24(int256(bound(widthSeed, 1, (2048 * 10) / uint256(ts))));
         int24 oneSidedRange = int24((width * ts) / 2);
 
-        (int24 strikeOffset, int24 minTick, int24 maxTick) = getContext(ts_, currentTick, width);
+        int24 rangeDown;
+        int24 rangeUp;
+        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, int24(ts));
+
+        (int24 strikeOffset, int24 minTick, int24 maxTick) = ts == 1
+            ? getContextFull(ts_, currentTick, width)
+            : getContext(ts_, currentTick, width);
 
         int24 lowerBound = tokenType == 0
             ? int24(minTick + oneSidedRange - strikeOffset)
@@ -300,6 +360,15 @@ contract PositionUtils is Test {
         int24 upperBound = tokenType == 0
             ? int24(currentTick + ts - oneSidedRange - strikeOffset)
             : int24(maxTick - oneSidedRange - strikeOffset);
+
+        if (ts == 1) {
+            lowerBound = tokenType == 0
+                ? int24(minTick + rangeDown - strikeOffset)
+                : int24(currentTick + rangeDown - strikeOffset);
+            upperBound = tokenType == 0
+                ? int24(currentTick + ts - rangeUp - strikeOffset)
+                : int24(maxTick - rangeUp - strikeOffset);
+        }
 
         // strike MUST be defined as a multiple of tickSpacing because the range extends out equally on both sides,
         // based on the width being divisibly by 2, it is then offset by either ts or ts / 2
@@ -314,17 +383,24 @@ contract PositionUtils is Test {
         int256 strikeSeed,
         uint256 ts_,
         int24 currentTick
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         int256 ts = int256(ts_);
 
-        width = int24(int256(bound(widthSeed, 1, 2048)));
-        int24 oneSidedRange = int24((width * ts) / 2);
+        width = ts == 1
+            ? width = int24(int256(bound(widthSeed, 1, 2048)))
+            : int24(int256(bound(widthSeed, 1, (2048 * 10) / uint256(ts))));
 
-        (int24 strikeOffset, int24 minTick, int24 maxTick) = getContext(ts_, currentTick, width);
+        int24 rangeDown;
+        int24 rangeUp;
+        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, int24(ts));
+
+        (int24 strikeOffset, , int24 maxTick) = ts == 1
+            ? getContextFull(ts_, currentTick, width)
+            : getContext(ts_, currentTick, width);
 
         // add ts(1) because range is inclusive of lower tick in UniV3
-        int24 lowerBound = int24(currentTick + ts + oneSidedRange - strikeOffset);
-        int24 upperBound = int24(maxTick - oneSidedRange - strikeOffset);
+        int24 lowerBound = int24(currentTick + ts + rangeDown - strikeOffset);
+        int24 upperBound = int24(maxTick - rangeUp - strikeOffset);
 
         // strike MUST be defined as a multiple of tickSpacing because the range extends out equally on both sides,
         // based on the width being divisibly by 2, it is then offset by either ts or ts / 2
@@ -338,17 +414,24 @@ contract PositionUtils is Test {
         int256 strikeSeed,
         uint256 ts_,
         int24 currentTick
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         int256 ts = int256(ts_);
 
-        width = int24(int256(bound(widthSeed, 1, 2048)));
-        int24 oneSidedRange = int24((width * ts) / 2);
+        width = ts == 1
+            ? width = int24(int256(bound(widthSeed, 1, 2048)))
+            : int24(int256(bound(widthSeed, 1, (2048 * 10) / uint256(ts))));
 
-        (int24 strikeOffset, int24 minTick, int24 maxTick) = getContext(ts_, currentTick, width);
+        int24 rangeDown;
+        int24 rangeUp;
+        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, int24(ts));
+
+        (int24 strikeOffset, int24 minTick, ) = ts == 1
+            ? getContextFull(ts_, currentTick, width)
+            : getContext(ts_, currentTick, width);
 
         // add ts(1) because range is inclusive of lower tick in UniV3
-        int24 lowerBound = int24(minTick + oneSidedRange - strikeOffset);
-        int24 upperBound = int24(currentTick - oneSidedRange - strikeOffset);
+        int24 lowerBound = int24(minTick + rangeDown - strikeOffset);
+        int24 upperBound = int24(currentTick - rangeUp - strikeOffset);
 
         // strike MUST be defined as a multiple of tickSpacing because the range extends out equally on both sides,
         // based on the width being divisibly by 2, it is then offset by either ts or ts / 2
@@ -363,7 +446,7 @@ contract PositionUtils is Test {
         uint256 ts_,
         int24 currentTick,
         uint256 tokenType
-    ) public view returns (int24 width, int24 strike) {
+    ) public pure returns (int24 width, int24 strike) {
         return
             tokenType == 1
                 ? getBelowRangeSW(widthSeed, strikeSeed, ts_, currentTick)
@@ -475,7 +558,7 @@ contract PositionUtils is Test {
         int24 tickUpper,
         uint256 token,
         uint256 amountToken
-    ) internal view returns (uint256 contractAmount) {
+    ) internal pure returns (uint256 contractAmount) {
         uint160 sqrtRatioX96 = TickMath.getSqrtRatioAtTick(tick);
         uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(tickLower);
         uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(tickUpper);
@@ -608,7 +691,7 @@ contract PositionUtils is Test {
     ) public returns (uint256, uint256) {
         vm.snapshot();
 
-        changePrank(address(0x123456789));
+        vm.startPrank(address(0x123456789));
 
         deal(token0, address(0x123456789), type(uint128).max);
         deal(token1, address(0x123456789), type(uint128).max);
@@ -768,7 +851,7 @@ contract PositionUtils is Test {
     ) public returns (int256, int256) {
         vm.snapshot();
 
-        changePrank(address(0x123456789));
+        vm.startPrank(address(0x123456789));
 
         deal(token0, address(0x123456789), type(uint128).max);
         deal(token1, address(0x123456789), type(uint128).max);
@@ -996,7 +1079,8 @@ contract PositionUtils is Test {
 
             return zeroForOne ? (amountSpecified, -amountOut) : (-amountOut, amountSpecified);
         } else {
-            int256 amountIn = int256(
+            int256 amountIn;
+            try
                 router.exactOutputSingle(
                     ISwapRouter.ExactOutputSingleParams({
                         tokenIn: zeroForOne ? token0 : token1,
@@ -1009,8 +1093,11 @@ contract PositionUtils is Test {
                         sqrtPriceLimitX96: 0
                     })
                 )
-            );
-
+            returns (uint256 _amountIn) {
+                amountIn = int256(_amountIn);
+            } catch {
+                vm.assume(false);
+            }
             vm.revertTo(0);
 
             return zeroForOne ? (amountIn, amountSpecified) : (amountSpecified, amountIn);
@@ -1029,7 +1116,7 @@ contract PositionUtils is Test {
         bool[2] memory zeroForOne,
         int256[2] memory amountSpecified
     ) public returns (uint256[2] memory amount0, uint256[2] memory amount1) {
-        changePrank(address(0x123456789));
+        vm.startPrank(address(0x123456789));
 
         deal(token0, address(0x123456789), type(uint128).max);
         deal(token1, address(0x123456789), type(uint128).max);
@@ -1219,11 +1306,17 @@ contract PositionUtils is Test {
         // distribute accrued fee amount to Uniswap pool
         deal(
             IUniswapV3Pool(uniPool).token0(),
-            (IUniswapV3Pool(uniPool).liquidity() * posFees0) / posLiq
+            uniPool,
+            IERC20Partial(IUniswapV3Pool(uniPool).token0()).balanceOf(uniPool) +
+                (IUniswapV3Pool(uniPool).liquidity() * posFees0) /
+                posLiq
         );
         deal(
             IUniswapV3Pool(uniPool).token1(),
-            (IUniswapV3Pool(uniPool).liquidity() * posFees1) / posLiq
+            uniPool,
+            IERC20Partial(IUniswapV3Pool(uniPool).token1()).balanceOf(uniPool) +
+                (IUniswapV3Pool(uniPool).liquidity() * posFees1) /
+                posLiq
         );
 
         // update global fees
@@ -1277,5 +1370,86 @@ contract PositionUtils is Test {
         }
 
         return calldataWithoutSelector;
+    }
+
+    function getSCR(int256 utilization) internal pure returns (uint256 sellCollateralRatio) {
+        // the sell ratio is on a straight line defined between two points (x0,y0) and (x1,y1):
+        //   (x0,y0) = (targetPoolUtilization,min_sell_ratio) and
+        //   (x1,y1) = (saturatedPoolUtilization,max_sell_ratio)
+        // the line's formula: y = a * (x - x0) + y0, where a = (y1 - y0) / (x1 - x0)
+        /**
+            SELL
+            COLLATERAL
+            RATIO
+                          ^
+                          |                  max ratio = 100%
+                   100% - |                _------
+                          |             _-¯
+                          |          _-¯
+                    20% - |---------¯
+                          |         .       . .
+                          +---------+-------+-+--->   POOL_
+                                   50%    90% 100%     UTILIZATION
+        */
+
+        uint256 min_sell_ratio = 2000;
+        /// if utilization is less than zero, this is the calculation for a strangle, which gets 2x the capital efficiency at low pool utilization
+        /// at 0% utilization, strangle legs do not compound efficiency
+        if (utilization < 0) {
+            unchecked {
+                min_sell_ratio /= 2;
+                utilization = -utilization;
+            }
+        }
+
+        // return the basal sell ratio if pool utilization is lower than target
+        if (uint256(utilization) < 5000) {
+            return min_sell_ratio;
+        }
+
+        // return 100% collateral ratio if utilization is above saturated pool utilization
+        // this means all new positions are fully collateralized, which reduces risks of insolvency at high pool utilization
+        if (uint256(utilization) > 9000) {
+            return 10000;
+        }
+
+        unchecked {
+            return
+                min_sell_ratio +
+                ((10000 - min_sell_ratio) * (uint256(utilization) - 5000)) /
+                (9000 - 5000);
+        }
+    }
+
+    // convert signed int to assets
+    function convertToAssets(CollateralTracker ct, int256 amount) internal view returns (int256) {
+        return (amount > 0 ? int8(1) : -1) * int256(ct.convertToAssets(uint256(Math.abs(amount))));
+    }
+
+    // "virtual" deposit or withdrawal from an account without changing the share price
+    function editCollateral(CollateralTracker ct, address owner, uint256 newShares) internal {
+        int256 shareDelta = int256(newShares) - int256(ct.balanceOf(owner));
+        int256 assetDelta = convertToAssets(ct, shareDelta);
+        vm.store(
+            address(ct),
+            bytes32(uint256(7)),
+            bytes32(
+                uint256(
+                    LeftRightSigned.unwrap(
+                        LeftRightSigned
+                            .wrap(int256(uint256(vm.load(address(ct), bytes32(uint256(7))))))
+                            .add(LeftRightSigned.wrap(int256(uint256(uint128(int128(assetDelta))))))
+                    )
+                )
+            )
+        );
+
+        deal(
+            ct.asset(),
+            address(ct),
+            uint256(int256(IERC20Partial(ct.asset()).balanceOf(address(ct))) + assetDelta)
+        );
+
+        deal(address(ct), owner, newShares, true);
     }
 }

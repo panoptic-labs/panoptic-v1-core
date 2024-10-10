@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {RevertingToken} from "solmate/test/utils/weird-tokens/RevertingToken.sol";
