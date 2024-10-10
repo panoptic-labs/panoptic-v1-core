@@ -1,82 +1,57 @@
-// SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-// Interfaces
-import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
-// Libraries
-import {Math} from "@libraries/Math.sol";
-// Custom types
-import {LeftRightUnsigned, LeftRightSigned} from "@types/LeftRight.sol";
+// Uniswap V4 interfaces
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+// Uniswap V4 libraries
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+// Uniswap V4 types
+import {PoolId} from "v4-core/types/PoolId.sol";
 
-/// @title Library for Fee Calculations.
-/// @author Axicon Labs Limited
-/// @notice Compute fees accumulated within option position legs (a leg is a liquidity chunk).
-/// @dev Some options positions involve moving liquidity chunks to the AMM/Uniswap. Those chunks can then earn AMM swap fees.
-//
-//          When price tick moves within
-//          this liquidity chunk == an option leg within a `tokenId` option position:
-//          Fees accumulate.
-//                ◄────────────►
-//     liquidity  ┌───┼────────┐
-//          ▲     │   │        │
-//          │     │   :        ◄──────Liquidity chunk
-//          │     │   │        │      (an option position leg)
-//          │   ┌─┴───┼────────┴─┐
-//          │   │     │          │
-//          │   │     :          │
-//          │   │     │          │
-//          │   │     :          │
-//          │   │     │          │
-//          └───┴─────┴──────────┴────► price
-//                    ▲
-//                    │
-//            Current price tick
-//              of the AMM
-//
-library FeesCalc {
-    /// @notice Calculate the AMM swap fees accumulated by the `liquidityChunk` in each token of the pool.
-    /// @dev Read from the Uniswap pool and compute the accumulated fees from swapping activity.
-    /// @param univ3pool The AMM/Uniswap pool where fees are collected from
-    /// @param currentTick The current price tick
-    /// @param tickLower The lower tick of the chunk to calculate fees for
-    /// @param tickUpper The upper tick of the chunk to calculate fees for
-    /// @param liquidity The liquidity amount of the chunk to calculate fees for
-    /// @return The fees collected from the AMM for each token (LeftRight-packed) with token0 in the right slot and token1 in the left slot
-    function calculateAMMSwapFees(
-        IUniswapV3Pool univ3pool,
-        int24 currentTick,
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidity
-    ) public view returns (LeftRightSigned) {
-        // extract the amount of AMM fees collected within the liquidity chunk
-        // NOTE: the fee variables are *per unit of liquidity*; so more "rate" variables
-        (
-            uint256 ammFeesPerLiqToken0X128,
-            uint256 ammFeesPerLiqToken1X128
-        ) = _getAMMSwapFeesPerLiquidityCollected(univ3pool, currentTick, tickLower, tickUpper);
+/// @notice A library to retrieve state information from Uniswap V4 pools via `extsload`.
+/// @author Axicon Labs Limited, credit to Uniswap Labs under MIT License
+library V4StateReader {
+    /// @notice Retrieves the current `sqrtPriceX96` from a Uniswap V4 pool.
+    /// @param manager The Uniswap V4 pool manager contract
+    /// @param poolId The pool ID of the Uniswap V4 pool
+    /// @return sqrtPriceX96 The current `sqrtPriceX96` of the Uniswap V4 pool
+    function getSqrtPriceX96(
+        IPoolManager manager,
+        PoolId poolId
+    ) internal view returns (uint160 sqrtPriceX96) {
+        bytes32 stateSlot = StateLibrary._getPoolStateSlot(poolId);
+        bytes32 data = manager.extsload(stateSlot);
 
-        // Use the fee growth (rate) variable to compute the absolute fees accumulated within the chunk:
-        //   ammFeesToken0X128 * liquidity / (2**128)
-        // to store the (absolute) fees as int128:
-        return
-            LeftRightSigned
-                .wrap(0)
-                .toRightSlot(int128(int256(Math.mulDiv128(ammFeesPerLiqToken0X128, liquidity))))
-                .toLeftSlot(int128(int256(Math.mulDiv128(ammFeesPerLiqToken1X128, liquidity))));
+        assembly ("memory-safe") {
+            sqrtPriceX96 := and(data, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+        }
+    }
+
+    /// @notice Retrieves the current tick from a Uniswap V4 pool.
+    /// @param manager The Uniswap V4 pool manager contract
+    /// @param poolId The pool ID of the Uniswap V4 pool
+    /// @return tick The current tick of the Uniswap V4 pool
+    function getTick(IPoolManager manager, PoolId poolId) internal view returns (int24 tick) {
+        bytes32 stateSlot = StateLibrary._getPoolStateSlot(poolId);
+        bytes32 data = manager.extsload(stateSlot);
+
+        assembly ("memory-safe") {
+            tick := signextend(2, shr(160, data))
+        }
     }
 
     /// @notice Calculates the fee growth that has occurred (per unit of liquidity) in the AMM/Uniswap for an
     /// option position's tick range.
-    /// @dev Extracts the feeGrowth from the Uniswap V3 pool.
-    /// @param univ3pool The AMM pool where the leg is deployed
+    /// @param manager The Uniswap V4 pool manager contract
+    /// @param idV4 The pool ID of the Uniswap V4 pool
     /// @param currentTick The current price tick in the AMM
     /// @param tickLower The lower tick of the option position leg (a liquidity chunk)
     /// @param tickUpper The upper tick of the option position leg (a liquidity chunk)
-    /// @return feeGrowthInside0X128 The fee growth in the AMM of token0
-    /// @return feeGrowthInside1X128 The fee growth in the AMM of token1
-    function _getAMMSwapFeesPerLiquidityCollected(
-        IUniswapV3Pool univ3pool,
+    /// @return feeGrowthInside0X128 The fee growth in the AMM for token0
+    /// @return feeGrowthInside1X128 The fee growth in the AMM for token1
+    function getFeeGrowthInside(
+        IPoolManager manager,
+        PoolId idV4,
         int24 currentTick,
         int24 tickLower,
         int24 tickUpper
@@ -87,8 +62,16 @@ library FeesCalc {
         // (...)
         // upperOut1: For token1: fee growth on the _other_ side of tickUpper (again: relative to currentTick)
         // the point is: the range covered by lowerOut0 changes depending on where currentTick is.
-        (, , uint256 lowerOut0, uint256 lowerOut1, , , , ) = univ3pool.ticks(tickLower);
-        (, , uint256 upperOut0, uint256 upperOut1, , , , ) = univ3pool.ticks(tickUpper);
+        (uint256 lowerOut0, uint256 lowerOut1) = StateLibrary.getTickFeeGrowthOutside(
+            manager,
+            idV4,
+            tickLower
+        );
+        (uint256 upperOut0, uint256 upperOut1) = StateLibrary.getTickFeeGrowthOutside(
+            manager,
+            idV4,
+            tickUpper
+        );
 
         // compute the effective feeGrowth, depending on whether price is above/below/within range
         unchecked {
@@ -149,9 +132,35 @@ library FeesCalc {
                                               current
                                                tick
                 */
-                feeGrowthInside0X128 = univ3pool.feeGrowthGlobal0X128() - lowerOut0 - upperOut0;
-                feeGrowthInside1X128 = univ3pool.feeGrowthGlobal1X128() - lowerOut1 - upperOut1;
+
+                (uint256 feeGrowthGlobal0X128, uint256 feeGrowthGlobal1X128) = StateLibrary
+                    .getFeeGrowthGlobals(manager, idV4);
+                feeGrowthInside0X128 = feeGrowthGlobal0X128 - lowerOut0 - upperOut0;
+                feeGrowthInside1X128 = feeGrowthGlobal1X128 - lowerOut1 - upperOut1;
             }
+        }
+    }
+
+    /// @notice Retrieves the last stored `feeGrowthInsideLast` values for a unique Uniswap V4 position.
+    /// @dev Corresponds to pools[poolId].positions[positionId] in `manager`.
+    /// @param manager The Uniswap V4 pool manager contract
+    /// @param poolId The ID of the Uniswap V4 pool
+    /// @param positionId The ID of the position, which is a hash of the owner, tickLower, tickUpper, and salt.
+    /// @return feeGrowthInside0LastX128 The fee growth inside the position for token0
+    /// @return feeGrowthInside1LastX128 The fee growth inside the position for token1
+    function getFeeGrowthInsideLast(
+        IPoolManager manager,
+        PoolId poolId,
+        bytes32 positionId
+    ) internal view returns (uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128) {
+        bytes32 slot = StateLibrary._getPositionInfoSlot(poolId, positionId);
+
+        // read all 3 words of the Position.State struct
+        bytes32[] memory data = manager.extsload(slot, 3);
+
+        assembly ("memory-safe") {
+            feeGrowthInside0LastX128 := mload(add(data, 64))
+            feeGrowthInside1LastX128 := mload(add(data, 96))
         }
     }
 }

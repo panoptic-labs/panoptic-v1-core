@@ -297,35 +297,6 @@ contract LeftRightTest is Test {
         }
     }
 
-    function test_Success_SubRectInts(int128 y, int128 z, int128 u, int128 v) public {
-        LeftRightSigned x = LeftRightSigned.wrap(0);
-
-        x = harness.toLeftSlot(x, y);
-        x = harness.toRightSlot(x, z);
-
-        LeftRightSigned xx = LeftRightSigned.wrap(0);
-        xx = harness.toLeftSlot(xx, u);
-        xx = harness.toRightSlot(xx, v);
-
-        // now test add
-        unchecked {
-            if ((y - u > y && u > 0) || (y - u < y && u < 0)) {
-                // under/overflow
-                vm.expectRevert(Errors.UnderOverFlow.selector);
-                harness.subRect(x, xx);
-            } else if ((z - v > z && v > 0) || (z - v < z && v < 0)) {
-                // under/overflow
-                vm.expectRevert(Errors.UnderOverFlow.selector);
-                harness.subRect(x, xx);
-            } else {
-                // normal case
-                LeftRightSigned other = harness.subRect(x, xx);
-                assertEq(int128(harness.leftSlot(other)), y - u > 0 ? y - u : int128(0));
-                assertEq(int128(harness.rightSlot(other)), z - v > 0 ? z - v : int128(0));
-            }
-        }
-    }
-
     function test_Success_AddCapped_NoCap(
         LeftRightUnsigned x,
         LeftRightUnsigned dx,

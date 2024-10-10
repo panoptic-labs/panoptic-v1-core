@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
+import {IV3CompatibleOracle} from "@interfaces/IV3CompatibleOracle.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
 // Libraries
@@ -14,6 +14,7 @@ import {LeftRightUnsigned} from "@types/LeftRight.sol";
 import {TokenId, TokenIdLibrary} from "@types/TokenId.sol";
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 import {PositionBalance, PositionBalanceLibrary} from "@types/PositionBalance.sol";
+import {PoolId} from "v4-core/types/PoolId.sol";
 
 /// @title Utility contract for token ID construction and advanced queries.
 /// @author Axicon Labs Limited
@@ -173,7 +174,7 @@ contract PanopticHelper {
 
     /// @notice Returns the median of the last `cardinality` average prices over `period` observations from `univ3pool`.
     /// @dev Used when we need a manipulation-resistant TWAP price.
-    /// @dev Uniswap observations snapshot the closing price of the last block before the first interaction of a given block.
+    /// @dev oracle observations snapshot the closing price of the last block before the first interaction of a given block.
     /// @dev The maximum frequency of observations is 1 per block, but there is no guarantee that the pool will be observed at every block.
     /// @dev Each period has a minimum length of blocktime * period, but may be longer if the Uniswap pool is relatively inactive.
     /// @dev The final price used in the array (of length `cardinality`) is the average of all observations comprising `period` (which is itself a number of observations).
@@ -183,7 +184,7 @@ contract PanopticHelper {
     /// @param period The number of observations to average to compute one entry in the median price array
     /// @return The median of `cardinality` observations spaced by `period` in the Uniswap pool
     function computeMedianObservedPrice(
-        IUniswapV3Pool univ3pool,
+        IV3CompatibleOracle univ3pool,
         uint256 cardinality,
         uint256 period
     ) external view returns (int24) {
@@ -200,7 +201,7 @@ contract PanopticHelper {
     }
 
     /// @notice Takes a packed structure representing a sorted 8-slot queue of ticks and returns the median of those values.
-    /// @dev Also inserts the latest Uniswap observation into the buffer, resorts, and returns if the last entry is at least `period` seconds old.
+    /// @dev Also inserts the latest oracle observation into the buffer, resorts, and returns if the last entry is at least `period` seconds old.
     /// @param period The minimum time in seconds that must have passed since the last observation was inserted into the buffer
     /// @param medianData The packed structure representing the sorted 8-slot queue of ticks
     /// @param univ3pool The Uniswap pool to retrieve observations from
@@ -209,7 +210,7 @@ contract PanopticHelper {
     function computeInternalMedian(
         uint256 period,
         uint256 medianData,
-        IUniswapV3Pool univ3pool
+        IV3CompatibleOracle univ3pool
     ) external view returns (int24, uint256) {
         (, , uint16 observationIndex, uint16 observationCardinality, , , ) = univ3pool.slot0();
 
@@ -229,7 +230,10 @@ contract PanopticHelper {
     /// @param univ3pool The Uniswap pool from which to compute the TWAP.
     /// @param twapWindow The time window to compute the TWAP over.
     /// @return The final calculated TWAP tick.
-    function twapFilter(IUniswapV3Pool univ3pool, uint32 twapWindow) external view returns (int24) {
+    function twapFilter(
+        IV3CompatibleOracle univ3pool,
+        uint32 twapWindow
+    ) external view returns (int24) {
         return PanopticMath.twapFilter(univ3pool, twapWindow);
     }
 
@@ -262,28 +266,28 @@ contract PanopticHelper {
         return int256(balanceCross) - int256(requiredCross);
     }
 
-    /// @notice Unwraps the contents of the tokenId into its legs.
-    /// @param tokenId the input tokenId
-    /// @return legs an array of leg structs
-    function unwrapTokenId(TokenId tokenId) public view returns (Leg[] memory) {
-        uint256 numLegs = tokenId.countLegs();
-        Leg[] memory legs = new Leg[](numLegs);
+    // /// @notice Unwraps the contents of the tokenId into its legs.
+    // /// @param tokenId the input tokenId
+    // /// @return legs an array of leg structs
+    // function unwrapTokenId(TokenId tokenId) public view returns (Leg[] memory) {
+    //     uint256 numLegs = tokenId.countLegs();
+    //     Leg[] memory legs = new Leg[](numLegs);
 
-        uint64 poolId = tokenId.poolId();
-        address UniswapV3Pool = address(SFPM.getUniswapV3PoolFromId(tokenId.poolId()));
-        for (uint256 i = 0; i < numLegs; ++i) {
-            legs[i].poolId = poolId;
-            legs[i].UniswapV3Pool = UniswapV3Pool;
-            legs[i].asset = tokenId.asset(i);
-            legs[i].optionRatio = tokenId.optionRatio(i);
-            legs[i].tokenType = tokenId.tokenType(i);
-            legs[i].isLong = tokenId.isLong(i);
-            legs[i].riskPartner = tokenId.riskPartner(i);
-            legs[i].strike = tokenId.strike(i);
-            legs[i].width = tokenId.width(i);
-        }
-        return legs;
-    }
+    //     uint64 poolId = tokenId.poolId();
+    //     address UniswapV3Pool = address(SFPM.getUniswapV3PoolFromId(tokenId.poolId()));
+    //     for (uint256 i = 0; i < numLegs; ++i) {
+    //         legs[i].poolId = poolId;
+    //         legs[i].UniswapV3Pool = UniswapV3Pool;
+    //         legs[i].asset = tokenId.asset(i);
+    //         legs[i].optionRatio = tokenId.optionRatio(i);
+    //         legs[i].tokenType = tokenId.tokenType(i);
+    //         legs[i].isLong = tokenId.isLong(i);
+    //         legs[i].riskPartner = tokenId.riskPartner(i);
+    //         legs[i].strike = tokenId.strike(i);
+    //         legs[i].width = tokenId.width(i);
+    //     }
+    //     return legs;
+    // }
 
     /// @notice Returns an estimate of the downside liquidation price for a given account on a given pool.
     /// @dev returns MIN_TICK if the LP is more than 100000 ticks below the current tick.
@@ -297,7 +301,7 @@ contract PanopticHelper {
         TokenId[] calldata positionIdList
     ) public view returns (int24 liquidationTick) {
         // initialize right and left bounds from current tick
-        (, int24 currentTick, , , , , ) = PanopticPool(pool).univ3pool().slot0();
+        (, int24 currentTick, , , , , ) = PanopticPool(pool).oracleContract().slot0();
         int24 x0 = currentTick - 10000;
         int24 x1 = currentTick;
         int24 tol = 100000;
@@ -321,7 +325,7 @@ contract PanopticHelper {
             );
             // if price is not within a 100000 tick range of current price, return MIN_TICK
             if (x1 > currentTick + tol || x1 < currentTick - tol) {
-                return Constants.MIN_V3POOL_TICK;
+                return Constants.MIN_V4POOL_TICK;
             }
             // stop if price is within 0.01% (1 tick) of LP
             if (
@@ -345,7 +349,7 @@ contract PanopticHelper {
         TokenId[] calldata positionIdList
     ) public view returns (int24 liquidationTick) {
         // initialize right and left bounds from current tick
-        (, int24 currentTick, , , , , ) = PanopticPool(pool).univ3pool().slot0();
+        (, int24 currentTick, , , , , ) = PanopticPool(pool).oracleContract().slot0();
         int24 x0 = currentTick;
         int24 x1 = currentTick + 10000;
         int24 tol = 100000;
@@ -369,7 +373,7 @@ contract PanopticHelper {
             );
             // if price is not within a 100000 tick range of current price, stop + return MAX_TICK
             if (x1 > currentTick + tol || x1 < currentTick - tol) {
-                return Constants.MAX_V3POOL_TICK;
+                return Constants.MAX_V4POOL_TICK;
             }
             // stop if price is within 0.01% (1 tick) of LP
             if (
@@ -451,7 +455,7 @@ contract PanopticHelper {
 
     /// @notice creates "Classic" strangle using a call and a put, with asymmetric upward risk.
     /// @dev example: createStrangle(uniPoolAddress, 4, 50, -50, 0, 1, 1, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the strangle
     /// @param callStrike strike of the call
     /// @param putStrike strike of the put
@@ -461,7 +465,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the strangle begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createStrangle(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 callStrike,
         int24 putStrike,
@@ -471,7 +475,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // A strangle is composed of
         // 1. a call with a higher strike price
@@ -504,7 +508,7 @@ contract PanopticHelper {
 
     /// @notice creates "Classic" straddle using a call and a put, with asymmetric upward risk.
     /// @dev createStraddle(uniPoolAddress, 4, 0, 0, 1, 1, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the strangle
     /// @param strike strike of the call and put
     /// @param asset asset of the strangle
@@ -513,7 +517,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the straddle begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createStraddle(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 strike,
         uint256 asset,
@@ -522,7 +526,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // A straddle is composed of
         // 1. a call with an identical strike price
@@ -537,7 +541,7 @@ contract PanopticHelper {
 
     /// @notice creates a call spread with 1 long leg and 1 short leg.
     /// @dev example: createCallSpread(uniPoolAddress, 4, -50, 50, 0, 1, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param strikeLong strike of the long leg
     /// @param strikeShort strike of the short leg
@@ -546,7 +550,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createCallSpread(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 strikeLong,
         int24 strikeShort,
@@ -555,7 +559,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // A call spread is composed of
         // 1. a long call with a lower strike price
@@ -570,7 +574,7 @@ contract PanopticHelper {
 
     /// @notice creates a put spread with 1 long leg and 1 short leg.
     /// @dev example: createPutSpread(uniPoolAddress, 4, -50, 50, 0, 1, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param strikeLong strike of the long leg
     /// @param strikeShort strike of the short leg
@@ -579,7 +583,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createPutSpread(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 strikeLong,
         int24 strikeShort,
@@ -588,7 +592,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // A put spread is composed of
         // 1. a long put with a higher strike price
@@ -603,7 +607,7 @@ contract PanopticHelper {
 
     /// @notice creates a diagonal spread with 1 long leg and 1 short leg.abi.
     /// @dev example: createCallDiagonalSpread(uniPoolAddress, 4, 8, -50, 50, 0, 1, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param widthLong width of the long leg
     /// @param widthShort width of the short leg
     /// @param strikeLong strike of the long leg
@@ -613,7 +617,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createCallDiagonalSpread(
-        address univ3pool,
+        PoolId idV4,
         int24 widthLong,
         int24 widthShort,
         int24 strikeLong,
@@ -623,7 +627,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // A call diagonal spread is composed of
         // 1. a long call with a (lower/higher) strike price and (lower/higher) width(expiry)
@@ -656,7 +660,7 @@ contract PanopticHelper {
 
     /// @notice creates a diagonal spread with 1 long leg and 1 short leg.
     /// @dev example: createPutDiagonalSpread(uniPoolAddress, 4, 8, -50, 50, 0, 1, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param widthLong width of the long leg
     /// @param widthShort width of the short leg
     /// @param strikeLong strike of the long leg
@@ -666,7 +670,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createPutDiagonalSpread(
-        address univ3pool,
+        PoolId idV4,
         int24 widthLong,
         int24 widthShort,
         int24 strikeLong,
@@ -676,7 +680,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // A bearish diagonal spread is composed of
         // 1. a long put with a (higher/lower) strike price and (lower/higher) width(expiry)
@@ -709,7 +713,7 @@ contract PanopticHelper {
 
     /// @notice creates a calendar spread with 1 long leg and 1 short leg.
     /// @dev example: createCallCalendarSpread(uniPoolAddress, 4, 8, 0, 0, 1, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param widthLong width of the long leg
     /// @param widthShort width of the short leg
     /// @param strike strike of the long and short legs
@@ -718,7 +722,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createCallCalendarSpread(
-        address univ3pool,
+        PoolId idV4,
         int24 widthLong,
         int24 widthShort,
         int24 strike,
@@ -729,7 +733,7 @@ contract PanopticHelper {
         // calendar spread is a diagonal spread where the legs have identical strike prices
         // so we can create one using the diagonal spread function
         tokenId = createCallDiagonalSpread(
-            univ3pool,
+            idV4,
             widthLong,
             widthShort,
             strike,
@@ -742,7 +746,7 @@ contract PanopticHelper {
 
     /// @notice creates a calendar spread with 1 long leg and 1 short leg.
     /// @dev example: createPutCalendarSpread(uniPoolAddress, 4, 8, 0, 0, 1, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param widthLong width of the long leg
     /// @param widthShort width of the short leg
     /// @param strike strike of the long and short legs
@@ -751,7 +755,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createPutCalendarSpread(
-        address univ3pool,
+        PoolId idV4,
         int24 widthLong,
         int24 widthShort,
         int24 strike,
@@ -762,7 +766,7 @@ contract PanopticHelper {
         // calendar spread is a diagonal spread where the legs have identical strike prices
         // so we can create one using the diagonal spread function
         tokenId = createPutDiagonalSpread(
-            univ3pool,
+            idV4,
             widthLong,
             widthShort,
             strike,
@@ -775,7 +779,7 @@ contract PanopticHelper {
 
     /// @notice creates iron condor w/ call and put spread.
     /// @dev example: createIronCondor(uniPoolAddress, 4, 50, -50, 50, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param callStrike strike of the call spread
     /// @param putStrike strike of the put spread
@@ -783,7 +787,7 @@ contract PanopticHelper {
     /// @param asset asset of the strategy
     /// @return tokenId the position id with the strategy configured
     function createIronCondor(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 callStrike,
         int24 putStrike,
@@ -796,22 +800,14 @@ contract PanopticHelper {
         // the "wings" represent how much more OTM the long sides of the spreads are
 
         // call spread
-        tokenId = createCallSpread(
-            univ3pool,
-            width,
-            callStrike + wingWidth,
-            callStrike,
-            asset,
-            1,
-            0
-        );
+        tokenId = createCallSpread(idV4, width, callStrike + wingWidth, callStrike, asset, 1, 0);
 
         // put spread
         tokenId = TokenId.wrap(
             TokenId.unwrap(tokenId) +
                 TokenId.unwrap(
                     createPutSpread(
-                        address(0),
+                        PoolId.wrap(0),
                         width,
                         putStrike - wingWidth,
                         putStrike,
@@ -825,7 +821,7 @@ contract PanopticHelper {
 
     /// @notice creates a jade lizard w/ long call and short asymmetric (traditional) strangle.
     /// @dev example: createJadeLizard(uniPoolAddress, 4, 100, 50, -50, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longCallStrike strike of the long call
     /// @param shortCallStrike strike of the short call
@@ -833,7 +829,7 @@ contract PanopticHelper {
     /// @param asset asset of the strategy
     /// @return tokenId the position id with the strategy configured
     function createJadeLizard(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longCallStrike,
         int24 shortCallStrike,
@@ -845,7 +841,7 @@ contract PanopticHelper {
         // 2. a long call
 
         // short strangle
-        tokenId = createStrangle(univ3pool, width, shortCallStrike, shortPutStrike, asset, 0, 1, 1);
+        tokenId = createStrangle(idV4, width, shortCallStrike, shortPutStrike, asset, 0, 1, 1);
 
         // long call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 1, 0, longCallStrike, width);
@@ -853,14 +849,14 @@ contract PanopticHelper {
 
     /// @notice creates a big lizard w/ long call and short asymmetric (traditional) straddle.
     /// @dev example: createBigLizard(uniPoolAddress, 4, 100, 50, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longCallStrike strike of the long call
     /// @param straddleStrike strike of the short straddle
     /// @param asset asset of the strategy
     /// @return tokenId the position id with the strategy configured
     function createBigLizard(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longCallStrike,
         int24 straddleStrike,
@@ -871,7 +867,7 @@ contract PanopticHelper {
         // 2. a long call
 
         // short straddle
-        tokenId = createStraddle(univ3pool, width, straddleStrike, asset, 0, 1, 1);
+        tokenId = createStraddle(idV4, width, straddleStrike, asset, 0, 1, 1);
 
         // long call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 1, 0, longCallStrike, width);
@@ -879,7 +875,7 @@ contract PanopticHelper {
 
     /// @notice creates a super bull w/ long call spread and short put.
     /// @dev example: createSuperBull(uniPoolAddress, 4, -50, 50, 50, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longCallStrike strike of the long call
     /// @param shortCallStrike strike of the short call
@@ -887,7 +883,7 @@ contract PanopticHelper {
     /// @param asset asset of the strategy
     /// @return tokenId the position id with the strategy configured
     function createSuperBull(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longCallStrike,
         int24 shortCallStrike,
@@ -899,7 +895,7 @@ contract PanopticHelper {
         // 2. a short put
 
         // long call spread
-        tokenId = createCallSpread(univ3pool, width, longCallStrike, shortCallStrike, asset, 1, 1);
+        tokenId = createCallSpread(idV4, width, longCallStrike, shortCallStrike, asset, 1, 1);
 
         // short put
         tokenId = addPutLeg(tokenId, 0, 1, asset, 0, 0, shortPutStrike, width);
@@ -907,7 +903,7 @@ contract PanopticHelper {
 
     /// @notice creates a super bear w/ long put spread and short call.
     /// @dev example: createSuperBear(uniPoolAddress, 4, 50, -50, -50, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longPutStrike strike of the long put
     /// @param shortPutStrike strike of the short put
@@ -915,7 +911,7 @@ contract PanopticHelper {
     /// @param asset asset of the strategy
     /// @return tokenId the position id with the strategy configured
     function createSuperBear(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longPutStrike,
         int24 shortPutStrike,
@@ -927,7 +923,7 @@ contract PanopticHelper {
         // 2. a short call
 
         // long put spread
-        tokenId = createPutSpread(univ3pool, width, longPutStrike, shortPutStrike, asset, 1, 1);
+        tokenId = createPutSpread(idV4, width, longPutStrike, shortPutStrike, asset, 1, 1);
 
         // short call
         tokenId = addCallLeg(tokenId, 0, 1, asset, 0, 0, shortCallStrike, width);
@@ -935,14 +931,14 @@ contract PanopticHelper {
 
     /// @notice creates a butterfly w/ long call spread and short put spread.
     /// @dev example: createIronButterfly(uniPoolAddress, 4, 0, 50, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param strike strike of the long and short legs
     /// @param wingWidth width of the wings
     /// @param asset asset of the strategy
     /// @return tokenId the position id with the strategy configured
     function createIronButterfly(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 strike,
         int24 wingWidth,
@@ -953,20 +949,20 @@ contract PanopticHelper {
         // 2. a short put spread
 
         // long call spread
-        tokenId = createCallSpread(univ3pool, width, strike, strike + wingWidth, asset, 1, 0);
+        tokenId = createCallSpread(idV4, width, strike, strike + wingWidth, asset, 1, 0);
 
         // short put spread
         tokenId = TokenId.wrap(
             TokenId.unwrap(tokenId) +
                 TokenId.unwrap(
-                    createPutSpread(address(0), width, strike, strike - wingWidth, asset, 1, 2)
+                    createPutSpread(PoolId.wrap(0), width, strike, strike - wingWidth, asset, 1, 2)
                 )
         );
     }
 
     /// @notice creates a ratio spread w/ long call and multiple short calls.
     /// @dev example: createCallRatioSpread(uniPoolAddress, 4, -50, 50, 0, 2, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longStrike strike of the long call
     /// @param shortStrike strike of the short calls
@@ -976,7 +972,7 @@ contract PanopticHelper {
     /// @return tokenId the position id with the strategy configured
 
     function createCallRatioSpread(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longStrike,
         int24 shortStrike,
@@ -985,7 +981,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // a call ratio spread is composed of
         // 1. a long call
@@ -1000,7 +996,7 @@ contract PanopticHelper {
 
     /// @notice creates a ratio spread w/ long put and multiple short puts.
     /// @dev example: createPutRatioSpread(uniPoolAddress, 4, -50, 50, 0, 2, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longStrike strike of the long put
     /// @param shortStrike strike of the short puts
@@ -1009,7 +1005,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createPutRatioSpread(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longStrike,
         int24 shortStrike,
@@ -1018,7 +1014,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // a put ratio spread is composed of
         // 1. a long put
@@ -1033,7 +1029,7 @@ contract PanopticHelper {
 
     /// @notice creates a ZEBRA spread w/ short call and multiple long calls.
     /// @dev example: createCallZEBRASpread(uniPoolAddress, 4, -50, 50, 0, 2, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longStrike strike of the long calls
     /// @param shortStrike strike of the short call
@@ -1042,7 +1038,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createCallZEBRASpread(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longStrike,
         int24 shortStrike,
@@ -1051,7 +1047,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // a call ZEBRA(zero extrinsic value back ratio spread) spread is composed of
         // 1. a short call
@@ -1066,7 +1062,7 @@ contract PanopticHelper {
 
     /// @notice creates a ZEBRA spread w/ short put and multiple long puts.
     /// @dev example: createPutZEBRASpread(uniPoolAddress, 4, -50, 50, 0, 2, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longStrike strike of the long puts
     /// @param shortStrike strike of the short put
@@ -1075,7 +1071,7 @@ contract PanopticHelper {
     /// @param start leg index where the (2 legs) of the spread begin (usually 0)
     /// @return tokenId the position id with the strategy configured
     function createPutZEBRASpread(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longStrike,
         int24 shortStrike,
@@ -1084,7 +1080,7 @@ contract PanopticHelper {
         uint256 start
     ) public view returns (TokenId tokenId) {
         // Pool
-        tokenId = tokenId.addPoolId(SFPM.getPoolId(univ3pool));
+        tokenId = tokenId.addPoolId(SFPM.getPoolId(idV4));
 
         // a put ZEBRA(zero extrinsic value back ratio spread) spread is composed of
         // 1. a short put
@@ -1099,7 +1095,7 @@ contract PanopticHelper {
 
     /// @notice creates a ZEEHBS w/ call and put ZEBRA spreads.
     /// @dev example: createPutZEBRASpread(uniPoolAddress, 4, -50, 50, 0, 2, 0).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longStrike strike of the long legs
     /// @param shortStrike strike of the short legs
@@ -1107,7 +1103,7 @@ contract PanopticHelper {
     /// @param ratio ratio of the short legs to the long legs
     /// @return tokenId the position id with the strategy configured
     function createZEEHBS(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longStrike,
         int24 shortStrike,
@@ -1119,14 +1115,14 @@ contract PanopticHelper {
         // 2. a put ZEBRA spread
 
         // call ZEBRA
-        tokenId = createCallZEBRASpread(univ3pool, width, longStrike, shortStrike, asset, ratio, 0);
+        tokenId = createCallZEBRASpread(idV4, width, longStrike, shortStrike, asset, ratio, 0);
 
         // put ZEBRA
         tokenId = TokenId.wrap(
             TokenId.unwrap(tokenId) +
                 TokenId.unwrap(
                     createPutZEBRASpread(
-                        address(0),
+                        PoolId.wrap(0),
                         width,
                         longStrike,
                         shortStrike,
@@ -1140,7 +1136,7 @@ contract PanopticHelper {
 
     /// @notice creates a BATS (AKA double ratio spread) w/ call and put ratio spreads.
     /// @dev example: createBATS(uniPoolAddress, 4, -50, 50, 0, 2).
-    /// @param univ3pool address of the pool
+    /// @param idV4 Uniswap V4 pool identifier
     /// @param width width of the spread
     /// @param longStrike strike of the long legs
     /// @param shortStrike strike of the short legs
@@ -1148,7 +1144,7 @@ contract PanopticHelper {
     /// @param ratio ratio of the short legs to the long legs
     /// @return tokenId the position id with the strategy configured
     function createBATS(
-        address univ3pool,
+        PoolId idV4,
         int24 width,
         int24 longStrike,
         int24 shortStrike,
@@ -1160,14 +1156,14 @@ contract PanopticHelper {
         // 2. a put ratio spread
 
         // call ratio spread
-        tokenId = createCallRatioSpread(univ3pool, width, longStrike, shortStrike, asset, ratio, 0);
+        tokenId = createCallRatioSpread(idV4, width, longStrike, shortStrike, asset, ratio, 0);
 
         // put ratio spread
         tokenId = TokenId.wrap(
             TokenId.unwrap(tokenId) +
                 TokenId.unwrap(
                     createPutRatioSpread(
-                        address(0),
+                        PoolId.wrap(0),
                         width,
                         longStrike,
                         shortStrike,

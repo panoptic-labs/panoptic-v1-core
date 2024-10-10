@@ -34,14 +34,28 @@ import {IUniswapV3Factory} from "v3-core/interfaces/IUniswapV3Factory.sol";
 import {ISwapRouter} from "v3-periphery/interfaces/ISwapRouter.sol";
 
 import {PositionUtils, MiniPositionManager} from "../testUtils/PositionUtils.sol";
+import {ClonesWithImmutableArgs} from "clones-with-immutable-args/ClonesWithImmutableArgs.sol";
+// V4 types
+import {PoolId} from "v4-core/types/PoolId.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+import {V4StateReader} from "@libraries/V4StateReader.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
+import {Currency} from "v4-core/types/Currency.sol";
+import {PoolManager} from "v4-core/PoolManager.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
+import {V4RouterSimple} from "../testUtils/V4RouterSimple.sol";
 
 // CollateralTracker with extended functionality intended to expose internal data
 contract CollateralTrackerHarness is CollateralTracker, PositionUtils, MiniPositionManager {
-    constructor() CollateralTracker(10, 2_000, 1_000, -1_024, 5_000, 9_000, 20_000) {}
+    constructor(
+        IPoolManager _manager
+    ) CollateralTracker(10, 2_000, 1_000, -1_024, 5_000, 9_000, 20, _manager) {}
 
     // view deployer (panoptic pool)
-    function panopticPool() external view returns (PanopticPool) {
-        return s_panopticPool;
+    function panopticPool() external pure returns (PanopticPool) {
+        return _panopticPool();
     }
 
     // whether the token has been initialized already or not
@@ -50,8 +64,8 @@ contract CollateralTrackerHarness is CollateralTracker, PositionUtils, MiniPosit
     }
 
     // whether the current instance is token 0
-    function underlyingIsToken0() external view returns (bool) {
-        return s_underlyingIsToken0;
+    function underlyingIsToken0() external pure returns (bool) {
+        return _underlyingIsToken0();
     }
 
     function _inAMM() external view returns (uint256) {
@@ -106,61 +120,11 @@ contract CollateralTrackerHarness is CollateralTracker, PositionUtils, MiniPosit
     }
 }
 
-// Inherits all of PanopticPool's functionality, however uses a modified version of startPool
-// which enables us to use our modified CollateralTracker harness that exposes internal data
 contract PanopticPoolHarness is PanopticPool {
-    constructor(SemiFungiblePositionManager _SFPM) PanopticPool(_SFPM) {}
-
-    function modifiedStartPool(
-        address token0,
-        address token1,
-        IUniswapV3Pool uniswapPool
-    ) external {
-        // Store the univ3Pool variable
-        s_univ3pool = IUniswapV3Pool(uniswapPool);
-
-        // store token0 and token1
-        address s_token0 = uniswapPool.token0();
-        address s_token1 = uniswapPool.token1();
-
-        // Start and store the collateral token0/1
-        _initalizeCollateralPair(token0, token1, uniswapPool);
-
-        (, int24 currentTick, , , , , ) = uniswapPool.slot0();
-
-        unchecked {
-            s_miniMedian =
-                (uint256(block.number) << 216) +
-                // magic number which adds (7,5,3,1,0,2,4,6) order and minTick in positions 7, 5, 3 and maxTick in 6, 4, 2
-                // see comment on s_miniMedian initialization for format of this magic number
-                (uint256(0xF590A6F276170D89E9F276170D89E9F276170D89E9000000000000)) +
-                (uint256(uint24(currentTick)) << 24) + // add to slot 4
-                (uint256(uint24(currentTick))); // add to slot 3
-        }
-
-        // Approve transfers of Panoptic Pool funds by SFPM
-        IERC20Partial(s_token0).approve(address(SFPM), type(uint256).max);
-        IERC20Partial(s_token1).approve(address(SFPM), type(uint256).max);
-
-        // Approve transfers of Panoptic Pool funds by Collateral token
-        IERC20Partial(s_token0).approve(address(s_collateralToken0), type(uint256).max);
-        IERC20Partial(s_token1).approve(address(s_collateralToken1), type(uint256).max);
-    }
-
-    // Generate a new pair of collateral tokens from a univ3 pool
-    function _initalizeCollateralPair(
-        address token0,
-        address token1,
-        IUniswapV3Pool uniswapPool
-    ) internal {
-        // Deploy collateral tokens
-        s_collateralToken0 = new CollateralTrackerHarness();
-        s_collateralToken1 = new CollateralTrackerHarness();
-
-        // initialize the token
-        s_collateralToken0.startToken(true, token0, token1, uniswapPool.fee(), this);
-        s_collateralToken1.startToken(false, token0, token1, uniswapPool.fee(), this);
-    }
+    constructor(
+        SemiFungiblePositionManager _SFPM,
+        IPoolManager _manager
+    ) PanopticPool(_SFPM, _manager) {}
 
     function delegate(address delegatee, CollateralTracker collateralToken) external {
         collateralToken.delegate(delegatee);
@@ -180,7 +144,7 @@ contract PanopticPoolHarness is PanopticPool {
     }
 
     function getTWAP() external view returns (int24 twapTick) {
-        return PanopticPool.getUniV3TWAP();
+        return PanopticPool.getOracleTWAP();
     }
 
     function positionBalance(
@@ -192,7 +156,7 @@ contract PanopticPoolHarness is PanopticPool {
 }
 
 contract SemiFungiblePositionManagerHarness is SemiFungiblePositionManager {
-    constructor(IUniswapV3Factory _factory) SemiFungiblePositionManager(_factory) {}
+    constructor(IPoolManager _manager) SemiFungiblePositionManager(_manager) {}
 
     function accountLiquidity(
         bytes32 positionKey
@@ -351,6 +315,12 @@ contract CollateralTrackerTest is Test, PositionUtils {
     CollateralTrackerHarness collateralToken0;
     CollateralTrackerHarness collateralToken1;
 
+    IPoolManager manager;
+
+    V4RouterSimple routerV4;
+
+    PoolKey poolKey;
+
     /*//////////////////////////////////////////////////////////////
                             POSITION DATA
     //////////////////////////////////////////////////////////////*/
@@ -415,12 +385,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // Pick a pool from the seed and cache initial state
         _cacheWorldState(pools[bound(seed, 0, pools.length - 1)]);
 
-        _deployCustomPanopticPool(token0, token1, pool);
+        _deployCustomPanopticPool();
     }
 
     function _cacheWorldState(IUniswapV3Pool _pool) internal {
         pool = _pool;
-        poolId = PanopticMath.getPoolId(address(_pool));
         token0 = _pool.token0();
         token1 = _pool.token1();
         isWETH = token0 == address(WETH) ? 0 : 1;
@@ -429,29 +398,110 @@ contract CollateralTrackerTest is Test, PositionUtils {
         (currentSqrtPriceX96, currentTick, , , , , ) = _pool.slot0();
         feeGrowthGlobal0X128 = _pool.feeGrowthGlobal0X128();
         feeGrowthGlobal1X128 = _pool.feeGrowthGlobal1X128();
+
+        poolKey = PoolKey(
+            Currency.wrap(token0),
+            Currency.wrap(token1),
+            fee,
+            tickSpacing,
+            IHooks(address(0))
+        );
+        poolId = PanopticMath.getPoolId(poolKey.toId(), poolKey.tickSpacing);
     }
 
-    function _deployCustomPanopticPool(
-        address _token0,
-        address _token1,
-        IUniswapV3Pool uniswapPool
-    ) internal {
+    function _deployCustomPanopticPool() internal {
+        manager = new PoolManager();
+        routerV4 = new V4RouterSimple(manager);
+
+        vm.startPrank(Swapper);
+
+        deal(token0, Swapper, type(uint248).max);
+        deal(token1, Swapper, type(uint248).max);
+
+        IERC20Partial(token0).approve(address(router), type(uint256).max);
+        IERC20Partial(token1).approve(address(router), type(uint256).max);
+
+        IERC20Partial(token0).approve(address(routerV4), type(uint256).max);
+        IERC20Partial(token1).approve(address(routerV4), type(uint256).max);
+
+        manager.initialize(poolKey, currentSqrtPriceX96);
+
+        routerV4.modifyLiquidity(
+            address(0),
+            poolKey,
+            (TickMath.MIN_TICK / tickSpacing) * tickSpacing,
+            (TickMath.MAX_TICK / tickSpacing) * tickSpacing,
+            1_000_000 ether
+        );
+
         // deploy the semiFungiblePositionManager
-        sfpm = new SemiFungiblePositionManagerHarness(V3FACTORY);
+        sfpm = new SemiFungiblePositionManagerHarness(manager);
 
         // Initialize the world pool
-        sfpm.initializeAMMPool(_token0, _token1, fee);
+        sfpm.initializeAMMPool(poolKey);
 
         panopticHelper = new PanopticHelper(SemiFungiblePositionManager(sfpm));
 
-        // deploy modified Panoptic pool
-        panopticPool = new PanopticPoolHarness(sfpm);
+        vm.startPrank(address(this));
 
-        // initalize Panoptic Pool
-        panopticPool.modifiedStartPool(_token0, _token1, uniswapPool);
+        panopticPool = PanopticPoolHarness(
+            ClonesWithImmutableArgs.addressOfClone3(PoolId.unwrap(poolKey.toId()))
+        );
 
-        collateralToken0 = CollateralTrackerHarness(address(panopticPool.collateralToken0()));
-        collateralToken1 = CollateralTrackerHarness(address(panopticPool.collateralToken1()));
+        collateralToken0 = new CollateralTrackerHarness(manager);
+        collateralToken1 = new CollateralTrackerHarness(manager);
+
+        collateralToken0 = CollateralTrackerHarness(
+            ClonesWithImmutableArgs.clone(
+                address(collateralToken0),
+                abi.encodePacked(
+                    panopticPool,
+                    true,
+                    token0,
+                    token0,
+                    token1,
+                    fee,
+                    (fee * uint256(20_000)) / 10_000
+                )
+            )
+        );
+        collateralToken1 = CollateralTrackerHarness(
+            ClonesWithImmutableArgs.clone(
+                address(collateralToken1),
+                abi.encodePacked(
+                    panopticPool,
+                    false,
+                    token1,
+                    token0,
+                    token1,
+                    fee,
+                    (fee * uint256(20_000)) / 10_000
+                )
+            )
+        );
+
+        panopticPool = new PanopticPoolHarness(sfpm, manager);
+
+        panopticPool = PanopticPoolHarness(
+            ClonesWithImmutableArgs.clone3(
+                address(panopticPool),
+                abi.encodePacked(
+                    collateralToken0,
+                    collateralToken1,
+                    pool,
+                    poolKey.toId(),
+                    abi.encode(poolKey)
+                ),
+                PoolId.unwrap(poolKey.toId())
+            )
+        );
+
+        vm.startPrank(Swapper);
+
+        panopticPool.initialize();
+
+        collateralToken0.initialize();
+        collateralToken1.initialize();
 
         // store panoptic pool address
         panopticPoolAddress = address(panopticPool);
@@ -484,19 +534,20 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // deposit to panoptic pool
         collateralToken0.setPoolAssets(collateralToken0._availableAssets() + initialMockTokens);
         collateralToken1.setPoolAssets(collateralToken1._availableAssets() + initialMockTokens);
-        deal(
-            token0,
-            address(panopticPool),
-            IERC20Partial(token0).balanceOf(panopticPoolAddress) + initialMockTokens
-        );
-        deal(
-            token1,
-            address(panopticPool),
-            IERC20Partial(token1).balanceOf(panopticPoolAddress) + initialMockTokens
-        );
+
+        (, address pranked, ) = vm.readCallers();
+        vm.startPrank(Swapper);
+        routerV4.mintCurrency(address(0), Currency.wrap(token0), initialMockTokens);
+        routerV4.mintCurrency(address(0), Currency.wrap(token1), initialMockTokens);
+
+        manager.transfer(address(panopticPool), uint160(token0), initialMockTokens);
+        manager.transfer(address(panopticPool), uint160(token1), initialMockTokens);
+
+        vm.startPrank(pranked);
+
+        manager.transfer(address(0), 0, 0);
     }
 
-    //@note move this and panopticPool helper into position utils
     /*//////////////////////////////////////////////////////////////
                                 HELPERS
     //////////////////////////////////////////////////////////////*/
@@ -505,13 +556,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
     function twoWaySwap(uint256 swapSize) public {
         vm.startPrank(Swapper);
 
-        deal(token0, Swapper, type(uint248).max);
-        deal(token1, Swapper, type(uint248).max);
-
-        IERC20Partial(token0).approve(address(router), type(uint256).max);
-        IERC20Partial(token1).approve(address(router), type(uint256).max);
-
+        uint160 originalSqrtPriceX96 = V4StateReader.getSqrtPriceX96(manager, poolKey.toId());
         swapSize = bound(swapSize, 10 ** 18, 10 ** 22);
+
         router.exactInputSingle(
             ISwapRouter.ExactInputSingleParams(
                 isWETH == 0 ? token0 : token1,
@@ -524,6 +571,10 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 0
             )
         );
+
+        (uint160 swappedSqrtPriceX96, , , , , , ) = pool.slot0();
+
+        routerV4.swapTo(address(0), poolKey, swappedSqrtPriceX96);
 
         router.exactOutputSingle(
             ISwapRouter.ExactOutputSingleParams(
@@ -538,7 +589,10 @@ contract CollateralTrackerTest is Test, PositionUtils {
             )
         );
 
-        (currentSqrtPriceX96, currentTick, , , , , ) = pool.slot0();
+        routerV4.swapTo(address(0), poolKey, originalSqrtPriceX96);
+
+        currentSqrtPriceX96 = V4StateReader.getSqrtPriceX96(manager, poolKey.toId());
+        currentTick = V4StateReader.getTick(manager, poolKey.toId());
     }
 
     function setUp() public {}
@@ -547,7 +601,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
                         START TOKEN TESTS
     //////////////////////////////////////////////////////////////*/
 
-    function test_Success_StartToken_virtualShares() public {
+    function test_Success_initialize_virtualShares() public {
         _initWorld(0);
         CollateralTracker ct = new CollateralTracker(
             10,
@@ -556,26 +610,27 @@ contract CollateralTrackerTest is Test, PositionUtils {
             -1_024,
             5_000,
             9_000,
-            20_000
+            20,
+            manager
         );
-        ct.startToken(false, token0, token1, fee, panopticPool);
+        ct.initialize();
 
         assertEq(ct.totalSupply(), 10 ** 6);
         assertEq(ct.totalAssets(), 1);
     }
 
-    function test_Fail_startToken_alreadyInitializedToken(uint256 x) public {
+    function test_Fail_initialize_alreadyInitializedToken(uint256 x) public {
         _initWorld(x);
 
         // Deploy collateral token
-        collateralToken0 = new CollateralTrackerHarness();
+        collateralToken0 = new CollateralTrackerHarness(manager);
 
         // initialize the token
-        collateralToken0.startToken(false, token0, token1, fee, PanopticPool(address(0)));
+        collateralToken0.initialize();
 
         // fails if already initialized
         vm.expectRevert(Errors.CollateralTokenAlreadyInitialized.selector);
-        collateralToken0.startToken(false, token0, token1, fee, PanopticPool(address(0)));
+        collateralToken0.initialize();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -625,8 +680,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         address underlyingToken1 = collateralToken1.asset();
 
         // check if the panoptic pool got transferred the correct underlying assets
-        assertEq(assets, IERC20Partial(underlyingToken0).balanceOf(address(panopticPool)));
-        assertEq(assets, IERC20Partial(underlyingToken1).balanceOf(address(panopticPool)));
+        assertEq(assets, manager.balanceOf(address(panopticPool), uint160(underlyingToken0)));
+        assertEq(assets, manager.balanceOf(address(panopticPool), uint160(underlyingToken1)));
     }
 
     function test_Fail_deposit_DepositTooLarge(uint256 x, uint256 assets) public {
@@ -862,8 +917,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList,
             uint128(bound(positionSizeSeed, 501, 1000)),
             0,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
     }
 
@@ -898,8 +953,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList,
             750,
             0,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
 
         tokenId = TokenId.wrap(0).addPoolId(poolId).addLeg(0, 1, 0, 1, 0, 0, strike, width);
@@ -909,8 +964,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList,
             500,
             type(uint64).max,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
 
         collateralToken0.setPoolAssets(collateralToken0._availableAssets() - 300);
@@ -921,8 +976,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         panopticPool.burnOptions(
             tokenId,
             positionIdList,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
     }
 
@@ -957,8 +1012,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList,
             750,
             0,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
 
         tokenId = TokenId.wrap(0).addPoolId(poolId).addLeg(0, 1, 0, 1, 0, 0, strike, width);
@@ -971,8 +1026,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList,
             500,
             type(uint64).max,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
     }
 
@@ -1007,8 +1062,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList,
             750,
             0,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
 
         collateralToken0.setInAMM(-250);
@@ -1019,8 +1074,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         panopticPool.burnOptions(
             tokenId,
             positionIdList,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
     }
 
@@ -1239,8 +1294,14 @@ contract CollateralTrackerTest is Test, PositionUtils {
         address underlyingToken1 = collateralToken1.asset();
 
         // check if the panoptic pool got transferred the correct underlying assets
-        assertEq(returnedAssets0, IERC20Partial(underlyingToken0).balanceOf(address(panopticPool)));
-        assertEq(returnedAssets1, IERC20Partial(underlyingToken1).balanceOf(address(panopticPool)));
+        assertEq(
+            returnedAssets0,
+            manager.balanceOf(address(panopticPool), uint160(underlyingToken0))
+        );
+        assertEq(
+            returnedAssets1,
+            manager.balanceOf(address(panopticPool), uint160(underlyingToken1))
+        );
     }
 
     function test_Fail_mint_DepositTooLarge(uint256 x, uint256 shares) public {
@@ -1355,8 +1416,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             positionIdList,
             positionSize0,
             0,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
 
         // Attempt a transfer to Alice from Bob
@@ -1447,8 +1508,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
                 positionIdList,
                 positionSize0,
                 0,
-                Constants.MAX_V3POOL_TICK,
-                Constants.MIN_V3POOL_TICK
+                Constants.MAX_V4POOL_TICK,
+                Constants.MIN_V4POOL_TICK
             );
         }
 
@@ -1794,11 +1855,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
     }
 
     // access control on delegate/revoke/settlement functions
-    function test_Fail_All_OnlyPanopticPool(uint256 x, address caller) public {
+    function test_Fail_All_OnlyPanopticPool(uint256 x) public {
         _initWorld(x);
-        vm.assume(caller != address(panopticPool));
-
-        vm.prank(caller);
 
         vm.expectRevert(Errors.NotPanopticPool.selector);
         collateralToken0.delegate(address(0));
@@ -1816,8 +1874,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         collateralToken0.takeCommissionAddData(
             address(0),
             0,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK,
             false
         );
 
@@ -1826,8 +1884,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
             address(0),
             0,
             0,
-            Constants.MAX_V3POOL_TICK,
-            Constants.MIN_V3POOL_TICK
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
         );
     }
 
@@ -1849,9 +1907,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         {
             _initWorld(x);
-
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
 
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
@@ -2047,9 +2102,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -2128,6 +2180,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Alice);
 
         // check requirement at fuzzed tick
         {
@@ -2245,9 +2298,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -2334,6 +2384,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Alice);
 
         // check requirement at fuzzed tick
         {
@@ -2452,9 +2503,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -2542,6 +2590,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Alice);
 
         // check requirement at fuzzed tick
         {
@@ -2661,9 +2710,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -2782,6 +2828,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Alice);
 
         // check requirement at fuzzed tick
         {
@@ -2902,9 +2949,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         {
             _initWorld(x);
-
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
 
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
@@ -3035,6 +3079,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Alice);
 
         // check requirement at fuzzed tick
         {
@@ -3155,9 +3200,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -3250,6 +3292,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Alice);
 
         // check requirement at fuzzed tick
         {
@@ -3387,9 +3430,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -3482,6 +3522,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Alice);
 
         // check requirement at fuzzed tick
         {
@@ -3605,9 +3646,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -3700,6 +3738,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Alice);
 
         // check requirement at fuzzed tick
         {
@@ -3827,9 +3866,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -3901,6 +3937,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Bob);
 
         // check requirement at fuzzed tick
         {
@@ -4007,9 +4044,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -4079,6 +4113,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Bob);
 
         // check requirement at fuzzed tick
         {
@@ -4210,9 +4245,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -4277,6 +4309,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Bob);
 
         // check requirement at fuzzed tick
         {
@@ -4402,9 +4435,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -4469,6 +4499,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Bob);
 
         // check requirement at fuzzed tick
         {
@@ -4595,9 +4626,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -4658,6 +4686,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Bob);
 
         // check requirement at fuzzed tick
         {
@@ -4770,9 +4799,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -4832,6 +4858,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Bob);
 
         // check requirement at fuzzed tick
         {
@@ -4954,9 +4981,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -5000,6 +5024,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // mimic pool activity
         twoWaySwap(swapSizeSeed);
+        vm.startPrank(Bob);
 
         // check requirement at fuzzed tick
         {
@@ -5142,9 +5167,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -5260,9 +5282,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
     ) public {
         {
             _initWorld(x);
-
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
 
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
@@ -5398,9 +5417,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         {
             _initWorld(x);
 
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
-
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
 
@@ -5534,9 +5550,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
     ) public {
         {
             _initWorld(x);
-
-            // initalize a custom Panoptic pool
-            _deployCustomPanopticPool(token0, token1, pool);
 
             // Invoke all interactions with the Collateral Tracker from user Bob
             vm.startPrank(Bob);
@@ -5695,7 +5708,9 @@ contract CollateralTrackerTest is Test, PositionUtils {
         //    utilization = 9000.0
         //
         //-----------------------------------------------------------
-        int128 _poolBalance = int128(int256(IERC20Partial(token).balanceOf(address(panopticPool))));
+        int128 _poolBalance = int128(
+            int256(manager.balanceOf(address(panopticPool), uint160(token)))
+        );
         // Solve for a mocked inAMM amount using real lockedFunds and pool bal
         // satisfy the condition of poolBalance > lockedFunds
         // let poolBalance and lockedFunds be fuzzed
@@ -5706,7 +5721,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // set states
         collateralToken.setInAMM(int128(inAMM));
-        deal(token, address(panopticPool), uint128(_poolBalance));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -6060,47 +6074,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         assertEq(expectedPoolUtilization, currentPoolUtilization);
     }
 
-    function test_Success_name(uint256 x) public {
-        _initWorld(x);
-
-        // string memory expectedName =
-        //     string.concat(
-        //             "POPT-V1",
-        //             " ",
-        //             IERC20Metadata(s_univ3token0).symbol(),
-        //             " LP on ",
-        //             symbol0,
-        //             "/",
-        //             symbol1,
-        //             " ",
-        //             fee % 100 == 0
-        //                 ? Strings.toString(fee / 100)
-        //                 : string.concat(Strings.toString(fee / 100), ".", Strings.toString(fee % 100)),
-        //             "bps"
-        //         );
-
-        string memory returnedName = collateralToken0.name();
-        console2.log(returnedName);
-    }
-
-    function test_Success_symbol(uint256 x) public {
-        _initWorld(x);
-
-        // string.concat(TICKER_PREFIX, symbol);
-        // "po" + symbol IERC20Metadata(s_underlyingToken).symbol()
-
-        string memory returnedSymbol = collateralToken0.symbol();
-        console2.log(returnedSymbol);
-    }
-
-    function test_Success_decimals(uint256 x) public {
-        _initWorld(x);
-
-        //IERC20Metadata(s_underlyingToken).decimals()
-
-        console2.log(collateralToken0.decimals());
-    }
-
     /*//////////////////////////////////////////////////////////////
                     REPLICATED FUNCTIONS (TEST HELPERS)
     //////////////////////////////////////////////////////////////*/
@@ -6179,20 +6152,6 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // Initialize variables
         bool zeroForOne; // The direction of the swap, true for token0 to token1, false for token1 to token0
         int256 swapAmount; // The amount of token0 or token1 to swap
-        bytes memory data;
-
-        // construct the swap callback struct
-        data = abi.encode(
-            CallbackData({
-                univ3poolKey: PoolAddress.PoolKey({
-                    token0: pool.token0(),
-                    token1: pool.token1(),
-                    fee: pool.fee()
-                }),
-                payer: address(panopticPool)
-            })
-        );
-
         if ((itm0 != 0) && (itm1 != 0)) {
             (uint160 sqrtPriceX96, , , , , , ) = pool.slot0();
 
@@ -6218,18 +6177,11 @@ contract CollateralTrackerTest is Test, PositionUtils {
         }
 
         // assert the pool has enough funds to complete the swap for an ITM position (exchange tokens to token type)
-        bytes memory callData = abi.encodeCall(
-            pool.swap,
-            (
-                address(panopticPool),
-                zeroForOne,
-                swapAmount,
-                zeroForOne ? TickMath.MIN_SQRT_RATIO + 1 : TickMath.MAX_SQRT_RATIO - 1,
-                data
-            )
-        );
-        (bool ok, ) = address(pool).call(callData);
-        vm.assume(ok);
+        try
+            V4RouterSimple(address(sfpm)).swap(address(0), poolKey, swapAmount, zeroForOne)
+        {} catch {
+            vm.assume(false);
+        }
     }
 
     // Checks to see that a valid position is minted via simulation
@@ -6242,13 +6194,25 @@ contract CollateralTrackerTest is Test, PositionUtils {
     ) internal {
         // take a snapshot at this storage state
         uint256 snapshot = vm.snapshot();
-        {
-            IERC20Partial(token0).approve(address(sfpm), type(uint256).max);
-            IERC20Partial(token1).approve(address(sfpm), type(uint256).max);
+        vm.startPrank(address(panopticPool));
 
-            // mock mints and burns from the SFPM
-            vm.startPrank(address(sfpm));
-        }
+        vm.etch(address(sfpm), address(routerV4).code);
+
+        manager.setOperator(address(routerV4), true);
+
+        routerV4.burnCurrency(
+            address(0),
+            poolKey.currency0,
+            manager.balanceOf(address(panopticPool), uint160(token0))
+        );
+        routerV4.burnCurrency(
+            address(0),
+            poolKey.currency1,
+            manager.balanceOf(address(panopticPool), uint160(token1))
+        );
+
+        IERC20Partial(token0).approve(address(sfpm), type(uint256).max);
+        IERC20Partial(token1).approve(address(sfpm), type(uint256).max);
 
         int128 itm0;
         int128 itm1;
@@ -6324,40 +6288,64 @@ contract CollateralTrackerTest is Test, PositionUtils {
             /// simulate mint/burn
             // mint in pool if short
             if (tokenId.isLong(i) == 0) {
+                // try
+                //     pool.mint(
+                //         address(sfpm),
+                //         legLowerTick,
+                //         legUpperTick,
+                //         uint128(liquidity),
+                //         abi.encode(
+                //             CallbackData({
+                //                 univ3poolKey: PoolAddress.PoolKey({
+                //                     token0: pool.token0(),
+                //                     token1: pool.token1(),
+                //                     fee: pool.fee()
+                //                 }),
+                //                 payer: address(panopticPool)
+                //             })
+                //         )
+                //     )
                 try
-                    pool.mint(
-                        address(sfpm),
+                    V4RouterSimple(address(sfpm)).modifyLiquidity(
+                        address(0),
+                        poolKey,
                         legLowerTick,
                         legUpperTick,
-                        uint128(liquidity),
-                        abi.encode(
-                            CallbackData({
-                                univ3poolKey: PoolAddress.PoolKey({
-                                    token0: pool.token0(),
-                                    token1: pool.token1(),
-                                    fee: pool.fee()
-                                }),
-                                payer: address(panopticPool)
-                            })
-                        )
+                        int256(liquidity)
                     )
-                returns (uint256 _amount0, uint256 _amount1) {
+                returns (int256 _amount0, int256 _amount1) {
                     // assert that it meets the dust threshold requirement
                     vm.assume(
-                        (_amount0 > 50 && _amount0 < uint128(type(int128).max)) ||
-                            (_amount1 > 50 && _amount1 < uint128(type(int128).max))
+                        (-_amount0 > 50 && -_amount0 < type(int128).max) ||
+                            (-_amount1 > 50 && -_amount1 < type(int128).max)
                     );
 
                     if (tokenType == 1) {
-                        itm0 += int128(uint128(_amount0));
+                        itm0 += int128(-_amount0);
                     } else {
-                        itm1 += int128(uint128(_amount1));
+                        itm1 += int128(-_amount1);
                     }
                 } catch {
                     vm.assume(false); // invalid position, discard
                 }
             } else {
-                pool.burn(legLowerTick, legUpperTick, uint128(liquidity));
+                address _caller = caller;
+                V4RouterSimple(address(sfpm)).modifyLiquidityWithSalt(
+                    address(0),
+                    poolKey,
+                    legLowerTick,
+                    legUpperTick,
+                    int256(liquidity),
+                    keccak256(
+                        abi.encodePacked(
+                            poolKey.toId(),
+                            _caller,
+                            tokenType,
+                            legLowerTick,
+                            legUpperTick
+                        )
+                    )
+                );
             }
         }
 

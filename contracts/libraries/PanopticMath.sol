@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 // Interfaces
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
+import {IV3CompatibleOracle} from "@interfaces/IV3CompatibleOracle.sol";
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
 import {Errors} from "@libraries/Errors.sol";
@@ -15,6 +15,7 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {LeftRightUnsigned, LeftRightSigned} from "@types/LeftRight.sol";
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 import {TokenId} from "@types/TokenId.sol";
+import {PoolId} from "v4-core/types/PoolId.sol";
 
 /// @title Compute general math quantities relevant to Panoptic and AMM pool management.
 /// @notice Contains Panoptic-specific helpers and math functions.
@@ -32,27 +33,23 @@ library PanopticMath {
                               MATH HELPERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Given an address to a Uniswap V3 pool, return its 64-bit ID as used in the `TokenId` of Panoptic.
+    /// @notice Given a 256-bit Uniswap V4 pool ID (hash) and the corresponding `tickSpacing`, return its 64-bit ID as used in the `TokenId` of Panoptic.
     // Example:
-    //      the 64 bits are the 48 *last* (most significant) bits - and thus corresponds to the *first* 12 hex characters (reading left to right)
-    //      of the Uniswap V3 pool address, with the tickSpacing written in the highest 16 bits (i.e, max tickSpacing is 32768)
+    //      [16-bit tickSpacing][last 48 bits of Uniswap V4 pool ID] = poolId
     //      e.g.:
-    //        univ3pool   = 0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8
+    //        idV4        = 0x9c33e1937fe23c3ff82d7725f2bb5af696db1c89a9b8cae141cb0e986847638a
     //        tickSpacing = 60
     //      the returned id is then:
-    //        poolPattern = 0x00008ad599c3A0ff
+    //        poolPattern = 0x0000e986847638a
     //        tickSpacing = 0x003c000000000000    +
     //        --------------------------------------------
-    //        poolId      = 0x003c8ad599c3A0ff
-    //
-    /// @param univ3pool The address of the Uniswap V3 pool to get the ID of
-    /// @return A uint64 representing a fingerprint of the Uniswap V3 pool address
-    function getPoolId(address univ3pool) internal view returns (uint64) {
+    //        poolId      = 0x003ce986847638a
+    /// @param idV4 The 256-bit Uniswap V4 pool ID
+    /// @param tickSpacing The tick spacing of the Uniswap V4 pool identified by `idV4`
+    /// @return A fingerprint representing the Uniswap V4 pool
+    function getPoolId(PoolId idV4, int24 tickSpacing) internal pure returns (uint64) {
         unchecked {
-            int24 tickSpacing = IUniswapV3Pool(univ3pool).tickSpacing();
-            uint64 poolId = uint64(uint160(univ3pool) >> 112);
-            poolId += uint64(uint24(tickSpacing)) << 48;
-            return poolId;
+            return uint48(uint256(PoolId.unwrap(idV4))) + (uint64(uint24(tickSpacing)) << 48);
         }
     }
 
@@ -93,23 +90,25 @@ library PanopticMath {
         }
     }
 
-    /// @notice Converts `fee` to a string with "bps" appended.
+    /// @notice Converts `fee` to a string with "bps" appended, or DYNAMIC if "fee" is equivalent to `0x800000`.
     /// @dev The lowest supported value of `fee` is 1 (`="0.01bps"`).
     /// @param fee The fee to convert to a string (in hundredths of basis points)
     /// @return Stringified version of `fee` with "bps" appended
     function uniswapFeeToString(uint24 fee) internal pure returns (string memory) {
         return
-            string.concat(
-                Strings.toString(fee / 100),
-                fee % 100 == 0
-                    ? ""
-                    : string.concat(
-                        ".",
-                        Strings.toString((fee / 10) % 10),
-                        Strings.toString(fee % 10)
-                    ),
-                "bps"
-            );
+            fee == 0x800000
+                ? "DYNAMIC"
+                : string.concat(
+                    Strings.toString(fee / 100),
+                    fee % 100 == 0
+                        ? ""
+                        : string.concat(
+                            ".",
+                            Strings.toString((fee / 10) % 10),
+                            Strings.toString(fee % 10)
+                        ),
+                    "bps"
+                );
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -147,21 +146,19 @@ library PanopticMath {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Computes various oracle prices corresponding to a Uniswap pool.
-    /// @param univ3pool The Uniswap pool to get the observations from
+    /// @param oracleContract The external oracle contract to retrieve observations from
     /// @param miniMedian The packed structure representing the sorted 8-slot queue of internal median observations
-    /// @return currentTick The current tick in the Uniswap pool (as returned in slot0)
     /// @return fastOracleTick The fast oracle tick computed as the median of the past N observations in the Uniswap Pool
     /// @return slowOracleTick The slow oracle tick as tracked by `s_miniMedian`
     /// @return latestObservation The latest observation from the Uniswap pool (price at the end of the last block)
-    /// @return medianData the updated value for `s_miniMedian` (returns 0 if not enough time has passed since last observation)
+    /// @return medianData The updated value for `s_miniMedian` (returns 0 if not enough time has passed since last observation)
     function getOracleTicks(
-        IUniswapV3Pool univ3pool,
+        IV3CompatibleOracle oracleContract,
         uint256 miniMedian
     )
         external
         view
         returns (
-            int24 currentTick,
             int24 fastOracleTick,
             int24 slowOracleTick,
             int24 latestObservation,
@@ -171,11 +168,10 @@ library PanopticMath {
         uint16 observationIndex;
         uint16 observationCardinality;
 
-        IUniswapV3Pool _univ3pool = univ3pool;
-        (, currentTick, observationIndex, observationCardinality, , , ) = univ3pool.slot0();
+        (, , observationIndex, observationCardinality, , , ) = oracleContract.slot0();
 
         (fastOracleTick, latestObservation) = computeMedianObservedPrice(
-            _univ3pool,
+            oracleContract,
             observationIndex,
             observationCardinality,
             Constants.FAST_ORACLE_CARDINALITY,
@@ -184,7 +180,7 @@ library PanopticMath {
 
         if (Constants.SLOW_ORACLE_UNISWAP_MODE) {
             (slowOracleTick, ) = computeMedianObservedPrice(
-                _univ3pool,
+                oracleContract,
                 observationIndex,
                 observationCardinality,
                 Constants.SLOW_ORACLE_CARDINALITY,
@@ -196,19 +192,19 @@ library PanopticMath {
                 observationCardinality,
                 Constants.MEDIAN_PERIOD,
                 miniMedian,
-                _univ3pool
+                oracleContract
             );
         }
     }
 
-    /// @notice Returns the median of the last `cardinality` average prices over `period` observations from `univ3pool`.
+    /// @notice Returns the median of the last `cardinality` average prices over `period` observations from `oracleContract`.
     /// @dev Used when we need a manipulation-resistant TWAP price.
-    /// @dev Uniswap observations snapshot the closing price of the last block before the first interaction of a given block.
+    /// @dev oracle observations snapshot the closing price of the last block before the first interaction of a given block.
     /// @dev The maximum frequency of observations is 1 per block, but there is no guarantee that the pool will be observed at every block.
     /// @dev Each period has a minimum length of blocktime * period, but may be longer if the Uniswap pool is relatively inactive.
     /// @dev The final price used in the array (of length `cardinality`) is the average of all observations comprising `period` (which is itself a number of observations).
     /// @dev Thus, the minimum total time window is `cardinality` * `period` * `blocktime`.
-    /// @param univ3pool The Uniswap pool to get the median observation from
+    /// @param oracleContract The external oracle contract to retrieve observations from
     /// @param observationIndex The index of the last observation in the pool
     /// @param observationCardinality The number of observations in the pool
     /// @param cardinality The number of `periods` to in the median price array, should be odd
@@ -216,7 +212,7 @@ library PanopticMath {
     /// @return The median of `cardinality` observations spaced by `period` in the Uniswap pool
     /// @return The latest observation in the Uniswap pool
     function computeMedianObservedPrice(
-        IUniswapV3Pool univ3pool,
+        IV3CompatibleOracle oracleContract,
         uint256 observationIndex,
         uint256 observationCardinality,
         uint256 cardinality,
@@ -228,7 +224,7 @@ library PanopticMath {
             uint256[] memory timestamps = new uint256[](cardinality + 1);
             // get the last "cardinality" timestamps/tickCumulatives (if observationIndex < cardinality, the index will wrap back from observationCardinality)
             for (uint256 i = 0; i < cardinality + 1; ++i) {
-                (timestamps[i], tickCumulatives[i], , ) = univ3pool.observations(
+                (timestamps[i], tickCumulatives[i], , ) = oracleContract.observations(
                     uint256(
                         (int256(observationIndex) - int256(i * period)) +
                             int256(observationCardinality)
@@ -250,12 +246,12 @@ library PanopticMath {
     }
 
     /// @notice Takes a packed structure representing a sorted 8-slot queue of ticks and returns the median of those values and an updated queue if another observation is warranted.
-    /// @dev Also inserts the latest Uniswap observation into the buffer, resorts, and returns if the last entry is at least `period` seconds old.
+    /// @dev Also inserts the latest oracle observation into the buffer, resorts, and returns if the last entry is at least `period` seconds old.
     /// @param observationIndex The index of the last observation in the Uniswap pool
     /// @param observationCardinality The number of observations in the Uniswap pool
     /// @param period The minimum time in seconds that must have passed since the last observation was inserted into the buffer
     /// @param medianData The packed structure representing the sorted 8-slot queue of ticks
-    /// @param univ3pool The Uniswap pool to retrieve observations from
+    /// @param oracleContract The external oracle contract to retrieve observations from
     /// @return medianTick The median of the provided 8-slot queue of ticks in `medianData`
     /// @return updatedMedianData The updated 8-slot queue of ticks with the latest observation inserted if the last entry is at least `period` seconds old (returns 0 otherwise)
     function computeInternalMedian(
@@ -263,7 +259,7 @@ library PanopticMath {
         uint256 observationCardinality,
         uint256 period,
         uint256 medianData,
-        IUniswapV3Pool univ3pool
+        IV3CompatibleOracle oracleContract
     ) public view returns (int24 medianTick, uint256 updatedMedianData) {
         unchecked {
             // return the average of the rank 3 and 4 values
@@ -276,13 +272,16 @@ library PanopticMath {
             if (block.timestamp >= uint256(uint40(medianData >> 216)) + period) {
                 int24 lastObservedTick;
                 {
-                    (uint256 timestamp_old, int56 tickCumulative_old, , ) = univ3pool.observations(
-                        uint256(
-                            int256(observationIndex) - int256(1) + int256(observationCardinality)
-                        ) % observationCardinality
-                    );
+                    (uint256 timestamp_old, int56 tickCumulative_old, , ) = oracleContract
+                        .observations(
+                            uint256(
+                                int256(observationIndex) -
+                                    int256(1) +
+                                    int256(observationCardinality)
+                            ) % observationCardinality
+                        );
 
-                    (uint256 timestamp_last, int56 tickCumulative_last, , ) = univ3pool
+                    (uint256 timestamp_last, int56 tickCumulative_last, , ) = oracleContract
                         .observations(observationIndex);
                     lastObservedTick = int24(
                         (tickCumulative_last - tickCumulative_old) /
@@ -325,25 +324,28 @@ library PanopticMath {
         }
     }
 
-    /// @notice Computes the twap of a Uniswap V3 pool using data from its oracle.
+    /// @notice Computes a TWAP price over `twapWindow` on a Uniswap V3-style observation oracle.
     /// @dev Note that our definition of TWAP differs from a typical mean of prices over a time window.
     /// @dev We instead observe the average price over a series of time intervals, and define the TWAP as the median of those averages.
-    /// @param univ3pool The Uniswap pool from which to compute the TWAP
+    /// @param oracleContract The external oracle contract to retrieve observations from
     /// @param twapWindow The time window to compute the TWAP over
     /// @return The final calculated TWAP tick
-    function twapFilter(IUniswapV3Pool univ3pool, uint32 twapWindow) external view returns (int24) {
+    function twapFilter(
+        IV3CompatibleOracle oracleContract,
+        uint32 twapWindow
+    ) external view returns (int24) {
         uint32[] memory secondsAgos = new uint32[](20);
 
         int256[] memory twapMeasurement = new int256[](19);
 
         unchecked {
-            // construct the time stots
+            // construct the time slots
             for (uint256 i = 0; i < 20; ++i) {
                 secondsAgos[i] = uint32(((i + 1) * twapWindow) / 20);
             }
 
             // observe the tickCumulative at the 20 pre-defined time slots
-            (int56[] memory tickCumulatives, ) = univ3pool.observe(secondsAgos);
+            (int56[] memory tickCumulatives, ) = oracleContract.observe(secondsAgos);
 
             // compute the average tick per 30s window
             for (uint256 i = 0; i < 19; ++i) {
@@ -365,7 +367,7 @@ library PanopticMath {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice For a given option position (`tokenId`), leg index within that position (`legIndex`), and `positionSize` get the tick range spanned and its
-    /// liquidity (share ownership) in the Uniswap V3 pool; this is a liquidity chunk.
+    /// liquidity (share ownership) in the Uniswap V4 pool; this is a liquidity chunk.
     //          Liquidity chunk  (defined by tick upper, tick lower, and its size/amount: the liquidity)
     //   liquidity    │
     //         ▲      │
@@ -374,7 +376,7 @@ library PanopticMath {
     //         │  │       │
     //         │  │       │
     //         └──┴───────┴────► price
-    //         Uniswap V3 Pool
+    //         Uniswap V4 Pool
     /// @param tokenId The option position id
     /// @param legIndex The leg index of the option position, can be {0,1,2,3}
     /// @param positionSize The number of contracts held by this leg
@@ -387,10 +389,10 @@ library PanopticMath {
         // get the tick range for this leg
         (int24 tickLower, int24 tickUpper) = tokenId.asTicks(legIndex);
 
-        // Get the amount of liquidity owned by this leg in the Uniswap V3 pool in the above tick range
+        // Get the amount of liquidity owned by this leg in the Uniswap V4 pool in the above tick range
         // Background:
         //
-        //  In Uniswap V3, the amount of liquidity received for a given amount of token0 when the price is
+        //  In Uniswap V4, the amount of liquidity received for a given amount of token0 when the price is
         //  not in range is given by:
         //     Liquidity = amount0 * (sqrt(upper) * sqrt(lower)) / (sqrt(upper) - sqrt(lower))
         //  For token1, it is given by:
@@ -400,7 +402,7 @@ library PanopticMath {
         //  In TradFi, the asset is always cash and selling a $1000 put requires the user to lock $1000, and selling
         //  a call requires the user to lock 1 unit of asset.
         //
-        //  Because Uniswap V3 chooses token0 and token1 from the alphanumeric order, there is no consistency as to whether token0 is
+        //  Because Uniswap V4 chooses token0 and token1 from the alphanumeric order, there is no consistency as to whether token0 is
         //  stablecoin, ETH, or an ERC20. Some pools may want ETH to be the asset (e.g. ETH-DAI) and some may wish the stablecoin to
         //  be the asset (e.g. DAI-ETH) so that K asset is moved for puts and 1 asset is moved for calls.
         //  But since the convention is to force the order always we have no say in this.
@@ -425,7 +427,7 @@ library PanopticMath {
     /// @notice Extract the tick range specified by `strike` and `width` for the given `tickSpacing`, if valid.
     /// @param strike The strike price of the option
     /// @param width The width of the option
-    /// @param tickSpacing The tick spacing of the underlying Uniswap V3 pool
+    /// @param tickSpacing The tick spacing of the underlying Uniswap V4 pool
     /// @return tickLower The lower tick of the liquidity chunk
     /// @return tickUpper The upper tick of the liquidity chunk
     function getTicks(
@@ -433,26 +435,19 @@ library PanopticMath {
         int24 width,
         int24 tickSpacing
     ) internal pure returns (int24 tickLower, int24 tickUpper) {
-        unchecked {
-            // The max/min ticks that can be initialized are the closest multiple of tickSpacing to the actual max/min tick abs()=887272
-            // Dividing and multiplying by tickSpacing rounds down and forces the tick to be a multiple of tickSpacing
-            int24 minTick = (Constants.MIN_V3POOL_TICK / tickSpacing) * tickSpacing;
-            int24 maxTick = (Constants.MAX_V3POOL_TICK / tickSpacing) * tickSpacing;
+        (int24 rangeDown, int24 rangeUp) = PanopticMath.getRangesFromStrike(width, tickSpacing);
 
-            (int24 rangeDown, int24 rangeUp) = PanopticMath.getRangesFromStrike(width, tickSpacing);
+        (tickLower, tickUpper) = (strike - rangeDown, strike + rangeUp);
 
-            (tickLower, tickUpper) = (strike - rangeDown, strike + rangeUp);
-
-            // Revert if the upper/lower ticks are not multiples of tickSpacing
-            // Revert if the tick range extends from the strike outside of the valid tick range
-            // These are invalid states, and would revert silently later in `univ3Pool.mint`
-            if (
-                tickLower % tickSpacing != 0 ||
-                tickUpper % tickSpacing != 0 ||
-                tickLower < minTick ||
-                tickUpper > maxTick
-            ) revert Errors.TicksNotInitializable();
-        }
+        // Revert if the upper/lower ticks are not multiples of tickSpacing
+        // Revert if the tick range extends from the strike outside of the valid tick range
+        // These are invalid states, and would revert later on in the Uniswap pool
+        if (
+            tickLower % tickSpacing != 0 ||
+            tickUpper % tickSpacing != 0 ||
+            tickLower < Constants.MIN_V4POOL_TICK ||
+            tickUpper > Constants.MAX_V4POOL_TICK
+        ) revert Errors.TicksNotInitializable();
     }
 
     /// @notice Returns the distances of the upper and lower ticks from the strike for a position with the given width and tickSpacing.

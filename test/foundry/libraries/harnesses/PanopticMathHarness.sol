@@ -4,13 +4,15 @@ pragma solidity ^0.8.24;
 // Internal
 import {PanopticMath} from "@libraries/PanopticMath.sol";
 // Uniswap
-import {IUniswapV3Pool} from "v3-core/interfaces/IUniswapV3Pool.sol";
+import {IV3CompatibleOracle} from "@interfaces/IV3CompatibleOracle.sol";
 // Types
 import {LiquidityChunk} from "@types/LiquidityChunk.sol";
 import {TokenId} from "@types/TokenId.sol";
 import {LeftRightUnsigned, LeftRightSigned} from "@types/LeftRight.sol";
 
 import "forge-std/Test.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {PoolId} from "v4-core/types/PoolId.sol";
 
 /// @title PanopticMathHarness: A harness to expose the PanopticMath library for code coverage analysis.
 /// @notice Replicates the interface of the PanopticMath library, passing through any function calls
@@ -44,8 +46,8 @@ contract PanopticMathHarness is Test {
         return (tickLower, tickUpper);
     }
 
-    function getPoolId(address univ3pool) public view returns (uint64) {
-        uint64 poolId = PanopticMath.getPoolId(univ3pool);
+    function getPoolId(PoolId idV4, int24 tickSpacing) public pure returns (uint64) {
+        uint64 poolId = PanopticMath.getPoolId(idV4, tickSpacing);
         return poolId;
     }
 
@@ -77,13 +79,16 @@ contract PanopticMathHarness is Test {
         return newHash;
     }
 
-    function twapFilter(IUniswapV3Pool univ3pool, uint32 twapWindow) public view returns (int24) {
+    function twapFilter(
+        IV3CompatibleOracle univ3pool,
+        uint32 twapWindow
+    ) public view returns (int24) {
         int24 twapTick = PanopticMath.twapFilter(univ3pool, twapWindow);
         return twapTick;
     }
 
     function computeMedianObservedPrice(
-        IUniswapV3Pool univ3pool,
+        IV3CompatibleOracle univ3pool,
         uint256 observationIndex,
         uint256 observationCardinality,
         uint256 cardinality,

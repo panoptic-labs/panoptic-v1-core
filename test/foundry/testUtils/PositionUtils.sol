@@ -14,6 +14,16 @@ import {PanopticMath} from "@libraries/PanopticMath.sol";
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
 import {Math} from "@libraries/Math.sol";
 import {LeftRightUnsigned, LeftRightSigned} from "@types/LeftRight.sol";
+import {PoolId} from "v4-core/types/PoolId.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+import {V4StateReader} from "@libraries/V4StateReader.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
+import {Currency} from "v4-core/types/Currency.sol";
+import {PoolManager} from "v4-core/PoolManager.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
+import {V4RouterSimple} from "../testUtils/V4RouterSimple.sol";
 
 contract MiniPositionManager {
     struct CallbackData {
@@ -677,15 +687,13 @@ contract PositionUtils is Test {
         vm.revertTo(snapshot);
     }
 
+    // UPD
     function simulateSwap(
-        IUniswapV3Pool uniPool,
+        PoolKey memory key,
         int24 tickLower,
         int24 tickUpper,
         uint128 liquidity,
-        ISwapRouter router,
-        address token0,
-        address token1,
-        uint24 fee,
+        V4RouterSimple routerV4,
         bool zeroForOne,
         int256 amountSpecified
     ) public returns (uint256, uint256) {
@@ -693,159 +701,67 @@ contract PositionUtils is Test {
 
         vm.startPrank(address(0x123456789));
 
-        deal(token0, address(0x123456789), type(uint128).max);
-        deal(token1, address(0x123456789), type(uint128).max);
+        routerV4.modifyLiquidity(address(0), key, tickLower, tickUpper, int128(liquidity));
 
-        MiniPositionManager pm = new MiniPositionManager();
+        (int256 delta0, int256 delta1) = routerV4.swap(
+            address(0),
+            key,
+            amountSpecified,
+            zeroForOne
+        );
 
-        IERC20Partial(token0).approve(address(router), type(uint256).max);
-        IERC20Partial(token1).approve(address(router), type(uint256).max);
-        IERC20Partial(token0).approve(address(pm), type(uint256).max);
-        IERC20Partial(token1).approve(address(pm), type(uint256).max);
-
-        pm.mintLiquidity(uniPool, tickLower, tickUpper, liquidity, address(0x123456789));
-
-        if (amountSpecified > 0) {
-            uint256 amountOut = router.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                    tokenIn: zeroForOne ? token0 : token1,
-                    tokenOut: zeroForOne ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456789),
-                    deadline: block.timestamp,
-                    amountIn: uint256(amountSpecified),
-                    amountOutMinimum: 0,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-
-            vm.revertTo(0);
-
-            return
-                zeroForOne
-                    ? (uint256(amountSpecified), amountOut)
-                    : (amountOut, uint256(amountSpecified));
-        } else {
-            uint256 amountIn = router.exactOutputSingle(
-                ISwapRouter.ExactOutputSingleParams({
-                    tokenIn: zeroForOne ? token0 : token1,
-                    tokenOut: zeroForOne ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456789),
-                    deadline: block.timestamp,
-                    amountOut: uint256(-amountSpecified),
-                    amountInMaximum: type(uint256).max,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-
-            vm.revertTo(0);
-
-            return
-                zeroForOne
-                    ? (amountIn, uint256(-amountSpecified))
-                    : (uint256(-amountSpecified), amountIn);
-        }
+        vm.revertTo(0);
+        return (uint256(Math.abs(delta0)), uint256(Math.abs(delta1)));
     }
 
+    // UPD
     function simulateSwap(
-        IUniswapV3Pool uniPool,
+        PoolKey memory key,
         int24 tickLower,
         int24 tickUpper,
         int128 liquidity,
-        ISwapRouter router,
-        address token0,
-        address token1,
-        uint24 fee,
+        bytes32 positionKey,
+        V4RouterSimple routerV4,
         bool zeroForOne,
         int256 amountSpecified
-    ) public returns (uint256, uint256) {
+    ) external returns (uint256, uint256) {
         snap = vm.snapshot();
 
-        (, caller, ) = vm.readCallers();
-
-        deal(token0, address(caller), type(uint128).max);
-        deal(token1, address(caller), type(uint128).max);
-
-        MiniPositionManager pm = new MiniPositionManager();
+        vm.startPrank(address(0x123456789));
 
         // make it so we can burn existing liq from caller
-        vm.etch(caller, address(pm).code);
+        vm.etch(msg.sender, address(routerV4).code);
 
-        IERC20Partial(token0).approve(address(router), type(uint256).max);
-        IERC20Partial(token1).approve(address(router), type(uint256).max);
-        IERC20Partial(token0).approve(address(caller), type(uint256).max);
-        IERC20Partial(token1).approve(address(caller), type(uint256).max);
+        IERC20Partial(Currency.unwrap(key.currency0)).approve(msg.sender, type(uint256).max);
+        IERC20Partial(Currency.unwrap(key.currency1)).approve(msg.sender, type(uint256).max);
 
-        if (liquidity > 0) {
-            MiniPositionManager(caller).mintLiquidity(
-                uniPool,
-                tickLower,
-                tickUpper,
-                uint128(liquidity),
-                caller
-            );
-        } else {
-            MiniPositionManager(caller).burnLiquidity(
-                uniPool,
-                tickLower,
-                tickUpper,
-                uint128(-liquidity)
-            );
-        }
+        V4RouterSimple(msg.sender).modifyLiquidityWithSalt(
+            address(0),
+            key,
+            tickLower,
+            tickUpper,
+            liquidity,
+            positionKey
+        );
 
-        if (amountSpecified > 0) {
-            uint256 amountOut = router.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                    tokenIn: zeroForOne ? token0 : token1,
-                    tokenOut: zeroForOne ? token1 : token0,
-                    fee: fee,
-                    recipient: caller,
-                    deadline: block.timestamp,
-                    amountIn: uint256(amountSpecified),
-                    amountOutMinimum: 0,
-                    sqrtPriceLimitX96: 0
-                })
-            );
+        (int256 delta0, int256 delta1) = routerV4.swap(
+            address(0),
+            key,
+            amountSpecified,
+            zeroForOne
+        );
 
-            vm.revertTo(snap);
+        vm.revertTo(snap);
 
-            return
-                zeroForOne
-                    ? (uint256(amountSpecified), amountOut)
-                    : (amountOut, uint256(amountSpecified));
-        } else {
-            uint256 amountIn = router.exactOutputSingle(
-                ISwapRouter.ExactOutputSingleParams({
-                    tokenIn: zeroForOne ? token0 : token1,
-                    tokenOut: zeroForOne ? token1 : token0,
-                    fee: fee,
-                    recipient: caller,
-                    deadline: block.timestamp,
-                    amountOut: uint256(-amountSpecified),
-                    amountInMaximum: type(uint256).max,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-
-            vm.revertTo(snap);
-
-            return
-                zeroForOne
-                    ? (amountIn, uint256(-amountSpecified))
-                    : (uint256(-amountSpecified), amountIn);
-        }
+        return (uint256(Math.abs(delta0)), uint256(Math.abs(delta1)));
     }
 
     function simulateSwap(
-        IUniswapV3Pool uniPool,
+        PoolKey memory key,
         int24[2] memory tickLower,
         int24[2] memory tickUpper,
         uint128[2] memory liquidity,
-        ISwapRouter router,
-        address token0,
-        address token1,
-        uint24 fee,
+        V4RouterSimple routerV4,
         bool zeroForOne,
         int256 amountSpecified
     ) public returns (int256, int256) {
@@ -853,162 +769,69 @@ contract PositionUtils is Test {
 
         vm.startPrank(address(0x123456789));
 
-        deal(token0, address(0x123456789), type(uint128).max);
-        deal(token1, address(0x123456789), type(uint128).max);
+        routerV4.modifyLiquidity(address(0), key, tickLower[0], tickUpper[0], int128(liquidity[0]));
+        routerV4.modifyLiquidity(address(0), key, tickLower[1], tickUpper[1], int128(liquidity[1]));
 
-        MiniPositionManager pm = new MiniPositionManager();
+        (int256 delta0, int256 delta1) = routerV4.swap(
+            address(0),
+            key,
+            amountSpecified,
+            zeroForOne
+        );
 
-        IERC20Partial(token0).approve(address(router), type(uint256).max);
-        IERC20Partial(token1).approve(address(router), type(uint256).max);
-        IERC20Partial(token0).approve(address(pm), type(uint256).max);
-        IERC20Partial(token1).approve(address(pm), type(uint256).max);
+        vm.revertTo(0);
 
-        pm.mintLiquidity(uniPool, tickLower[0], tickUpper[0], liquidity[0], address(0x123456789));
-        pm.mintLiquidity(uniPool, tickLower[1], tickUpper[1], liquidity[1], address(0x123456789));
-
-        if (amountSpecified > 0) {
-            int256 amountOut = int256(
-                router.exactInputSingle(
-                    ISwapRouter.ExactInputSingleParams({
-                        tokenIn: zeroForOne ? token0 : token1,
-                        tokenOut: zeroForOne ? token1 : token0,
-                        fee: fee,
-                        recipient: address(0x123456789),
-                        deadline: block.timestamp,
-                        amountIn: uint256(amountSpecified),
-                        amountOutMinimum: 0,
-                        sqrtPriceLimitX96: 0
-                    })
-                )
-            );
-
-            vm.revertTo(0);
-
-            return zeroForOne ? (amountSpecified, -amountOut) : (-amountOut, amountSpecified);
-        } else {
-            int256 amountIn = int256(
-                router.exactOutputSingle(
-                    ISwapRouter.ExactOutputSingleParams({
-                        tokenIn: zeroForOne ? token0 : token1,
-                        tokenOut: zeroForOne ? token1 : token0,
-                        fee: fee,
-                        recipient: address(0x123456789),
-                        deadline: block.timestamp,
-                        amountOut: uint256(-amountSpecified),
-                        amountInMaximum: type(uint256).max,
-                        sqrtPriceLimitX96: 0
-                    })
-                )
-            );
-
-            vm.revertTo(0);
-
-            return zeroForOne ? (amountIn, amountSpecified) : (amountSpecified, amountIn);
-        }
+        return (-delta0, -delta1);
     }
 
     function simulateSwapLong(
-        IUniswapV3Pool uniPool,
+        PoolKey memory key,
         int24[2] memory tickLower,
         int24[2] memory tickUpper,
         int128[2] memory liquidity,
-        ISwapRouter router,
-        address token0,
-        address token1,
-        uint24 fee,
+        bytes32[2] memory positionKeys,
+        V4RouterSimple routerV4,
         bool zeroForOne,
         int256 amountSpecified
-    ) public returns (int256, int256) {
+    ) external returns (int256, int256) {
         vm.snapshot();
 
-        (, caller, ) = vm.readCallers();
+        vm.startPrank(address(0x123456789));
 
-        deal(token0, address(caller), type(uint128).max);
-        deal(token1, address(caller), type(uint128).max);
-
-        MiniPositionManager pm = new MiniPositionManager();
+        IERC20Partial(Currency.unwrap(key.currency0)).approve(msg.sender, type(uint256).max);
+        IERC20Partial(Currency.unwrap(key.currency1)).approve(msg.sender, type(uint256).max);
 
         // make it so we can burn existing liq from caller
-        vm.etch(caller, address(pm).code);
+        vm.etch(msg.sender, address(routerV4).code);
 
-        IERC20Partial(token0).approve(address(router), type(uint256).max);
-        IERC20Partial(token1).approve(address(router), type(uint256).max);
-        IERC20Partial(token0).approve(address(caller), type(uint256).max);
-        IERC20Partial(token1).approve(address(caller), type(uint256).max);
+        V4RouterSimple(msg.sender).modifyLiquidityWithSalt(
+            address(0),
+            key,
+            tickLower[0],
+            tickUpper[0],
+            liquidity[0],
+            positionKeys[0]
+        );
 
-        if (liquidity[0] > 0) {
-            MiniPositionManager(caller).mintLiquidity(
-                uniPool,
-                tickLower[0],
-                tickUpper[0],
-                uint128(liquidity[0]),
-                caller
-            );
-        } else {
-            MiniPositionManager(caller).burnLiquidity(
-                uniPool,
-                tickLower[0],
-                tickUpper[0],
-                uint128(-liquidity[0])
-            );
-        }
+        V4RouterSimple(msg.sender).modifyLiquidityWithSalt(
+            address(0),
+            key,
+            tickLower[1],
+            tickUpper[1],
+            liquidity[1],
+            positionKeys[1]
+        );
 
-        if (liquidity[1] > 0) {
-            MiniPositionManager(caller).mintLiquidity(
-                uniPool,
-                tickLower[1],
-                tickUpper[1],
-                uint128(liquidity[1]),
-                caller
-            );
-        } else {
-            MiniPositionManager(caller).burnLiquidity(
-                uniPool,
-                tickLower[1],
-                tickUpper[1],
-                uint128(-liquidity[1])
-            );
-        }
+        (int256 delta0, int256 delta1) = V4RouterSimple(msg.sender).swap(
+            address(0),
+            key,
+            amountSpecified,
+            zeroForOne
+        );
 
-        if (amountSpecified > 0) {
-            int256 amountOut = int256(
-                router.exactInputSingle(
-                    ISwapRouter.ExactInputSingleParams({
-                        tokenIn: zeroForOne ? token0 : token1,
-                        tokenOut: zeroForOne ? token1 : token0,
-                        fee: fee,
-                        recipient: caller,
-                        deadline: block.timestamp,
-                        amountIn: uint256(amountSpecified),
-                        amountOutMinimum: 0,
-                        sqrtPriceLimitX96: 0
-                    })
-                )
-            );
+        vm.revertTo(0);
 
-            vm.revertTo(0);
-
-            return zeroForOne ? (amountSpecified, -amountOut) : (-amountOut, amountSpecified);
-        } else {
-            int256 amountIn = int256(
-                router.exactOutputSingle(
-                    ISwapRouter.ExactOutputSingleParams({
-                        tokenIn: zeroForOne ? token0 : token1,
-                        tokenOut: zeroForOne ? token1 : token0,
-                        fee: fee,
-                        recipient: caller,
-                        deadline: block.timestamp,
-                        amountOut: uint256(-amountSpecified),
-                        amountInMaximum: type(uint256).max,
-                        sqrtPriceLimitX96: 0
-                    })
-                )
-            );
-
-            vm.revertTo(0);
-
-            return zeroForOne ? (amountIn, amountSpecified) : (amountSpecified, amountIn);
-        }
+        return (-delta0, -delta1);
     }
 
     function simulateSwapSingleBurn(
@@ -1104,198 +927,74 @@ contract PositionUtils is Test {
         }
     }
 
+    // UPD
     function simulateSwap(
-        IUniswapV3Pool uniPool,
+        PoolKey memory key,
         int24 tickLower,
         int24 tickUpper,
         uint128 liquidity,
-        ISwapRouter router,
-        address token0,
-        address token1,
-        uint24 fee,
+        V4RouterSimple routerV4,
         bool[2] memory zeroForOne,
         int256[2] memory amountSpecified
     ) public returns (uint256[2] memory amount0, uint256[2] memory amount1) {
         vm.startPrank(address(0x123456789));
 
-        deal(token0, address(0x123456789), type(uint128).max);
-        deal(token1, address(0x123456789), type(uint128).max);
+        routerV4.modifyLiquidity(address(0), key, tickLower, tickUpper, int128(liquidity));
 
-        MiniPositionManager pm = new MiniPositionManager();
+        (int256 delta0, int256 delta1) = routerV4.swap(
+            address(0),
+            key,
+            amountSpecified[0],
+            zeroForOne[0]
+        );
 
-        IERC20Partial(token0).approve(address(router), type(uint256).max);
-        IERC20Partial(token1).approve(address(router), type(uint256).max);
-        IERC20Partial(token0).approve(address(pm), type(uint256).max);
-        IERC20Partial(token1).approve(address(pm), type(uint256).max);
+        amount0[0] = uint256(Math.abs(delta0));
+        amount1[0] = uint256(Math.abs(delta1));
 
-        pm.mintLiquidity(uniPool, tickLower, tickUpper, liquidity, address(0x123456789));
+        routerV4.modifyLiquidity(address(0), key, tickLower, tickUpper, -int128(liquidity));
 
-        if (amountSpecified[0] > 0) {
-            uint256 amountOut = router.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                    tokenIn: zeroForOne[0] ? token0 : token1,
-                    tokenOut: zeroForOne[0] ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456789),
-                    deadline: block.timestamp,
-                    amountIn: uint256(amountSpecified[0]),
-                    amountOutMinimum: 0,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-            (amount0[0], amount1[0]) = zeroForOne[0]
-                ? (uint256(amountSpecified[0]), amountOut)
-                : (amountOut, uint256(amountSpecified[0]));
-        } else {
-            uint256 amountIn = router.exactOutputSingle(
-                ISwapRouter.ExactOutputSingleParams({
-                    tokenIn: zeroForOne[0] ? token0 : token1,
-                    tokenOut: zeroForOne[0] ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456789),
-                    deadline: block.timestamp,
-                    amountOut: uint256(-amountSpecified[0]),
-                    amountInMaximum: type(uint256).max,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-            (amount0[0], amount1[0]) = zeroForOne[0]
-                ? (amountIn, uint256(-amountSpecified[0]))
-                : (uint256(-amountSpecified[0]), amountIn);
-        }
+        (delta0, delta1) = routerV4.swap(address(0), key, amountSpecified[1], zeroForOne[1]);
 
-        pm.burnLiquidity(uniPool, tickLower, tickUpper, liquidity);
-
-        if (amountSpecified[1] > 0) {
-            uint256 amountOut = router.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                    tokenIn: zeroForOne[1] ? token0 : token1,
-                    tokenOut: zeroForOne[1] ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456789),
-                    deadline: block.timestamp,
-                    amountIn: uint256(amountSpecified[1]),
-                    amountOutMinimum: 0,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-            (amount0[1], amount1[1]) = zeroForOne[1]
-                ? (uint256(amountSpecified[1]), amountOut)
-                : (amountOut, uint256(amountSpecified[1]));
-        } else {
-            uint256 amountIn = router.exactOutputSingle(
-                ISwapRouter.ExactOutputSingleParams({
-                    tokenIn: zeroForOne[1] ? token0 : token1,
-                    tokenOut: zeroForOne[1] ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456789),
-                    deadline: block.timestamp,
-                    amountOut: uint256(-amountSpecified[1]),
-                    amountInMaximum: type(uint256).max,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-            (amount0[1], amount1[1]) = zeroForOne[1]
-                ? (amountIn, uint256(-amountSpecified[1]))
-                : (uint256(-amountSpecified[1]), amountIn);
-        }
+        amount0[1] = uint256(Math.abs(delta0));
+        amount1[1] = uint256(Math.abs(delta1));
     }
 
+    // UPD
     function simulateSwap(
-        IUniswapV3Pool uniPool,
+        PoolKey memory key,
         int24 tickLower,
         int24 tickUpper,
         uint128[2] memory liquidity,
-        ISwapRouter router,
-        address token0,
-        address token1,
-        uint24 fee,
+        V4RouterSimple routerV4,
         bool[2] memory zeroForOne,
         int256[2] memory amountSpecified
     ) public returns (uint256[2] memory amount0, uint256[2] memory amount1) {
-        MiniPositionManager pm = new MiniPositionManager();
+        vm.startPrank(address(0x123456789));
 
-        IERC20Partial(token0).approve(address(router), type(uint256).max);
-        IERC20Partial(token1).approve(address(router), type(uint256).max);
-        IERC20Partial(token0).approve(address(pm), type(uint256).max);
-        IERC20Partial(token1).approve(address(pm), type(uint256).max);
+        routerV4.modifyLiquidity(address(0), key, tickLower, tickUpper, int128(liquidity[0]));
 
-        pm.mintLiquidity(uniPool, tickLower, tickUpper, liquidity[0], address(0x123456));
+        (int256 delta0, int256 delta1) = routerV4.swap(
+            address(0),
+            key,
+            amountSpecified[0],
+            zeroForOne[0]
+        );
 
-        if (amountSpecified[0] > 0) {
-            uint256 amountOut = router.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                    tokenIn: zeroForOne[0] ? token0 : token1,
-                    tokenOut: zeroForOne[0] ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456),
-                    deadline: block.timestamp,
-                    amountIn: uint256(amountSpecified[0]),
-                    amountOutMinimum: 0,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-            (amount0[0], amount1[0]) = zeroForOne[0]
-                ? (uint256(amountSpecified[0]), amountOut)
-                : (amountOut, uint256(amountSpecified[0]));
-        } else {
-            uint256 amountIn = router.exactOutputSingle(
-                ISwapRouter.ExactOutputSingleParams({
-                    tokenIn: zeroForOne[0] ? token0 : token1,
-                    tokenOut: zeroForOne[0] ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456),
-                    deadline: block.timestamp,
-                    amountOut: uint256(-amountSpecified[0]),
-                    amountInMaximum: type(uint256).max,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-            (amount0[0], amount1[0]) = zeroForOne[0]
-                ? (amountIn, uint256(-amountSpecified[0]))
-                : (uint256(-amountSpecified[0]), amountIn);
-        }
+        amount0[0] = uint256(Math.abs(delta0));
+        amount1[0] = uint256(Math.abs(delta1));
 
-        pm.burnLiquidity(uniPool, tickLower, tickUpper, liquidity[1]);
+        routerV4.modifyLiquidity(address(0), key, tickLower, tickUpper, -int128(liquidity[1]));
 
-        if (amountSpecified[1] > 0) {
-            uint256 amountOut = router.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                    tokenIn: zeroForOne[1] ? token0 : token1,
-                    tokenOut: zeroForOne[1] ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456),
-                    deadline: block.timestamp,
-                    amountIn: uint256(amountSpecified[1]),
-                    amountOutMinimum: 0,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-            (amount0[1], amount1[1]) = zeroForOne[1]
-                ? (uint256(amountSpecified[1]), amountOut)
-                : (amountOut, uint256(amountSpecified[1]));
-        } else {
-            uint256 amountIn = router.exactOutputSingle(
-                ISwapRouter.ExactOutputSingleParams({
-                    tokenIn: zeroForOne[1] ? token0 : token1,
-                    tokenOut: zeroForOne[1] ? token1 : token0,
-                    fee: fee,
-                    recipient: address(0x123456),
-                    deadline: block.timestamp,
-                    amountOut: uint256(-amountSpecified[1]),
-                    amountInMaximum: type(uint256).max,
-                    sqrtPriceLimitX96: 0
-                })
-            );
-            (amount0[1], amount1[1]) = zeroForOne[1]
-                ? (amountIn, uint256(-amountSpecified[1]))
-                : (uint256(-amountSpecified[1]), amountIn);
-        }
+        (delta0, delta1) = routerV4.swap(address(0), key, amountSpecified[1], zeroForOne[1]);
+
+        amount0[1] = uint256(Math.abs(delta0));
+        amount1[1] = uint256(Math.abs(delta1));
     }
 
     // this only works if the position is in-range
     function accruePoolFeesInRange(
-        address uniPool,
+        IPoolManager manager,
+        PoolKey memory key,
         uint256 posLiq,
         uint256 posFees0,
         uint256 posFees1
@@ -1303,32 +1002,63 @@ contract PositionUtils is Test {
         uint256 feeGrowthAdd0X128 = FullMath.mulDiv(posFees0, 2 ** 128, posLiq);
         uint256 feeGrowthAdd1X128 = FullMath.mulDiv(posFees1, 2 ** 128, posLiq);
 
+        uint128 _liquidity = StateLibrary.getLiquidity(manager, key.toId());
         // distribute accrued fee amount to Uniswap pool
         deal(
-            IUniswapV3Pool(uniPool).token0(),
-            uniPool,
-            IERC20Partial(IUniswapV3Pool(uniPool).token0()).balanceOf(uniPool) +
-                (IUniswapV3Pool(uniPool).liquidity() * posFees0) /
+            Currency.unwrap(key.currency0),
+            address(manager),
+            IERC20Partial(Currency.unwrap(key.currency0)).balanceOf(address(manager)) +
+                (_liquidity * posFees0) /
                 posLiq
         );
         deal(
-            IUniswapV3Pool(uniPool).token1(),
-            uniPool,
-            IERC20Partial(IUniswapV3Pool(uniPool).token1()).balanceOf(uniPool) +
-                (IUniswapV3Pool(uniPool).liquidity() * posFees1) /
+            Currency.unwrap(key.currency1),
+            address(manager),
+            IERC20Partial(Currency.unwrap(key.currency1)).balanceOf(address(manager)) +
+                (_liquidity * posFees1) /
                 posLiq
         );
 
+        PoolId poolId = key.toId();
         // update global fees
         vm.store(
-            uniPool,
-            bytes32(uint256(1)),
-            bytes32(uint256(vm.load(uniPool, bytes32(uint256(1)))) + feeGrowthAdd0X128)
+            address(manager),
+            bytes32(
+                uint256(StateLibrary._getPoolStateSlot(poolId)) +
+                    StateLibrary.FEE_GROWTH_GLOBAL0_OFFSET
+            ),
+            bytes32(
+                uint256(
+                    vm.load(
+                        address(manager),
+                        bytes32(
+                            uint256(StateLibrary._getPoolStateSlot(poolId)) +
+                                StateLibrary.FEE_GROWTH_GLOBAL0_OFFSET
+                        )
+                    )
+                ) + feeGrowthAdd0X128
+            )
         );
+
         vm.store(
-            uniPool,
-            bytes32(uint256(2)),
-            bytes32(uint256(vm.load(uniPool, bytes32(uint256(2)))) + feeGrowthAdd1X128)
+            address(manager),
+            bytes32(
+                uint256(StateLibrary._getPoolStateSlot(poolId)) +
+                    StateLibrary.FEE_GROWTH_GLOBAL0_OFFSET +
+                    1
+            ),
+            bytes32(
+                uint256(
+                    vm.load(
+                        address(manager),
+                        bytes32(
+                            uint256(StateLibrary._getPoolStateSlot(poolId)) +
+                                StateLibrary.FEE_GROWTH_GLOBAL0_OFFSET +
+                                1
+                        )
+                    )
+                ) + feeGrowthAdd1X128
+            )
         );
     }
 
@@ -1432,12 +1162,12 @@ contract PositionUtils is Test {
         int256 assetDelta = convertToAssets(ct, shareDelta);
         vm.store(
             address(ct),
-            bytes32(uint256(7)),
+            bytes32(uint256(3)),
             bytes32(
                 uint256(
                     LeftRightSigned.unwrap(
                         LeftRightSigned
-                            .wrap(int256(uint256(vm.load(address(ct), bytes32(uint256(7))))))
+                            .wrap(int256(uint256(vm.load(address(ct), bytes32(uint256(3))))))
                             .add(LeftRightSigned.wrap(int256(uint256(uint128(int128(assetDelta))))))
                     )
                 )

@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {RevertingToken} from "solmate/test/utils/weird-tokens/RevertingToken.sol";
-import {ReturnsTwoToken} from "solmate/test/utils/weird-tokens/ReturnsTwoToken.sol";
-import {ReturnsFalseToken} from "solmate/test/utils/weird-tokens/ReturnsFalseToken.sol";
-import {MissingReturnToken} from "solmate/test/utils/weird-tokens/MissingReturnToken.sol";
-import {ReturnsTooMuchToken} from "solmate/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
-import {ReturnsGarbageToken} from "solmate/test/utils/weird-tokens/ReturnsGarbageToken.sol";
-import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
+import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
+import {RevertingToken} from "solmate/src/test/utils/weird-tokens/RevertingToken.sol";
+import {ReturnsTwoToken} from "solmate/src/test/utils/weird-tokens/ReturnsTwoToken.sol";
+import {ReturnsFalseToken} from "solmate/src/test/utils/weird-tokens/ReturnsFalseToken.sol";
+import {MissingReturnToken} from "solmate/src/test/utils/weird-tokens/MissingReturnToken.sol";
+import {ReturnsTooMuchToken} from "solmate/src/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
+import {ReturnsGarbageToken} from "solmate/src/test/utils/weird-tokens/ReturnsGarbageToken.sol";
+import {ReturnsTooLittleToken} from "solmate/src/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
 
-import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
+import {DSTestPlus} from "solmate/src/test/utils/DSTestPlus.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "@libraries/SafeTransferLib.sol";
 
 contract SafeTransferLibTest is DSTestPlus {
