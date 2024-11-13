@@ -1,0 +1,142 @@
+{
+  "env": {
+    "UNIV3_FACTORY": "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+  },
+  "dataContracts": [
+    {
+      "address": "0x00000000000142658e41964CBD294a7f731712fD",
+      "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a17e2a1f23d40a06028bb680b8",
+      "nonce": 0
+    },
+    {
+      "address": "0x0000000000014BE53913184E1B4585A059Ab0841",
+      "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a1e80b68d77649e9012e3c469c",
+      "nonce": 0
+    },
+    {
+      "address": "0x000000000001621A6649E38465B127693fFC5db8",
+      "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a1214a3ff2d33ac30206c172b0",
+      "nonce": 0
+    },
+    {
+      "address": "0x000000000001653c672601086c5135A8A8920CA8",
+      "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a1b48292a694a7c50041b0f508",
+      "nonce": 0
+    },
+    {
+      "address": "0x00000000000172Ea491d6b28ae9BC1c1468b6Abb",
+      "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a176942cd9507e38005aa96233",
+      "nonce": 0
+    },
+    {
+      "address": "0x0000000000017e67ED55A9b29e103C2f164Bff71",
+      "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a18147559955ca0003739cee54",
+      "nonce": 0
+    },
+    {
+      "address": "0x000000000001866C0708DA6574069c9D5D58b7c8",
+      "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a17deae15a2cacf003f38a77a5",
+      "nonce": 0
+    }
+  ],
+  "logicContracts": {
+    "FeesCalc": {
+      "path": "./contracts/libraries/FeesCalc.sol",
+      "deployment": {
+        "address": "0x0000000000019851AabFf4cd57DFC3e739F59757",
+        "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a162225be066ee9d03956fdb6e",
+        "nonce": 0
+      },
+      "optimizeRuns": 9999999
+    },
+    "PanopticMath": {
+      "path": "./contracts/libraries/PanopticMath.sol",
+      "deployment": {
+        "address": "0x000000000001CD07e625A9e225C37BEA50b3F441",
+        "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a138e82ca7ad7f3c00495a56d0",
+        "nonce": 0
+      },
+      "optimizeRuns": 9999999
+    },
+    "PositionBalanceLibrary": {
+      "path": "./contracts/types/PositionBalance.sol",
+      "deployment": {
+        "address": "0x000000000001D1d59E8fCe3945E7086eF4d80CBe",
+        "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a1eeaabc97a38f02031d846be3",
+        "nonce": 0
+      },
+      "optimizeRuns": 9999999
+    },
+    "InteractionHelper": {
+      "path": "./contracts/libraries/InteractionHelper.sol",
+      "deployment": {
+        "address": "0x000000000001a911bE5b2C386CC5807219f10eBe",
+        "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a1b99a1d02e30b940374a01117",
+        "nonce": 0
+      },
+      "optimizeRuns": 9999999,
+      "links": ["PanopticMath"]
+    },
+    "CollateralTracker": {
+      "path": "./contracts/CollateralTracker.sol",
+      "deployment": {
+        "address": "0x000000000001931ac40ff8b16F08E47D2A7CD650",
+        "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a15dce6e2429d452004d592140",
+        "nonce": 0
+      },
+      "constructorArgs": [
+        [20, 2000, 1000, -128, 5000, 9000, 20000],
+        ["uint256", "uint256", "uint256", "int256", "uint256", "uint256", "uint256"]
+      ],
+      "optimizeRuns": 9999999,
+      "links": ["InteractionHelper"]
+    },
+    "PanopticFactory": {
+      "path": "./contracts/PanopticFactory.sol",
+      "deployment": {
+        "address": "0x000000000000010a1DEc6c46371A28A071F8bb01",
+        "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a19c1f30d54f612201804528b7",
+        "nonce": 29
+      },
+      "optimizeRuns": 9999999,
+      "links": ["PanopticMath"],
+      "constructorArgs": [
+        [
+          "@SemiFungiblePositionManager",
+          "$UNIV3_FACTORY",
+          "@PanopticPool",
+          "@CollateralTracker",
+          "$MD_PROPERTIES",
+          "$MD_INDICES",
+          "$MD_POINTERS"
+        ],
+        ["address", "address", "address", "address", "bytes32[]", "uint256[][]", "uint256[][]"]
+      ]
+    },
+    "PanopticPool": {
+      "path": "./contracts/PanopticPool.sol",
+      "deployment": {
+        "address": "0x0000000000001B1A7fe31692d107cAA42fb06862",
+        "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a1ca0683ce612aa20186ad6c09",
+        "nonce": 0
+      },
+      "optimizeRuns": 833,
+      "links": ["InteractionHelper", "PanopticMath", "PositionBalanceLibrary"],
+      "constructorArgs": [["@SemiFungiblePositionManager"], ["address"]]
+    },
+    "SemiFungiblePositionManager": {
+      "path": "./contracts/SemiFungiblePositionManager.sol",
+      "deployment": {
+        "address": "0x0000000000000DEdEDdD16227aA3D836C5753194",
+        "salt": "0x82bf455e9ebd6a541ef10b683de1edcaf05ce7a136f15df6a78bf60145fff15c",
+        "nonce": 4
+      },
+      "optimizeRuns": 27899,
+      "links": ["FeesCalc"],
+      "constructorArgs": [
+        ["$UNIV3_FACTORY", 2100000000000000000000, 10000],
+        ["address", "uint256", "uint256"]
+      ]
+    }
+  }
+}

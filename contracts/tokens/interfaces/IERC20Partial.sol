@@ -25,4 +25,7 @@ interface IERC20Partial {
     /// @param to The user to transfer tokens to
     /// @param amount The amount of tokens to transfer
     function transfer(address to, uint256 amount) external;
+
+    /// @notice Returns the amount of tokens in existence.
+    function totalSupply() external view returns (uint256);
 }

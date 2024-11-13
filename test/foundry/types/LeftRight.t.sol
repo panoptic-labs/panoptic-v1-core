@@ -23,7 +23,7 @@ contract LeftRightTest is Test {
     }
 
     // RIGHT SLOT
-    function test_Success_RightSlot_Uint128_In_Uint256(uint128 y) public {
+    function test_Success_RightSlot_Uint128_In_Uint256(uint128 y) public view {
         LeftRightUnsigned x = LeftRightUnsigned.wrap(0);
         x = harness.toRightSlot(x, y);
         assertEq(uint128(harness.leftSlot(x)), 0);
@@ -33,20 +33,23 @@ contract LeftRightTest is Test {
     function test_Success_RightSlot_Uint128_In_Uint256_noLeaking(
         LeftRightUnsigned x,
         uint128 y
-    ) public {
+    ) public view {
         uint128 originalLeft = harness.leftSlot(x);
         x = harness.toRightSlot(x, y);
         assertEq(harness.leftSlot(x), originalLeft, "Right slot input overflowed into left slot");
     }
 
-    function test_Success_RightSlot_Int128_In_Int256(int128 y) public {
+    function test_Success_RightSlot_Int128_In_Int256(int128 y) public view {
         LeftRightSigned x = LeftRightSigned.wrap(0);
         x = harness.toRightSlot(x, y);
         assertEq(int128(harness.leftSlot(x)), 0);
         assertEq(int128(harness.rightSlot(x)), y);
     }
 
-    function test_Success_RightSlot_int128_In_Int256_noLeaking(LeftRightSigned x, int128 y) public {
+    function test_Success_RightSlot_int128_In_Int256_noLeaking(
+        LeftRightSigned x,
+        int128 y
+    ) public view {
         int128 originalLeft = harness.leftSlot(x);
         x = harness.toRightSlot(x, y);
         assertEq(
@@ -57,14 +60,14 @@ contract LeftRightTest is Test {
     }
 
     // LEFT SLOT
-    function test_Success_LeftSlot_Uint128_In_Uint256(uint128 y) public {
+    function test_Success_LeftSlot_Uint128_In_Uint256(uint128 y) public view {
         LeftRightUnsigned x = LeftRightUnsigned.wrap(0);
         x = harness.toLeftSlot(x, y);
         assertEq(uint128(harness.leftSlot(x)), y);
         assertEq(uint128(harness.rightSlot(x)), 0);
     }
 
-    function test_Success_LeftSlot_Int128_In_Int256(int128 y) public {
+    function test_Success_LeftSlot_Int128_In_Int256(int128 y) public view {
         LeftRightSigned x = LeftRightSigned.wrap(0);
         x = harness.toLeftSlot(x, y);
         assertEq(int128(harness.leftSlot(x)), y);
@@ -72,7 +75,7 @@ contract LeftRightTest is Test {
     }
 
     // BOTH
-    function test_Success_BothSlots_uint256(uint128 y, uint128 z) public {
+    function test_Success_BothSlots_uint256(uint128 y, uint128 z) public view {
         LeftRightUnsigned x = LeftRightUnsigned.wrap(0);
         x = harness.toLeftSlot(x, y);
         x = harness.toRightSlot(x, z);
@@ -81,7 +84,7 @@ contract LeftRightTest is Test {
         assertEq(uint128(harness.rightSlot(x)), z);
     }
 
-    function test_Success_BothSlots_int256(int128 y, int128 z) public {
+    function test_Success_BothSlots_int256(int128 y, int128 z) public view {
         LeftRightSigned x = LeftRightSigned.wrap(0);
         x = harness.toLeftSlot(x, y);
         x = harness.toRightSlot(x, z);
@@ -319,7 +322,7 @@ contract LeftRightTest is Test {
                 harness.subRect(x, xx);
             } else {
                 // normal case
-                LeftRightSigned other = harness.subRect(x, xx);
+                LeftRightUnsigned other = harness.subRect(x, xx);
                 assertEq(int128(harness.leftSlot(other)), y - u > 0 ? y - u : int128(0));
                 assertEq(int128(harness.rightSlot(other)), z - v > 0 ? z - v : int128(0));
             }
@@ -331,7 +334,7 @@ contract LeftRightTest is Test {
         LeftRightUnsigned dx,
         LeftRightUnsigned y,
         LeftRightUnsigned dy
-    ) public {
+    ) public view {
         vm.assume(
             uint256(x.rightSlot()) + dx.rightSlot() < type(uint128).max &&
                 uint256(y.rightSlot()) + dy.rightSlot() < type(uint128).max
@@ -355,7 +358,7 @@ contract LeftRightTest is Test {
         LeftRightUnsigned dx,
         LeftRightUnsigned y,
         LeftRightUnsigned dy
-    ) public {
+    ) public view {
         vm.assume(
             uint256(x.rightSlot()) + dx.rightSlot() >= type(uint128).max ||
                 uint256(y.rightSlot()) + dy.rightSlot() >= type(uint128).max
@@ -378,7 +381,7 @@ contract LeftRightTest is Test {
         LeftRightUnsigned dx,
         LeftRightUnsigned y,
         LeftRightUnsigned dy
-    ) public {
+    ) public view {
         vm.assume(
             uint256(x.leftSlot()) + dx.leftSlot() >= type(uint128).max ||
                 uint256(y.leftSlot()) + dy.leftSlot() >= type(uint128).max
@@ -401,7 +404,7 @@ contract LeftRightTest is Test {
         LeftRightUnsigned dx,
         LeftRightUnsigned y,
         LeftRightUnsigned dy
-    ) public {
+    ) public view {
         vm.assume(
             uint256(x.rightSlot()) + dx.rightSlot() >= type(uint128).max ||
                 uint256(y.rightSlot()) + dy.rightSlot() >= type(uint128).max
@@ -424,7 +427,7 @@ contract LeftRightTest is Test {
         LeftRightUnsigned dx,
         LeftRightUnsigned y,
         LeftRightUnsigned dy
-    ) public {
+    ) public view {
         (LeftRightUnsigned r_x, LeftRightUnsigned r_y) = harness.addCapped(x, dx, y, dy);
 
         if (

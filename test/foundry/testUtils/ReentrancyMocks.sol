@@ -56,7 +56,7 @@ contract ReenterBurn {
         activated = true;
         if (reenter)
             SemiFungiblePositionManagerHarness(msg.sender).burnTokenizedPosition(
-                TokenId.wrap(0).addPoolId(PanopticMath.getPoolId(address(this))),
+                TokenId.wrap(0).addPoolId(PanopticMath.getPoolId(address(this), tickSpacing)),
                 0,
                 0,
                 0
@@ -116,7 +116,7 @@ contract ReenterMint {
 
         if (reenter)
             SemiFungiblePositionManagerHarness(msg.sender).mintTokenizedPosition(
-                TokenId.wrap(0).addPoolId(PanopticMath.getPoolId(address(this))),
+                TokenId.wrap(0).addPoolId(PanopticMath.getPoolId(address(this), tickSpacing)),
                 0,
                 0,
                 0
@@ -178,7 +178,9 @@ contract ReenterTransferSingle {
             SemiFungiblePositionManagerHarness(msg.sender).safeTransferFrom(
                 address(0),
                 address(0),
-                TokenId.unwrap(TokenId.wrap(0).addPoolId(PanopticMath.getPoolId(address(this)))),
+                TokenId.unwrap(
+                    TokenId.wrap(0).addPoolId(PanopticMath.getPoolId(address(this), tickSpacing))
+                ),
                 0,
                 ""
             );
@@ -236,7 +238,9 @@ contract ReenterTransferBatch {
         activated = true;
 
         uint256[] memory ids = new uint256[](1);
-        ids[0] = TokenId.unwrap(TokenId.wrap(0).addPoolId(PanopticMath.getPoolId(address(this))));
+        ids[0] = TokenId.unwrap(
+            TokenId.wrap(0).addPoolId(PanopticMath.getPoolId(address(this), tickSpacing))
+        );
         if (reenter)
             SemiFungiblePositionManagerHarness(msg.sender).safeBatchTransferFrom(
                 address(0),

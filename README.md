@@ -149,7 +149,30 @@ Get a coverage report (requires `genhtml` to be installed):
 forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage
 ```
 
-## Deployment
+## Deployment (Release)
+
+Panoptic can also be deployed at a preconfigured set of addresses on mainnet. The canonical initcodes are saved in `deployment-info.json` and can be updated by running the following commands:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+pip install eth_abi
+python3 build_release.py
+```
+
+The configuration file `build-config.json` can be modified with the desired set of addresses and constructor arguments for each contract. The `env`
+section contains deployment variables expected to change, such as the `UNIV3_FACTORY` address.
+
+Each `address` and `salt` pair specified by `build-config.json` can be deployed through the `CREATE3` factory at `0x000000000000b361194cfe6312EE3210d53C15AA`. All salts in the current configuration are owned by `vault.panoptic.eth`.
+
+The following command can be run to generate the Safe transaction batches required to deploy Panoptic with the code in `deployment-info.json` from a Safe multisig that owns salts:
+
+```bash
+python3 gen_safetx.py
+```
+
+The generated batches for each contract will be saved in individual JSON files in the `safe-txns` directory. These can be uploaded to a Gnosis Safe for execution via the "Transaction Builder" app. To ensure an accurate deployment process, each transaction batch should be queued in alphabetical order and checked against `deployment-info.json` for correctness prior to execution.
+
+## Deployment (Legacy)
 
 Panoptic can be deployed on any chain with a Uniswap V3 instance. To go through with the deployment, several environment variables need to be set:
 
@@ -157,7 +180,7 @@ Panoptic can be deployed on any chain with a Uniswap V3 instance. To go through 
 - `UNISWAP_V3_FACTORY` The address of the Uniswap V3 Factory Panoptic is being deployed on
 - `WETH9` The canonical Wrapped Ether deployment on the chain
 
-To deploy Panoptic, run:
+To deploy Panoptic for testing purposes, run:
 
 ```bash
 forge script script/DeployProtocol.s.sol:DeployProtocol --rpc-url sepolia -vvvv --broadcast

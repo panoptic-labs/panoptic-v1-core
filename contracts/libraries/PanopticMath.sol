@@ -3,11 +3,11 @@ pragma solidity ^0.8.24;
 
 // Interfaces
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
+import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IUniswapV3Pool} from "univ3-core/interfaces/IUniswapV3Pool.sol";
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
-import {Errors} from "@libraries/Errors.sol";
 import {Math} from "@libraries/Math.sol";
 // OpenZeppelin libraries
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -25,17 +25,17 @@ library PanopticMath {
     /// @notice This is equivalent to `type(uint256).max` — used in assembly blocks as a replacement.
     uint256 internal constant MAX_UINT256 = 2 ** 256 - 1;
 
-    /// @notice Masks 16-bit tickSpacing out of 64-bit `[16-bit tickspacing][48-bit poolPattern]` format poolId
+    /// @notice Masks 16-bit tickSpacing out of 64-bit `[16-bit tickspacing][48-bit poolPattern]` format poolId.
     uint64 internal constant TICKSPACING_MASK = 0xFFFF000000000000;
 
     /*//////////////////////////////////////////////////////////////
-                              MATH HELPERS
+                              UTILITIES
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Given an address to a Uniswap V3 pool, return its 64-bit ID as used in the `TokenId` of Panoptic.
     // Example:
     //      the 64 bits are the 48 *last* (most significant) bits - and thus corresponds to the *first* 12 hex characters (reading left to right)
-    //      of the Uniswap V3 pool address, with the tickSpacing written in the highest 16 bits (i.e, max tickSpacing is 32768)
+    //      of the Uniswap V3 pool address, with the tickSpacing written in the highest 16 bits (i.e, max tickSpacing is 32767)
     //      e.g.:
     //        univ3pool   = 0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8
     //        tickSpacing = 60
@@ -46,10 +46,10 @@ library PanopticMath {
     //        poolId      = 0x003c8ad599c3A0ff
     //
     /// @param univ3pool The address of the Uniswap V3 pool to get the ID of
+    /// @param tickSpacing The tick spacing of `univ3pool`
     /// @return A uint64 representing a fingerprint of the Uniswap V3 pool address
-    function getPoolId(address univ3pool) internal view returns (uint64) {
+    function getPoolId(address univ3pool, int24 tickSpacing) internal pure returns (uint64) {
         unchecked {
-            int24 tickSpacing = IUniswapV3Pool(univ3pool).tickSpacing();
             uint64 poolId = uint64(uint160(univ3pool) >> 112);
             poolId += uint64(uint24(tickSpacing)) << 48;
             return poolId;
@@ -112,33 +112,29 @@ library PanopticMath {
             );
     }
 
-    /*//////////////////////////////////////////////////////////////
-                              UTILITIES
-    //////////////////////////////////////////////////////////////*/
-
     /// @notice Update an existing account's "positions hash" with a new `tokenId`.
-    /// @notice The positions hash contains a fingerprint of all open positions created by an account/user and a count of those positions.
+    /// @notice The positions hash contains a fingerprint of all open positions created by an account/user and a count of the legs across those positions.
     /// @dev The "fingerprint" portion of the hash is given by XORing the hashed `tokenId` of each position the user has open together.
-    /// @param existingHash The existing position hash containing all historical N positions created and the count of the positions
-    /// @param tokenId The new position to add to the existing hash: `existingHash = uint248(existingHash) ^ hashOf(tokenId)`
-    /// @param addFlag Whether to mint (add) the tokenId to the count of positions or burn (subtract) it from the count `(existingHash >> 248) +/- 1`
-    /// @return newHash The new positionHash with the updated hash
+    /// @param existingHash The existing position hash representing a list of positions and the count of the legs across those positions
+    /// @param tokenId The new position to modify the existing hash with: `existingHash = uint248(existingHash) ^ uint248(hashOf(tokenId))`
+    /// @param addFlag Whether to mint (add) the tokenId to the count of positions or burn (subtract) it from the count `(existingHash >> 248) +/- tokenId.countLegs()`
+    /// @return newHash The updated position hash with the new tokenId XORed in and the leg count incremented/decremented
     function updatePositionsHash(
         uint256 existingHash,
         TokenId tokenId,
         bool addFlag
     ) internal pure returns (uint256) {
-        // update hash by taking the XOR of the new tokenId
+        // update hash by taking the XOR of the existing hash with the new tokenId
         uint256 updatedHash = uint248(existingHash) ^
             (uint248(uint256(keccak256(abi.encode(tokenId)))));
 
-        // increment the upper 8 bits (position counter) if addflag=true, decrement otherwise
-        uint256 newPositionCount = addFlag
-            ? uint8(existingHash >> 248) + 1
-            : uint8(existingHash >> 248) - 1;
+        // increment the upper 8 bits (leg counter) if addFlag=true, decrement otherwise
+        uint256 newLegCount = addFlag
+            ? uint8(existingHash >> 248) + uint8(tokenId.countLegs())
+            : uint8(existingHash >> 248) - tokenId.countLegs();
 
         unchecked {
-            return uint256(updatedHash) + (newPositionCount << 248);
+            return uint256(updatedHash) + (newLegCount << 248);
         }
     }
 
@@ -149,11 +145,11 @@ library PanopticMath {
     /// @notice Computes various oracle prices corresponding to a Uniswap pool.
     /// @param univ3pool The Uniswap pool to get the observations from
     /// @param miniMedian The packed structure representing the sorted 8-slot queue of internal median observations
-    /// @return currentTick The current tick in the Uniswap pool (as returned in slot0)
+    /// @return currentTick The current tick in the Uniswap pool
     /// @return fastOracleTick The fast oracle tick computed as the median of the past N observations in the Uniswap Pool
-    /// @return slowOracleTick The slow oracle tick as tracked by `s_miniMedian`
+    /// @return slowOracleTick The slow oracle tick computed with the method specified in `SLOW_ORACLE_UNISWAP_MODE`
     /// @return latestObservation The latest observation from the Uniswap pool (price at the end of the last block)
-    /// @return medianData the updated value for `s_miniMedian` (returns 0 if not enough time has passed since last observation)
+    /// @return medianData The updated value for `s_miniMedian` (0 if not enough time has passed since last observation or if `SLOW_ORACLE_UNISWAP_MODE` is true)
     function getOracleTicks(
         IUniswapV3Pool univ3pool,
         uint256 miniMedian
@@ -205,9 +201,9 @@ library PanopticMath {
     /// @dev Used when we need a manipulation-resistant TWAP price.
     /// @dev Uniswap observations snapshot the closing price of the last block before the first interaction of a given block.
     /// @dev The maximum frequency of observations is 1 per block, but there is no guarantee that the pool will be observed at every block.
-    /// @dev Each period has a minimum length of blocktime * period, but may be longer if the Uniswap pool is relatively inactive.
-    /// @dev The final price used in the array (of length `cardinality`) is the average of all observations comprising `period` (which is itself a number of observations).
-    /// @dev Thus, the minimum total time window is `cardinality` * `period` * `blocktime`.
+    /// @dev Each period has a minimum length of `blocktime * period`, but may be longer if the Uniswap pool is relatively inactive.
+    /// @dev The final price used in the array (of length `cardinality`) is the average of `cardinality` observations spaced by `period` (which is itself a number of observations).
+    /// @dev Thus, the minimum total time window is `cardinality * period * blocktime`.
     /// @param univ3pool The Uniswap pool to get the median observation from
     /// @param observationIndex The index of the last observation in the pool
     /// @param observationCardinality The number of observations in the pool
@@ -325,7 +321,7 @@ library PanopticMath {
         }
     }
 
-    /// @notice Computes the twap of a Uniswap V3 pool using data from its oracle.
+    /// @notice Computes the TWAP of a Uniswap V3 pool using data from its oracle.
     /// @dev Note that our definition of TWAP differs from a typical mean of prices over a time window.
     /// @dev We instead observe the average price over a series of time intervals, and define the TWAP as the median of those averages.
     /// @param univ3pool The Uniswap pool from which to compute the TWAP
@@ -337,7 +333,7 @@ library PanopticMath {
         int256[] memory twapMeasurement = new int256[](19);
 
         unchecked {
-            // construct the time stots
+            // construct the time slots
             for (uint256 i = 0; i < 20; ++i) {
                 secondsAgos[i] = uint32(((i + 1) * twapWindow) / 20);
             }
@@ -361,7 +357,7 @@ library PanopticMath {
     }
 
     /*//////////////////////////////////////////////////////////////
-                         LIQUIDITY CALCULATION
+                          LIQUIDITY CHUNK MATH
     //////////////////////////////////////////////////////////////*/
 
     /// @notice For a given option position (`tokenId`), leg index within that position (`legIndex`), and `positionSize` get the tick range spanned and its
@@ -407,13 +403,12 @@ library PanopticMath {
         //
         //  To solve this, we encode the asset value in tokenId. This parameter specifies which of token0 or token1 is the
         //  asset, such that:
-        //     when asset=0, then amount0 moved at strike K =1.0001**currentTick is 1, amount1 moved to strike K is 1/K
-        //     when asset=1, then amount1 moved at strike K =1.0001**currentTick is K, amount0 moved to strike K is 1
+        //     when asset=0, then amount0 moved at strike K =1.0001**currentTick is 1, amount1 moved to strike K is K
+        //     when asset=1, then amount1 moved at strike K =1.0001**currentTick is K, amount0 moved to strike K is 1/K
         //
         //  The following function takes this into account when computing the liquidity of the leg and switches between
         //  the definition for getLiquidityForAmount0 or getLiquidityForAmount1 when relevant.
-        //
-        //
+
         uint256 amount = uint256(positionSize) * tokenId.optionRatio(legIndex);
         if (tokenId.asset(legIndex) == 0) {
             return Math.getLiquidityForAmount0(tickLower, tickUpper, amount);
@@ -422,36 +417,21 @@ library PanopticMath {
         }
     }
 
-    /// @notice Extract the tick range specified by `strike` and `width` for the given `tickSpacing`, if valid.
+    /// @notice Extract the tick range specified by `strike` and `width` for the given `tickSpacing`.
     /// @param strike The strike price of the option
     /// @param width The width of the option
     /// @param tickSpacing The tick spacing of the underlying Uniswap V3 pool
-    /// @return tickLower The lower tick of the liquidity chunk
-    /// @return tickUpper The upper tick of the liquidity chunk
+    /// @return The lower tick of the liquidity chunk
+    /// @return The upper tick of the liquidity chunk
     function getTicks(
         int24 strike,
         int24 width,
         int24 tickSpacing
-    ) internal pure returns (int24 tickLower, int24 tickUpper) {
+    ) internal pure returns (int24, int24) {
+        (int24 rangeDown, int24 rangeUp) = PanopticMath.getRangesFromStrike(width, tickSpacing);
+
         unchecked {
-            // The max/min ticks that can be initialized are the closest multiple of tickSpacing to the actual max/min tick abs()=887272
-            // Dividing and multiplying by tickSpacing rounds down and forces the tick to be a multiple of tickSpacing
-            int24 minTick = (Constants.MIN_V3POOL_TICK / tickSpacing) * tickSpacing;
-            int24 maxTick = (Constants.MAX_V3POOL_TICK / tickSpacing) * tickSpacing;
-
-            (int24 rangeDown, int24 rangeUp) = PanopticMath.getRangesFromStrike(width, tickSpacing);
-
-            (tickLower, tickUpper) = (strike - rangeDown, strike + rangeUp);
-
-            // Revert if the upper/lower ticks are not multiples of tickSpacing
-            // Revert if the tick range extends from the strike outside of the valid tick range
-            // These are invalid states, and would revert silently later in `univ3Pool.mint`
-            if (
-                tickLower % tickSpacing != 0 ||
-                tickUpper % tickSpacing != 0 ||
-                tickLower < minTick ||
-                tickUpper > maxTick
-            ) revert Errors.TicksNotInitializable();
+            return (strike - rangeDown, strike + rangeUp);
         }
     }
 
@@ -459,8 +439,8 @@ library PanopticMath {
     /// @dev Given `r = (width * tickSpacing) / 2`, `tickLower = strike - floor(r)` and `tickUpper = strike + ceil(r)`.
     /// @param width The width of the leg
     /// @param tickSpacing The tick spacing of the underlying pool
-    /// @return The lower tick of the range
-    /// @return The upper tick of the range
+    /// @return The distance of the lower tick from the strike
+    /// @return The distance of the upper tick from the strike
     function getRangesFromStrike(
         int24 width,
         int24 tickSpacing
@@ -475,9 +455,9 @@ library PanopticMath {
                          TOKEN CONVERSION LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Compute the amount of notional value underlying this option position.
+    /// @notice Compute the amount of notional value underlying an option position.
     /// @param tokenId The option position id
-    /// @param positionSize The number of contracts of this option
+    /// @param positionSize The number of contracts of the option
     /// @return longAmounts Left-right packed word where rightSlot = token0 and leftSlot = token1 held against borrowed Uniswap liquidity for long legs
     /// @return shortAmounts Left-right packed word where where rightSlot = token0 and leftSlot = token1 borrowed to create short legs
     function computeExercisedAmounts(
@@ -486,7 +466,6 @@ library PanopticMath {
     ) internal pure returns (LeftRightSigned longAmounts, LeftRightSigned shortAmounts) {
         uint256 numLegs = tokenId.countLegs();
         for (uint256 leg = 0; leg < numLegs; ) {
-            // Compute the amount of funds that have been removed from the Panoptic Pool
             (LeftRightSigned longs, LeftRightSigned shorts) = _calculateIOAmounts(
                 tokenId,
                 positionSize,
@@ -683,11 +662,9 @@ library PanopticMath {
 
         if (tokenId.asset(legIndex) == 0) {
             amount0 = positionSize * uint128(tokenId.optionRatio(legIndex));
-
             amount1 = Math.mulDiv96RoundingUp(amount0, geometricMeanPriceX96).toUint128();
         } else {
             amount1 = positionSize * uint128(tokenId.optionRatio(legIndex));
-
             amount0 = Math.mulDivRoundingUp(amount1, 2 ** 96, geometricMeanPriceX96).toUint128();
         }
 
@@ -705,12 +682,10 @@ library PanopticMath {
         uint128 positionSize,
         uint256 legIndex
     ) internal pure returns (LeftRightSigned longs, LeftRightSigned shorts) {
-        // compute amounts moved
         LeftRightUnsigned amountsMoved = getAmountsMoved(tokenId, positionSize, legIndex);
 
         bool isShort = tokenId.isLong(legIndex) == 0;
 
-        // if token0
         if (tokenId.tokenType(legIndex) == 0) {
             if (isShort) {
                 // if option is short, increment shorts by contracts
@@ -900,8 +875,7 @@ library PanopticMath {
             // Ignore any surplus collateral - the liquidatee is either solvent or it converts to <1 unit of the other token
             int256 collateralDelta0 = -Math.min(collateralRemaining.rightSlot(), 0);
             int256 collateralDelta1 = -Math.min(collateralRemaining.leftSlot(), 0);
-            int256 haircut0;
-            int256 haircut1;
+            LeftRightSigned haircutBase;
 
             // if the premium in the same token is not enough to cover the loss and there is a surplus of the other token,
             // the liquidator will provide the tokens (reflected in the bonus amount) & receive compensation in the other token
@@ -927,8 +901,11 @@ library PanopticMath {
                     )
                 );
 
-                haircut0 = longPremium.rightSlot();
-                haircut1 = protocolLoss1 + collateralDelta1;
+                // It is assumed the sum of `protocolLoss1` and `collateralDelta1` does not exceed `2^127 - 1` given practical constraints
+                // on token supplies and deposit limits
+                haircutBase = LeftRightSigned.wrap(longPremium.rightSlot()).toLeftSlot(
+                    int128(protocolLoss1 + collateralDelta1)
+                );
             } else if (
                 longPremium.leftSlot() < collateralDelta1 &&
                 longPremium.rightSlot() > collateralDelta0
@@ -951,39 +928,71 @@ library PanopticMath {
                     )
                 );
 
-                haircut0 = collateralDelta0 + protocolLoss0;
-                haircut1 = longPremium.leftSlot();
+                // It is assumed the sum of `protocolLoss0` and `collateralDelta0` does not exceed `2^127 - 1` given practical constraints
+                // on token supplies and deposit limits
+                haircutBase = LeftRightSigned
+                    .wrap(int128(protocolLoss0 + collateralDelta0))
+                    .toLeftSlot(longPremium.leftSlot());
             } else {
                 // for each token, haircut until the protocol loss is mitigated or the premium paid is exhausted
-                haircut0 = Math.min(collateralDelta0, longPremium.rightSlot());
-                haircut1 = Math.min(collateralDelta1, longPremium.leftSlot());
+                // the size of `collateralDelta0/1` and `longPremium.rightSlot()/leftSlot()` is limited to `2^127 - 1` given that they originate from LeftRightSigned types
+                haircutBase = LeftRightSigned
+                    .wrap(int128(Math.min(collateralDelta0, longPremium.rightSlot())))
+                    .toLeftSlot(int128(Math.min(collateralDelta1, longPremium.leftSlot())));
 
                 collateralDelta0 = 0;
                 collateralDelta1 = 0;
             }
 
-            {
-                address _liquidatee = liquidatee;
-                if (haircut0 != 0) collateral0.exercise(_liquidatee, 0, 0, 0, int128(haircut0));
-                if (haircut1 != 0) collateral1.exercise(_liquidatee, 0, 0, 0, int128(haircut1));
-            }
-
+            // total haircut after rounding up prorated haircut amounts for each leg
+            LeftRightUnsigned haircutTotal;
+            address _liquidatee = liquidatee;
             for (uint256 i = 0; i < positionIdList.length; i++) {
                 TokenId tokenId = positionIdList[i];
                 LeftRightSigned[4][] memory _premiasByLeg = premiasByLeg;
                 for (uint256 leg = 0; leg < tokenId.countLegs(); ++leg) {
-                    if (tokenId.isLong(leg) == 1) {
-                        mapping(bytes32 chunkKey => LeftRightUnsigned settledTokens)
-                            storage _settledTokens = settledTokens;
+                    if (
+                        tokenId.isLong(leg) == 1 &&
+                        LeftRightSigned.unwrap(_premiasByLeg[i][leg]) != 0
+                    ) {
+                        // calculate prorated (by target/liquidity) haircut amounts to revoke from settled for each leg
+                        // `-premiasByLeg[i][leg]` (and `longPremium` which is the sum of all -premiasByLeg[i][leg]`) is always positive because long premium is represented as a negative delta
+                        // `haircutBase` is always positive because all of its possible constituent values (`collateralDelta`, `longPremium`) are guaranteed to be positive
+                        // the sum of all prorated haircut amounts for each token is assumed to be less than `2^127 - 1` given practical constraints on token supplies and deposit limits
 
-                        // calculate amounts to revoke from settled and subtract from haircut req
-                        uint256 settled0 = Math.unsafeDivRoundingUp(
-                            uint128(-_premiasByLeg[i][leg].rightSlot()) * uint256(haircut0),
-                            uint128(longPremium.rightSlot())
+                        LeftRightSigned haircutAmounts = LeftRightSigned
+                            .wrap(
+                                int128(
+                                    uint128(
+                                        Math.unsafeDivRoundingUp(
+                                            uint128(-_premiasByLeg[i][leg].rightSlot()) *
+                                                uint256(uint128(haircutBase.rightSlot())),
+                                            uint128(longPremium.rightSlot())
+                                        )
+                                    )
+                                )
+                            )
+                            .toLeftSlot(
+                                int128(
+                                    uint128(
+                                        Math.unsafeDivRoundingUp(
+                                            uint128(-_premiasByLeg[i][leg].leftSlot()) *
+                                                uint256(uint128(haircutBase.leftSlot())),
+                                            uint128(longPremium.leftSlot())
+                                        )
+                                    )
+                                )
+                            );
+
+                        haircutTotal = haircutTotal.add(
+                            LeftRightUnsigned.wrap(uint256(LeftRightSigned.unwrap(haircutAmounts)))
                         );
-                        uint256 settled1 = Math.unsafeDivRoundingUp(
-                            uint128(-_premiasByLeg[i][leg].leftSlot()) * uint256(haircut1),
-                            uint128(longPremium.leftSlot())
+
+                        emit PanopticPool.PremiumSettled(
+                            _liquidatee,
+                            tokenId,
+                            leg,
+                            LeftRightSigned.wrap(0).sub(haircutAmounts)
                         );
 
                         bytes32 chunkKey = keccak256(
@@ -994,23 +1003,21 @@ library PanopticMath {
                             )
                         );
 
-                        // The long premium is not commited to storage during the liquidation, so we add the entire adjusted amount
+                        // The long premium is not committed to storage during the liquidation, so we add the entire adjusted amount
                         // for the haircut directly to the accumulator
-                        settled0 = Math.max(
-                            0,
-                            uint128(-_premiasByLeg[i][leg].rightSlot()) - settled0
-                        );
-                        settled1 = Math.max(
-                            0,
-                            uint128(-_premiasByLeg[i][leg].leftSlot()) - settled1
-                        );
-
-                        _settledTokens[chunkKey] = _settledTokens[chunkKey].add(
-                            LeftRightUnsigned.wrap(uint128(settled0)).toLeftSlot(uint128(settled1))
+                        settledTokens[chunkKey] = settledTokens[chunkKey].add(
+                            (LeftRightSigned.wrap(0).sub(_premiasByLeg[i][leg])).subRect(
+                                haircutAmounts
+                            )
                         );
                     }
                 }
             }
+
+            if (haircutTotal.rightSlot() != 0)
+                collateral0.exercise(_liquidatee, 0, 0, 0, int128(haircutTotal.rightSlot()));
+            if (haircutTotal.leftSlot() != 0)
+                collateral1.exercise(_liquidatee, 0, 0, 0, int128(haircutTotal.leftSlot()));
 
             return
                 LeftRightSigned.wrap(0).toRightSlot(int128(collateralDelta0)).toLeftSlot(

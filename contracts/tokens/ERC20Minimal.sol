@@ -11,13 +11,13 @@ abstract contract ERC20Minimal {
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted when tokens are transferred
+    /// @notice Emitted when tokens are transferred.
     /// @param from The sender of the tokens
     /// @param to The recipient of the tokens
     /// @param amount The amount of tokens transferred
     event Transfer(address indexed from, address indexed to, uint256 amount);
 
-    /// @notice Emitted when a user approves another user to spend tokens on their behalf
+    /// @notice Emitted when a user approves another user to spend tokens on their behalf.
     /// @param owner The user who approved the spender
     /// @param spender The user who was approved to spend tokens
     /// @param amount The amount of tokens approved to spend
@@ -31,7 +31,7 @@ abstract contract ERC20Minimal {
     /// @dev This cannot exceed the max uint256 value.
     uint256 public totalSupply;
 
-    /// @notice Token balances for each user
+    /// @notice Token balances for each user.
     mapping(address account => uint256 balance) public balanceOf;
 
     /// @notice Stored allowances for each user.

@@ -178,9 +178,9 @@ contract FactoryNFT is MetadataStore, ERC721 {
     /// @return The name of the current chain, or the chain ID if not recognized
     function getChainName() internal view returns (string memory) {
         if (block.chainid == 1) {
-            return "Ethereum Mainnet";
+            return "Ethereum";
         } else if (block.chainid == 56) {
-            return "BNB Smart Chain Mainnet";
+            return "BNB Smart Chain";
         } else if (block.chainid == 42161) {
             return "Arbitrum One";
         } else if (block.chainid == 8453) {
@@ -188,13 +188,57 @@ contract FactoryNFT is MetadataStore, ERC721 {
         } else if (block.chainid == 43114) {
             return "Avalanche C-Chain";
         } else if (block.chainid == 137) {
-            return "Polygon Mainnet";
+            return "Polygon";
         } else if (block.chainid == 10) {
-            return "OP Mainnet";
+            return "Optimism";
         } else if (block.chainid == 42220) {
-            return "Celo Mainnet";
+            return "CELO";
         } else if (block.chainid == 238) {
-            return "Blast Mainnet";
+            return "Blast";
+        } else if (block.chainid == 5000) {
+            return "Mantle";
+        } else if (block.chainid == 59144) {
+            return "Linea";
+        } else if (block.chainid == 534352) {
+            return "Scroll";
+        } else if (block.chainid == 100) {
+            return "Gnosis";
+        } else if (block.chainid == 34443) {
+            return "Mode";
+        } else if (block.chainid == 48900) {
+            return "Zircuit";
+        } else if (block.chainid == 1116) {
+            return "Core Blockchain";
+        } else if (block.chainid == 250) {
+            return "Fantom";
+        } else if (block.chainid == 130) {
+            return "Unichain";
+        } else if (block.chainid == 324) {
+            return "ZkSync Era";
+        } else if (block.chainid == 1329) {
+            return "Sei";
+        } else if (block.chainid == 60808) {
+            return "BOB";
+        } else if (block.chainid == 30) {
+            return "Rootstock";
+        } else if (block.chainid == 167000) {
+            return "Taiko";
+        } else if (block.chainid == 314) {
+            return "Filecoin";
+        } else if (block.chainid == 480) {
+            return "World Chain";
+        } else if (block.chainid == 1284) {
+            return "Moonbeam";
+        } else if (block.chainid == 1135) {
+            return "Lisk";
+        } else if (block.chainid == 288) {
+            return "Boba";
+        } else if (block.chainid == 1101) {
+            return "Polygon zkEVM";
+        } else if (block.chainid == 169) {
+            return "Manta";
+        } else if (block.chainid == 7777777) {
+            return "Zora";
         } else {
             return LibString.toString(block.chainid);
         }

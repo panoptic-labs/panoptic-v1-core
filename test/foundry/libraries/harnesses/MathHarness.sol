@@ -85,6 +85,11 @@ contract MathHarness {
         return sortedData;
     }
 
+    function mulDiv(uint256 a, uint256 b, uint256 c) public pure returns (uint256) {
+        uint256 result = Math.mulDiv(a, b, c);
+        return result;
+    }
+
     function mulDiv96(uint256 a, uint256 b) public pure returns (uint256) {
         uint256 result = Math.mulDiv96(a, b);
         return result;

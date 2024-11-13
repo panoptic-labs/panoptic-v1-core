@@ -192,7 +192,7 @@ contract PanopticPoolHarness is PanopticPool {
 }
 
 contract SemiFungiblePositionManagerHarness is SemiFungiblePositionManager {
-    constructor(IUniswapV3Factory _factory) SemiFungiblePositionManager(_factory) {}
+    constructor(IUniswapV3Factory _factory) SemiFungiblePositionManager(_factory, 10 ** 13, 0) {}
 
     function accountLiquidity(
         bytes32 positionKey
@@ -420,7 +420,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
     function _cacheWorldState(IUniswapV3Pool _pool) internal {
         pool = _pool;
-        poolId = PanopticMath.getPoolId(address(_pool));
+        poolId = PanopticMath.getPoolId(address(_pool), _pool.tickSpacing());
         token0 = _pool.token0();
         token1 = _pool.token1();
         isWETH = token0 == address(WETH) ? 0 : 1;
@@ -5855,7 +5855,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 actualValue1 = collateralToken1.maxRedeem(Bob);
 
         // if there are option positions this should return 0
-        if (panopticPool.numberOfPositions(Bob) != 0) {
+        if (panopticPool.numberOfLegs(Bob) != 0) {
             assertEq(0, actualValue0);
             assertEq(0, actualValue1);
             // if available is greater than the user balance
@@ -5916,7 +5916,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 actualValue1 = collateralToken1.maxWithdraw(Bob);
 
         // if there are option positions this should return 0
-        if (panopticPool.numberOfPositions(Bob) != 0) {
+        if (panopticPool.numberOfLegs(Bob) != 0) {
             assertEq(0, actualValue0, "with open positions 0");
             assertEq(0, actualValue1, "with open positions 1");
             // if available is greater than the user balance

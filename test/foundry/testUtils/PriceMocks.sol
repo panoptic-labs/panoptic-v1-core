@@ -31,6 +31,8 @@ contract UniPoolPriceMock {
     address public token1;
     uint24 public fee;
 
+    uint128 public constant maxLiquidityPerTick = 38350317471085141830651933667504588;
+
     function construct(
         Slot0 memory _slot0,
         address _token0,

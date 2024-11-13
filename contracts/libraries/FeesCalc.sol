@@ -94,13 +94,12 @@ library FeesCalc {
         unchecked {
             if (currentTick < tickLower) {
                 /**
-                  Diagrams shown for token0, and applies for token1 the same
                   L = lowerTick, U = upperTick
 
-                    liquidity         lowerOut0 (all fees collected in this price tick range for token0)
+                    liquidity         lowerOut (all fees collected in this price tick range)
                         ▲            ◄──────────────^v───► (to MAX_TICK)
                         │
-                        │                      upperOut0
+                        │                       upperOut
                         │                     ◄─────^v───►
                         │           ┌────────┐
                         │           │ chunk  │
@@ -116,10 +115,10 @@ library FeesCalc {
             } else if (currentTick >= tickUpper) {
                 /**
                     liquidity
-                        ▲           upperOut0
+                        ▲           upperOut
                         │◄─^v─────────────────────►
                         │
-                        │     lowerOut0  ┌────────┐
+                        │     lowerOut   ┌────────┐
                         │◄─^v───────────►│ chunk  │
                         │                │        │
                         └────────────────┴────────┴─▲─────► price tick
@@ -135,11 +134,11 @@ library FeesCalc {
                   current AMM tick is within the option position range (within the chunk)
 
                      liquidity
-                        ▲        feeGrowthGlobal0X128 = global fee growth
-                        │                             = (all fees collected for the entire price range for token 0)
+                        ▲        feeGrowthGlobalX128 = global fee growth
+                        │                            = (all fees collected for the entire price range)
                         │
                         │
-                        │     lowerOut0  ┌──────────────┐ upperOut0
+                        │     lowerOut   ┌──────────────┐  upperOut
                         │◄─^v───────────►│              │◄─────^v───►
                         │                │     chunk    │
                         │                │              │

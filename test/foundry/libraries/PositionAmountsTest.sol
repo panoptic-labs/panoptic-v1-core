@@ -8,7 +8,7 @@ import {PositionUtils} from "../testUtils/PositionUtils.sol";
 import "forge-std/Test.sol";
 
 contract PositionAmountsTest is Test, PositionUtils {
-    function test_Success_getLiquidityForAmountAtRatio_OTMBelow() public {
+    function test_Success_getLiquidityForAmountAtRatio_OTMBelow() public pure {
         uint160 CT = TickMath.getSqrtRatioAtTick(-100);
         uint160 TL = TickMath.getSqrtRatioAtTick(0);
         uint160 TU = TickMath.getSqrtRatioAtTick(100);
@@ -21,7 +21,7 @@ contract PositionAmountsTest is Test, PositionUtils {
         assertApproxEqAbs(amount1, 0, 10);
     }
 
-    function test_Success_getLiquidityForAmountAtRatio_OTMAbove() public {
+    function test_Success_getLiquidityForAmountAtRatio_OTMAbove() public pure {
         uint160 CT = TickMath.getSqrtRatioAtTick(0);
         uint160 TL = TickMath.getSqrtRatioAtTick(-100);
         uint160 TU = TickMath.getSqrtRatioAtTick(-50);
@@ -39,7 +39,7 @@ contract PositionAmountsTest is Test, PositionUtils {
         int256 tickLower,
         int256 currentTick,
         uint256 amount
-    ) public {
+    ) public pure {
         currentTick = bound(currentTick, -200_000 + 1, 200_000 - 1);
         tickLower = bound(tickLower, currentTick - 2048, currentTick - 1);
         tickUpper = bound(tickUpper, currentTick + 1, currentTick + 2048);

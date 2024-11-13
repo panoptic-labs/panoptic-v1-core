@@ -10,14 +10,19 @@ import {Errors} from "@libraries/Errors.sol";
 /// @author Axicon Labs Limited
 /// @notice This library provides functions to verify that a callback came from a canonical Uniswap V3 pool with a claimed set of features.
 library CallbackLib {
-    /// @notice Defining characteristics of a Uniswap V3 pool
+    /// @notice Type defining characteristics of a Uniswap V3 pool.
+    /// @param token0 The address of `token0` for the Uniswap pool
+    /// @param token1 The address of `token1` for the Uniswap pool
+    /// @param fee The fee tier of the Uniswap pool (in hundredths of basis points)
     struct PoolFeatures {
         address token0;
         address token1;
         uint24 fee;
     }
 
-    /// @notice Data sent by pool in mint/swap callbacks used to validate the pool and send back requisite tokens
+    /// @notice Type for data sent by pool in mint/swap callbacks used to validate the pool and send back requisite tokens.
+    /// @param poolFeatures The features of the pool that sent the callback (used to validate that the pool is canonical)
+    /// @param payer The address from which the requested tokens should be transferred
     struct CallbackData {
         PoolFeatures poolFeatures;
         address payer;

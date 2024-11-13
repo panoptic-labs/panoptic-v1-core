@@ -178,8 +178,8 @@ contract LeftRightHarness {
      * @param y the subtrahend
      * @return z the difference x - y
      */
-    function subRect(LeftRightSigned x, LeftRightSigned y) public pure returns (LeftRightSigned) {
-        LeftRightSigned r = LeftRightLibrary.subRect(x, y);
+    function subRect(LeftRightSigned x, LeftRightSigned y) public pure returns (LeftRightUnsigned) {
+        LeftRightUnsigned r = LeftRightLibrary.subRect(x, y);
         return r;
     }
 

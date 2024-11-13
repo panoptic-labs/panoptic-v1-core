@@ -137,7 +137,7 @@ library LeftRightLibrary {
     }
 
     /*//////////////////////////////////////////////////////////////
-                              MATH HELPERS
+                             MATH FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Add two LeftRight-encoded words; revert on overflow or underflow.
@@ -149,13 +149,13 @@ library LeftRightLibrary {
         LeftRightUnsigned y
     ) internal pure returns (LeftRightUnsigned z) {
         unchecked {
-            // adding leftRight packed uint128's is same as just adding the values explictily
+            // adding leftRight packed uint128's is same as just adding the values explicitly
             // given that we check for overflows of the left and right values
             z = LeftRightUnsigned.wrap(LeftRightUnsigned.unwrap(x) + LeftRightUnsigned.unwrap(y));
 
             // on overflow z will be less than either x or y
             // type cast z to uint128 to isolate the right slot and if it's lower than a value it's comprised of (x)
-            // then an overflow has occured
+            // then an overflow has occurred
             if (
                 LeftRightUnsigned.unwrap(z) < LeftRightUnsigned.unwrap(x) ||
                 (uint128(LeftRightUnsigned.unwrap(z)) < uint128(LeftRightUnsigned.unwrap(x)))
@@ -172,13 +172,13 @@ library LeftRightLibrary {
         LeftRightUnsigned y
     ) internal pure returns (LeftRightUnsigned z) {
         unchecked {
-            // subtracting leftRight packed uint128's is same as just subtracting the values explictily
+            // subtracting leftRight packed uint128's is same as just subtracting the values explicitly
             // given that we check for underflows of the left and right values
             z = LeftRightUnsigned.wrap(LeftRightUnsigned.unwrap(x) - LeftRightUnsigned.unwrap(y));
 
             // on underflow z will be greater than either x or y
             // type cast z to uint128 to isolate the right slot and if it's higher than a value that was subtracted from (x)
-            // then an underflow has occured
+            // then an underflow has occurred
             if (
                 LeftRightUnsigned.unwrap(z) > LeftRightUnsigned.unwrap(x) ||
                 (uint128(LeftRightUnsigned.unwrap(z)) > uint128(LeftRightUnsigned.unwrap(x)))
@@ -250,7 +250,7 @@ library LeftRightLibrary {
     function subRect(
         LeftRightSigned x,
         LeftRightSigned y
-    ) internal pure returns (LeftRightSigned z) {
+    ) internal pure returns (LeftRightUnsigned z) {
         unchecked {
             int256 left256 = int256(x.leftSlot()) - y.leftSlot();
             int128 left128 = int128(left256);
@@ -261,8 +261,8 @@ library LeftRightLibrary {
             if (left128 != left256 || right128 != right256) revert Errors.UnderOverFlow();
 
             return
-                z.toRightSlot(int128(Math.max(right128, 0))).toLeftSlot(
-                    int128(Math.max(left128, 0))
+                z.toRightSlot(uint128(uint256((Math.max(right128, 0))))).toLeftSlot(
+                    uint128(uint256((Math.max(left128, 0))))
                 );
         }
     }

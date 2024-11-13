@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.24;
 
-// Solady libraries
+// Libraries
 import {LibZip} from "solady/utils/LibZip.sol";
 
 type Pointer is uint256;
