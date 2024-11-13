@@ -24,10 +24,10 @@ using TokenIdLibrary for TokenId global;
 // (0) idV4             48bits     0bits      : least significant 48 bits of the Uniswap V4 pool ID, plus a pseudorandom number in the event of a collision
 // (1) tickSpacing      16bits     48bits     : tickSpacing for the pool corresponding to `idV4`. Up to 16 bits
 // ===== 4 times (one for each leg) ==============================================================
-// (2) asset             1bit      0bits      : Specifies the asset (0: token0, 1: token1)
+// (2) asset             1bit      0bits      : Specifies the asset (0: currency0, 1: currency1)
 // (3) optionRatio       7bits     1bits      : number of contracts per leg
 // (4) isLong            1bit      8bits      : long==1 means liquidity is removed, long==0 -> liquidity is added
-// (5) tokenType         1bit      9bits      : put/call: which token is moved when deployed (0 -> token0, 1 -> token1)
+// (5) tokenType         1bit      9bits      : put/call: which token is moved when deployed (0 -> currency0, 1 -> currency1)
 // (6) riskPartner       2bits     10bits     : normally its own index. Partner in defined risk position otherwise
 // (7) strike           24bits     12bits     : strike price; defined as (tickUpper + tickLower) / 2
 // (8) width            12bits     36bits     : width; defined as (tickUpper - tickLower) / tickSpacing
@@ -39,9 +39,9 @@ using TokenIdLibrary for TokenId global;
 //                        (strike price tick of the 3rd leg)
 //                            |             (width of the 2nd leg)
 //                            |                   |
-// (8)(7)(6)(5)(4)(3)(2)  (8)(7)(6)(5)(4)(3)(2)  (8)(7)(6)(5)(4)(3)(2)   (8)(7)(6)(5)(4)(3)(2)       (1)              (0)
-//  <---- 48 bits ---->    <---- 48 bits ---->    <---- 48 bits ---->     <---- 48 bits ---->   <- 16 bits ->     <- 48 bits ->
-//         Leg 4                  Leg 3                  Leg 2                   Leg 1           tickSpacing          idV4
+// (8)(7)(6)(5)(4)(3)(2)  (8)(7)(6)(5)(4)(3)(2)  (8)(7)(6)(5)(4)(3)(2)   (8)(7)(6)(5)(4)(3)(2)        (1)           (0)
+//  <---- 48 bits ---->    <---- 48 bits ---->    <---- 48 bits ---->     <---- 48 bits ---->   <- 16 bits ->   <- 48 bits ->
+//         Leg 4                  Leg 3                  Leg 2                   Leg 1           tickSpacing Uniswap Pool Pattern
 //
 //  <--- most significant bit                                                                             least significant bit --->
 //
@@ -100,11 +100,10 @@ library TokenIdLibrary {
     }
 
     /// @notice Get the asset basis for this TokenId.
-    /// @dev Which token is the asset - can be token0 (return 0) or token1 (return 1).
+    /// @dev Which token is the asset - can be currency0 (return 0) or currency1 (return 1).
     /// @param self The TokenId to extract `asset` from
     /// @param legIndex The leg index of this position (in {0,1,2,3}) to extract `asset` from
-    /// @dev Occupies the leftmost bit of the optionRatio 4 bits slot.
-    /// @return 0 if asset is token0, 1 if asset is token1
+    /// @return 0 if asset is currency0, 1 if asset is currency1
     function asset(TokenId self, uint256 legIndex) internal pure returns (uint256) {
         unchecked {
             return uint256((TokenId.unwrap(self) >> (64 + legIndex * 48)) % 2);
@@ -131,10 +130,10 @@ library TokenIdLibrary {
         }
     }
 
-    /// @notice Get the type of token moved for a given leg (implies a call or put). Either Token0 or Token1.
+    /// @notice Get the type of currency moved for a given leg (implies a call or put). Either currency0 or currency1.
     /// @param self The TokenId to extract `tokenType` at `legIndex` from
     /// @param legIndex The leg index of this position (in {0,1,2,3})
-    /// @return 1 if the token moved is token1 or 0 if the token moved is token0
+    /// @return 1 if the currency moved is currency1 or 0 if the currency moved is currency0
     function tokenType(TokenId self, uint256 legIndex) internal pure returns (uint256) {
         unchecked {
             return uint256((TokenId.unwrap(self) >> (64 + legIndex * 48 + 9)) % 2);
@@ -153,7 +152,7 @@ library TokenIdLibrary {
 
     /// @notice Get the strike price tick of the nth leg (with index `legIndex`).
     /// @param self The TokenId to extract `strike` at `legIndex` from
-    /// @param legIndex the leg index of this position (in {0,1,2,3})
+    /// @param legIndex The leg index of this position (in {0,1,2,3})
     /// @return The strike price (the underlying price of the leg)
     function strike(TokenId self, uint256 legIndex) internal pure returns (int24) {
         unchecked {
@@ -161,10 +160,10 @@ library TokenIdLibrary {
         }
     }
 
-    /// @notice Get the width of the nth leg (index `legIndex`). This is half the tick-range covered by the leg (tickUpper - tickLower)/2.
-    /// @dev Return as int24 to be compatible with the strike tick format (they naturally go together).
+    /// @notice Get the width (distance between upper and lower ticks) of the nth leg (index `legIndex`).
+    /// @dev The width is always positive; it is returned as an int24 for internal consistency with strike operations.
     /// @param self The TokenId to extract `width` at `legIndex` from
-    /// @param legIndex the leg index of this position (in {0,1,2,3})
+    /// @param legIndex The leg index of this position (in {0,1,2,3})
     /// @return The width of the position
     function width(TokenId self, uint256 legIndex) internal pure returns (int24) {
         unchecked {
@@ -176,7 +175,7 @@ library TokenIdLibrary {
                                 ENCODING
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Add the Uniswap V4 Pool pointed to by this option position (contains the entropy and tickSpacing).
+    /// @notice Add the Uniswap pool identifier corresponding to this option position (contains the entropy and tickSpacing).
     /// @param self The TokenId to add `_poolId` to
     /// @param _poolId The PoolID to add to `self`
     /// @return `self` with `_poolId` added to the PoolID slot
@@ -200,7 +199,6 @@ library TokenIdLibrary {
     /// @param self The TokenId to add `_asset` to
     /// @param _asset The asset to add to the Asset slot in `self` for `legIndex`
     /// @param legIndex The leg index of this position (in {0,1,2,3})
-    /// @dev Occupies the leftmost bit of the optionRatio 4 bits slot
     /// @return `self` with `_asset` added to the Asset slot
     function addAsset(
         TokenId self,
@@ -232,10 +230,9 @@ library TokenIdLibrary {
     }
 
     /// @notice Add "isLong" parameter indicating whether a leg is long (isLong=1) or short (isLong=0).
-    /// @notice returns 1 if the nth leg (leg index n-1) is a long position.
     /// @param self The TokenId to add `_isLong` to
     /// @param _isLong The isLong parameter to add to the IsLong slot in `self` for `legIndex`
-    /// @param legIndex the leg index of this position (in {0,1,2,3})
+    /// @param legIndex The leg index of this position (in {0,1,2,3})
     /// @return `self` with `_isLong` added to the IsLong slot for `legIndex`
     function addIsLong(
         TokenId self,
@@ -247,10 +244,10 @@ library TokenIdLibrary {
         }
     }
 
-    /// @notice Add the type of token moved for a given leg (implies a call or put). Either Token0 or Token1.
+    /// @notice Add the type of currency moved for a given leg (implies a call or put). Either currency0 or currency1.
     /// @param self The TokenId to add `_tokenType` to
     /// @param _tokenType The tokenType to add to the TokenType slot in `self` for `legIndex`
-    /// @param legIndex the leg index of this position (in {0,1,2,3})
+    /// @param legIndex The leg index of this position (in {0,1,2,3})
     /// @return `self` with `_tokenType` added to the TokenType slot for `legIndex`
     function addTokenType(
         TokenId self,
@@ -265,10 +262,10 @@ library TokenIdLibrary {
         }
     }
 
-    /// @notice Add the associated risk partner of the leg index (generally another leg in the overall position).
+    /// @notice Add the associated risk partner of the leg index.
     /// @param self The TokenId to add `_riskPartner` to
     /// @param _riskPartner The riskPartner to add to the RiskPartner slot in `self` for `legIndex`
-    /// @param legIndex the leg index of this position (in {0,1,2,3})
+    /// @param legIndex The leg index of this position (in {0,1,2,3})
     /// @return `self` with `_riskPartner` added to the RiskPartner slot for `legIndex`
     function addRiskPartner(
         TokenId self,
@@ -286,7 +283,7 @@ library TokenIdLibrary {
     /// @notice Add the strike price tick of the nth leg (index `legIndex`).
     /// @param self The TokenId to add `_strike` to
     /// @param _strike The strike price tick to add to the Strike slot in `self` for `legIndex`
-    /// @param legIndex the leg index of this position (in {0,1,2,3})
+    /// @param legIndex The leg index of this position (in {0,1,2,3})
     /// @return `self` with `_strike` added to the Strike slot for `legIndex`
     function addStrike(
         TokenId self,
@@ -305,7 +302,7 @@ library TokenIdLibrary {
     /// @notice Add the width of the nth leg (index `legIndex`).
     /// @param self The TokenId to add `_width` to
     /// @param _width The width to add to the Width slot in `self` for `legIndex`
-    /// @param legIndex the leg index of this position (in {0,1,2,3})
+    /// @param legIndex The leg index of this position (in {0,1,2,3})
     /// @return `self` with `_width` added to the Width slot for `legIndex`
     function addWidth(
         TokenId self,
@@ -358,11 +355,8 @@ library TokenIdLibrary {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Flip all the `isLong` positions in the legs in the `tokenId` option position.
-    /// @dev Uses XOR on existing isLong bits.
-    /// @dev Useful when we need to take an existing tokenId but now burn it.
-    /// @dev The way to do this is to simply flip it to a short instead.
     /// @param self The TokenId to flip isLong for on all active legs
-    /// @return tokenId with all `isLong` bits flipped
+    /// @return tokenId `self` with all `isLong` bits flipped
     function flipToBurnToken(TokenId self) internal pure returns (TokenId) {
         unchecked {
             // NOTE: This is a hack to avoid blowing up the contract size.
@@ -397,7 +391,6 @@ library TokenIdLibrary {
         }
     }
 
-    /// @notice Get the number of longs in this option position.
     /// @notice Count the number of legs (out of a maximum of 4) that are long positions.
     /// @param self The TokenId to count longs for
     /// @return The number of long positions in `self` (in the range {0,...,4})
@@ -408,7 +401,6 @@ library TokenIdLibrary {
     }
 
     /// @notice Get the option position's nth leg's (index `legIndex`) tick ranges (lower, upper).
-    /// @dev NOTE: Does not extract liquidity which is the third piece of information in a LiquidityChunk.
     /// @param self The TokenId to extract the tick range from
     /// @param legIndex The leg index of the position (in {0,1,2,3})
     /// @return legLowerTick The lower tick of the leg/liquidity chunk
@@ -425,9 +417,8 @@ library TokenIdLibrary {
     }
 
     /// @notice Return the number of active legs in the option position.
-    /// @param self The TokenId to count active legs for
-    /// @dev ASSUMPTION: There is at least 1 leg in this option position.
     /// @dev ASSUMPTION: For any leg, the option ratio is always > 0 (the leg always has a number of contracts associated with it).
+    /// @param self The TokenId to count active legs for
     /// @return The number of active legs in `self` (in the range {0,...,4})
     function countLegs(TokenId self) internal pure returns (uint256) {
         // Strip all bits except for the option ratios
@@ -449,7 +440,6 @@ library TokenIdLibrary {
     }
 
     /// @notice Clear a leg in an option position at `legIndex`.
-    /// @dev set bits of the leg to zero. Also sets the optionRatio and asset to zero of that leg.
     /// @dev NOTE: it's important that the caller fills in the leg details after.
     //  - optionRatio is zeroed
     //  - asset is zeroed
@@ -460,7 +450,7 @@ library TokenIdLibrary {
     //  - riskPartner is zeroed
     /// @param self The TokenId to clear the leg from
     /// @param legIndex The leg index to reset, in {0,1,2,3}
-    /// @return `self` with the `legIndex`th leg zeroed including optionRatio and asset
+    /// @return `self` with the `legIndex`th leg zeroed
     function clearLeg(TokenId self, uint256 legIndex) internal pure returns (TokenId) {
         if (legIndex == 0)
             return
@@ -494,8 +484,7 @@ library TokenIdLibrary {
                                VALIDATION
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Validate an option position and all its active legs; return the underlying AMM address.
-    /// @dev Used to validate a position tokenId and its legs.
+    /// @notice Checks if a TokenId is valid and reverts with an error reflecting the incorrect parameter for invalid positions.
     /// @param self The TokenId to validate
     function validate(TokenId self) internal pure {
         if (self.optionRatio(0) == 0) revert Errors.InvalidTokenIdParameter(1);
@@ -522,7 +511,6 @@ library TokenIdLibrary {
                         revert Errors.InvalidTokenIdParameter(6);
                     }
                 }
-                // now validate this ith leg in the position:
 
                 // The width cannot be 0; the minimum is 1
                 if ((self.width(i) == 0)) revert Errors.InvalidTokenIdParameter(5);
@@ -555,14 +543,14 @@ library TokenIdLibrary {
                     uint256 _tokenType = self.tokenType(i);
                     uint256 tokenTypeP = self.tokenType(riskPartnerIndex);
 
-                    // if the position is the same i.e both long calls, short put's etc.
+                    // if the position is the same i.e both long calls, short puts etc.
                     // then this is a regular position, not a defined risk position
                     if ((_isLong == isLongP) && (_tokenType == tokenTypeP))
                         revert Errors.InvalidTokenIdParameter(4);
 
                     // if the two token long-types and the tokenTypes are both different (one is a short call, the other a long put, e.g.), this is a synthetic position
                     // A synthetic long or short is more capital efficient than each leg separated because the long+short premia accumulate proportionally
-                    // unlike short stranlges, long strangles also cannot be partnered, because there is no reduction in risk (both legs can earn premia simultaneously)
+                    // unlike short strangles, long strangles also cannot be partnered, because there is no reduction in risk (both legs can earn premia simultaneously)
                     if (((_isLong != isLongP) || _isLong == 1) && (_tokenType != tokenTypeP))
                         revert Errors.InvalidTokenIdParameter(5);
                 }

@@ -43,7 +43,6 @@ import {V4RouterSimple} from "../testUtils/V4RouterSimple.sol";
 
 contract PanopticFactoryHarness is PanopticFactory {
     constructor(
-        address _WETH9,
         SemiFungiblePositionManager _SFPM,
         IPoolManager manager,
         address poolReference,
@@ -53,7 +52,6 @@ contract PanopticFactoryHarness is PanopticFactory {
         Pointer[][] memory pointers
     )
         PanopticFactory(
-            _WETH9,
             _SFPM,
             manager,
             poolReference,
@@ -83,12 +81,13 @@ contract PanopticFactoryTest is Test {
     // Mainnet factory address
     IUniswapV3Factory V3FACTORY = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
 
-    IPoolManager manager = IPoolManager(address(new PoolManager()));
+    IPoolManager manager = IPoolManager(address(new PoolManager(address(0))));
 
     V4RouterSimple routerV4 = new V4RouterSimple(manager);
 
     // deploy the semiFungiblePositionManager
-    SemiFungiblePositionManager sfpm = new SemiFungiblePositionManager(manager);
+    SemiFungiblePositionManager sfpm =
+        new SemiFungiblePositionManager(manager, 10 ** 13, 10 ** 13, 0);
 
     address Deployer = makeAddr("Deployer");
 
@@ -249,7 +248,6 @@ contract PanopticFactoryTest is Test {
 
         // Deploy factory
         panopticFactory = new PanopticFactoryHarness(
-            address(_WETH),
             sfpm,
             manager,
             address(new PanopticPool(sfpm, manager)),
@@ -280,22 +278,13 @@ contract PanopticFactoryTest is Test {
             )
         );
 
-        // Amount of liquidity currently in the univ3 pool
-        uint128 liquidityBefore = StateLibrary.getLiquidity(manager, poolKey.toId());
-
-        // amount of assets held before mint
-        // Compute amount of liquidity to deploy
-        (uint128 fullRangeLiquidity, , ) = computeFullRangeLiquidity();
-
         {
             // Deploy pool
             // links the Uniswap V3 pool to the Panoptic pool
             PanopticPool deployedPool = panopticFactory.deployNewPool(
                 IV3CompatibleOracle(address(pool)),
                 poolKey,
-                salt,
-                type(uint256).max,
-                type(uint256).max
+                salt
             );
 
             // see if pool exists at the precomputed address
@@ -325,119 +314,6 @@ contract PanopticFactoryTest is Test {
             assertEq(token1, linkedPool.token1());
             assertEq(fee, linkedPool.fee());
         }
-
-        /* Liquidity checks */
-        // Amount of liquidity in univ3 pool after Panoptic Pool deployment
-        uint128 liquidityAfter = StateLibrary.getLiquidity(manager, poolKey.toId());
-        // ensure liquidity in pool now is sum of liquidity before and user deployed amount
-        assertEq(liquidityAfter - liquidityBefore, fullRangeLiquidity);
-    }
-
-    // deploy a pool with token0 as WETH
-    function test_Success_deployNewPoolWETH0() public {
-        // No need to fuzz as we are testing for a specific condition
-        // use pool[7] -> ETH_USDT_5
-        _initalizeWorldState(pools[5]);
-
-        // generate a not so random salt
-        uint96 salt = uint96(block.timestamp);
-
-        // Deploy pool
-        // links the uni v3 pool to the Panoptic pool
-        panopticFactory.deployNewPool(
-            IV3CompatibleOracle(address(pool)),
-            poolKey,
-            salt,
-            type(uint256).max,
-            type(uint256).max
-        );
-    }
-
-    // deploy a pool with token1 as WETH
-    function test_Success_deployNewPoolToken1() public {
-        // No need to fuzz as we are testing for a specific condition
-        // use pool[1] -> USDC_USDT_1
-        _initalizeWorldState(pools[1]);
-
-        // generate a not so random salt
-        uint96 salt = uint96(block.timestamp);
-
-        // Deploy pool
-        // links the uni v3 pool to the Panoptic pool
-        panopticFactory.deployNewPool(
-            IV3CompatibleOracle(address(pool)),
-            poolKey,
-            salt,
-            type(uint256).max,
-            type(uint256).max
-        );
-    }
-
-    function test_Success_deployNewPool_SlippagePass() public {
-        _initWorld(0);
-
-        uint256 salt = uint96(block.timestamp) + (uint256(uint160(address(this))) << 96);
-
-        (, uint256 amount0, uint256 amount1) = computeFullRangeLiquidity();
-
-        panopticFactory.deployNewPool(
-            IV3CompatibleOracle(address(pool)),
-            poolKey,
-            uint96(salt),
-            amount0,
-            amount1
-        );
-    }
-
-    function test_Fail_deployNewPool_Slippage0() public {
-        _initWorld(0);
-
-        uint256 salt = uint96(block.timestamp) + (uint256(uint160(address(this))) << 96);
-
-        (, uint256 amount0, uint256 amount1) = computeFullRangeLiquidity();
-
-        vm.expectRevert(Errors.PriceBoundFail.selector);
-        panopticFactory.deployNewPool(
-            IV3CompatibleOracle(address(pool)),
-            poolKey,
-            uint96(salt),
-            amount0 - 1,
-            amount1
-        );
-    }
-
-    function test_Fail_deployNewPool_Slippage1() public {
-        _initWorld(0);
-
-        uint256 salt = uint96(block.timestamp) + (uint256(uint160(address(this))) << 96);
-
-        (, uint256 amount0, uint256 amount1) = computeFullRangeLiquidity();
-
-        vm.expectRevert(Errors.PriceBoundFail.selector);
-        panopticFactory.deployNewPool(
-            IV3CompatibleOracle(address(pool)),
-            poolKey,
-            uint96(salt),
-            amount0,
-            amount1 - 1
-        );
-    }
-
-    function test_Fail_deployNewPool_Slippage0Both() public {
-        _initWorld(0);
-
-        uint256 salt = uint96(block.timestamp) + (uint256(uint160(address(this))) << 96);
-
-        (, uint256 amount0, uint256 amount1) = computeFullRangeLiquidity();
-
-        vm.expectRevert(Errors.PriceBoundFail.selector);
-        panopticFactory.deployNewPool(
-            IV3CompatibleOracle(address(pool)),
-            poolKey,
-            uint96(salt),
-            amount0 - 1,
-            amount1 - 1
-        );
     }
 
     // Revert if trying to deploy a Panoptic Pool ontop of an invalid Uniswap Pool
@@ -447,13 +323,7 @@ contract PanopticFactoryTest is Test {
 
         // Deploy invalid pool (uninitalized tokens and fee)
         vm.expectRevert(Errors.UniswapPoolNotInitialized.selector);
-        panopticFactory.deployNewPool(
-            IV3CompatibleOracle(address(pool)),
-            poolKey,
-            salt,
-            type(uint256).max,
-            type(uint256).max
-        );
+        panopticFactory.deployNewPool(IV3CompatibleOracle(address(pool)), poolKey, salt);
     }
 
     // Revert if deploying a Panoptic Pool that has already been initalized
@@ -466,24 +336,12 @@ contract PanopticFactoryTest is Test {
         uint96 salt = uint96(block.timestamp);
 
         // Deploy pool
-        panopticFactory.deployNewPool(
-            IV3CompatibleOracle(address(pool)),
-            poolKey,
-            salt,
-            type(uint256).max,
-            type(uint256).max
-        );
+        panopticFactory.deployNewPool(IV3CompatibleOracle(address(pool)), poolKey, salt);
 
         // Attempt to deploy pool again
         vm.expectRevert(Errors.PoolAlreadyInitialized.selector);
         unchecked {
-            panopticFactory.deployNewPool(
-                IV3CompatibleOracle(address(pool)),
-                poolKey,
-                salt + 1,
-                type(uint256).max,
-                type(uint256).max
-            );
+            panopticFactory.deployNewPool(IV3CompatibleOracle(address(pool)), poolKey, salt + 1);
         }
     }
 
@@ -497,9 +355,7 @@ contract PanopticFactoryTest is Test {
         PanopticPool deployedPool = panopticFactory.deployNewPool(
             IV3CompatibleOracle(address(pool)),
             poolKey,
-            salt,
-            type(uint256).max,
-            type(uint256).max
+            salt
         );
         uint256 panopticPoolAddress = uint256(uint160(address(deployedPool)));
         bytes memory uri = bytes(panopticFactory.tokenURI(panopticPoolAddress));
@@ -565,76 +421,5 @@ contract PanopticFactoryTest is Test {
 
         // check highestRarity address was reached or surpassed
         assertGe(highestRarity, minTargetRarity);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                COMPUTE FULL RANGE LIQUIDITY
-    //////////////////////////////////////////////////////////////*/
-
-    /// Replicated logic from _mintFullRange in Panoptic Factory
-    function computeFullRangeLiquidity()
-        internal
-        returns (uint128 fullRangeLiquidity, uint256, uint256)
-    {
-        // get current tick
-        (uint160 currentSqrtPriceX96, , , , , , ) = pool.slot0();
-
-        // For full range: L = Δx * sqrt(P) = Δy / sqrt(P)
-        // We start with fixed delta amounts and apply this equation to calculate the liquidity
-        unchecked {
-            // Since we know one of the tokens is WETH, we simply add 0.1 ETH + worth in tokens
-            if (token0 == _WETH) {
-                fullRangeLiquidity = uint128(
-                    Math.mulDivRoundingUp(
-                        FULL_RANGE_LIQUIDITY_AMOUNT_WETH,
-                        currentSqrtPriceX96,
-                        Constants.FP96
-                    )
-                );
-            } else if (token1 == _WETH) {
-                fullRangeLiquidity = uint128(
-                    Math.mulDivRoundingUp(
-                        FULL_RANGE_LIQUIDITY_AMOUNT_WETH,
-                        Constants.FP96,
-                        currentSqrtPriceX96
-                    )
-                );
-            } else {
-                // Find the resulting liquidity for providing 1e6 of both tokens
-                uint128 liquidity0 = uint128(
-                    Math.mulDivRoundingUp(
-                        FULL_RANGE_LIQUIDITY_AMOUNT_TOKEN,
-                        currentSqrtPriceX96,
-                        Constants.FP96
-                    )
-                );
-                uint128 liquidity1 = uint128(
-                    Math.mulDivRoundingUp(
-                        FULL_RANGE_LIQUIDITY_AMOUNT_TOKEN,
-                        Constants.FP96,
-                        currentSqrtPriceX96
-                    )
-                );
-
-                // Pick the greater of the liquidities - i.e the more "expensive" option
-                // This ensures that the liquidity added is sufficiently large
-                fullRangeLiquidity = liquidity0 > liquidity1 ? liquidity0 : liquidity1;
-            }
-
-            // simulate the amounts minted in the Uniswap pool
-            uint256 snapshot = vm.snapshot();
-            (int256 amount0, int256 amount1) = routerV4.modifyLiquidity(
-                address(0),
-                poolKey,
-                (TickMath.MIN_TICK / tickSpacing) * tickSpacing,
-                (TickMath.MAX_TICK / tickSpacing) * tickSpacing,
-                int256(uint256(fullRangeLiquidity))
-            );
-
-            // revert state
-            vm.revertTo(snapshot);
-
-            return (fullRangeLiquidity, uint256(-amount0), uint256(-amount1));
-        }
     }
 }

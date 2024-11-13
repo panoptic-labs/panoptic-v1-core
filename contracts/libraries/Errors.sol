@@ -31,9 +31,6 @@ library Errors {
     /// @notice Tick is not between `MIN_TICK` and `MAX_TICK`
     error InvalidTick();
 
-    /// @notice The result of a notional value conversion is too small (=0) or too large (>2^128-1)
-    error InvalidNotionalValue();
-
     /// @notice The TokenId provided by the user is malformed or invalid
     /// @param parameterType poolId=0, ratio=1, tokenType=2, risk_partner=3, strike=4, width=5, two identical strike/width/tokenType chunks=6
     error InvalidTokenIdParameter(uint256 parameterType);
@@ -59,6 +56,9 @@ library Errors {
     /// @notice Uniswap pool has already been initialized in the SFPM or created in the factory
     error PoolAlreadyInitialized();
 
+    /// @notice SemiFungiblePositionManager: Tick range cannot be expanded on an an uninitialized pool
+    error PoolNotInitialized();
+
     /// @notice PanopticPool: A position with the given token ID has already been minted by the caller and is still open
     error PositionAlreadyMinted();
 
@@ -75,15 +75,16 @@ library Errors {
     /// @dev This is a safeguard against price manipulation during option mints, burns, and liquidations
     error StaleTWAP();
 
-    /// @notice PanopticPool: An account has reached the maximum number of open positions and cannnot mint another
-    error TooManyPositionsOpen();
+    /// @notice PanopticPool: The position being minted would increase the total amount of legs open for the account above the maximum
+    error TooManyLegsOpen();
 
     /// @notice ERC20 or SFPM (ERC1155) token transfer did not complete successfully
     error TransferFailed();
 
     /// @notice The tick range given by the strike price and width is invalid
-    /// because the upper and lower ticks are not multiples of `tickSpacing`
-    error TicksNotInitializable();
+    /// because the upper and lower ticks are not initializable multiples of `tickSpacing`
+    /// or one of the ticks exceeds the `MIN_TICK` or `MAX_TICK` bounds
+    error InvalidTickBound();
 
     /// @notice An operation in a library has failed due to an underflow or overflow
     error UnderOverFlow();

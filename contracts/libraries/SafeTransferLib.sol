@@ -10,6 +10,24 @@ import {Errors} from "@libraries/Errors.sol";
 /// @dev Caution! This library won't check that a token has code, responsibility is delegated to the caller.
 library SafeTransferLib {
     /*//////////////////////////////////////////////////////////////
+                             ETH OPERATIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Safely transfers ETH to a specified address.
+    /// @param to The address to transfer ETH to
+    /// @param amount The amount of ETH to transfer
+    function safeTransferETH(address to, uint256 amount) internal {
+        bool success;
+
+        assembly {
+            // Transfer the ETH and store if it succeeded or not.
+            success := call(gas(), to, amount, 0, 0, 0, 0)
+        }
+
+        if (!success) revert Errors.TransferFailed();
+    }
+
+    /*//////////////////////////////////////////////////////////////
                             ERC20 OPERATIONS
     //////////////////////////////////////////////////////////////*/
 

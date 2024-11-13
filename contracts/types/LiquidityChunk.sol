@@ -113,7 +113,6 @@ library LiquidityChunkLibrary {
         int24 _tickUpper
     ) internal pure returns (LiquidityChunk) {
         unchecked {
-            // convert tick upper to uint24 as explicit conversion from int24 to uint256 is not allowed
             return
                 LiquidityChunk.wrap(
                     LiquidityChunk.unwrap(self) + ((uint256(uint24(_tickUpper))) << 208)
@@ -146,7 +145,6 @@ library LiquidityChunkLibrary {
         int24 _tickUpper
     ) internal pure returns (LiquidityChunk) {
         unchecked {
-            // convert tick upper to uint24 as explicit conversion from int24 to uint256 is not allowed
             return
                 LiquidityChunk.wrap(LiquidityChunk.unwrap(self) & CLEAR_TU_MASK).addTickUpper(
                     _tickUpper

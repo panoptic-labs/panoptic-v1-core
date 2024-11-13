@@ -58,7 +58,7 @@ contract TokenIdTest is Test, PositionUtils {
         harness = new TokenIdHarness();
     }
 
-    function test_Success_AddPoolId(address y) public {
+    function test_Success_AddPoolId(address y) public view {
         TokenId tokenId;
 
         tokenId = harness.addPoolId(tokenId, uint64(uint160(y)));
@@ -66,7 +66,7 @@ contract TokenIdTest is Test, PositionUtils {
         assertEq(harness.poolId(tokenId), uint64(uint160(y)));
     }
 
-    function test_Success_AddTickSpacing(int24 y) public {
+    function test_Success_AddTickSpacing(int24 y) public view {
         TokenId tokenId;
 
         y = int24(bound(y, int24(0), int24(2 ** 16 - 1)));
@@ -78,7 +78,7 @@ contract TokenIdTest is Test, PositionUtils {
     /*//////////////////////////////////////////////////////////////
                             ADD WIDTH
     //////////////////////////////////////////////////////////////*/
-    function test_Success_AddWidth(int24 y, int24 z, int24 u, int24 v) public {
+    function test_Success_AddWidth(int24 y, int24 z, int24 u, int24 v) public view {
         TokenId tokenId;
 
         unchecked {
@@ -123,7 +123,7 @@ contract TokenIdTest is Test, PositionUtils {
     /*//////////////////////////////////////////////////////////////
                             ADD OPTION RATIO
     //////////////////////////////////////////////////////////////*/
-    function test_Success_AddOptionRatio(uint16 y, uint16 z, uint16 u, uint16 v) public {
+    function test_Success_AddOptionRatio(uint16 y, uint16 z, uint16 u, uint16 v) public view {
         TokenId tokenId;
 
         // the optionRatio is 7 bits so mask it:
@@ -161,7 +161,7 @@ contract TokenIdTest is Test, PositionUtils {
     /*//////////////////////////////////////////////////////////////
                             ADD NUMERAIRE
     //////////////////////////////////////////////////////////////*/
-    function test_Success_AddAsset(uint16 y, uint16 z, uint16 u, uint16 v) public {
+    function test_Success_AddAsset(uint16 y, uint16 z, uint16 u, uint16 v) public view {
         TokenId tokenId;
 
         // the asset is 1 bit so mask it:
@@ -199,7 +199,7 @@ contract TokenIdTest is Test, PositionUtils {
     /*//////////////////////////////////////////////////////////////
                             ADD STRIKE
     //////////////////////////////////////////////////////////////*/
-    function test_Success_AddStrike(int24 y, int24 z, int24 u, int24 v) public {
+    function test_Success_AddStrike(int24 y, int24 z, int24 u, int24 v) public view {
         TokenId tokenId;
 
         tokenId = harness.addStrike(tokenId, y, 0);
@@ -231,7 +231,7 @@ contract TokenIdTest is Test, PositionUtils {
                             ADD IS LONG
     //////////////////////////////////////////////////////////////*/
 
-    function test_Success_AddIsLong(uint16 y, uint16 z, uint16 u, uint16 v) public {
+    function test_Success_AddIsLong(uint16 y, uint16 z, uint16 u, uint16 v) public view {
         TokenId tokenId;
 
         uint256 numLongs; // also test the long counter
@@ -285,7 +285,7 @@ contract TokenIdTest is Test, PositionUtils {
     /*//////////////////////////////////////////////////////////////
                             ADD RISK PARTNER
     //////////////////////////////////////////////////////////////*/
-    function test_Success_AddRiskPartner(uint16 y, uint16 z, uint16 u, uint16 v) public {
+    function test_Success_AddRiskPartner(uint16 y, uint16 z, uint16 u, uint16 v) public view {
         TokenId tokenId;
 
         // the riskPartner is 2 bits so mask it:
@@ -323,7 +323,7 @@ contract TokenIdTest is Test, PositionUtils {
     /*//////////////////////////////////////////////////////////////
                             ADD TOKEN TYPE
     //////////////////////////////////////////////////////////////*/
-    function test_Success_AddTokenType(uint16 y, uint16 z, uint16 u, uint16 v) public {
+    function test_Success_AddTokenType(uint16 y, uint16 z, uint16 u, uint16 v) public view {
         TokenId tokenId;
 
         // the tokenType is 1 bit so mask it:
@@ -370,7 +370,7 @@ contract TokenIdTest is Test, PositionUtils {
         uint16 riskPartner,
         int24 strike,
         int24 width
-    ) public {
+    ) public view {
         TokenId tokenId;
 
         /// do validations
@@ -586,7 +586,7 @@ contract TokenIdTest is Test, PositionUtils {
         assertEq(TokenId.unwrap(expectedToken), TokenId.unwrap(returnedToken));
     }
 
-    function test_Success_flipToBurnToken_emptyLegs() public {
+    function test_Success_flipToBurnToken_emptyLegs() public view {
         TokenId tokenId;
 
         // expected data
@@ -678,106 +678,6 @@ contract TokenIdTest is Test, PositionUtils {
         // Ensure tick values returned are correct
         assertEq(tickLower, strike - rangeDown);
         assertEq(tickUpper, strike + rangeUp);
-    }
-
-    function test_Fail_asTicks_TicksNotInitializable(
-        uint256 widthSeed,
-        int256 strikeSeed,
-        int24 poolStatusSeed
-    ) public {
-        // fuzzes a valid currentTick
-        setPoolStatus(poolStatusSeed);
-
-        // Width must be > 0 < 4096
-        int24 width = int24(uint24(bound(widthSeed, 1, 4095)));
-
-        int24 rangeDown;
-        int24 rangeUp;
-        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, tickSpacing);
-
-        // The position must not extend outside of the max/min tick
-        int24 strike = int24(bound(strikeSeed, minTick + rangeDown, maxTick - rangeUp));
-
-        vm.assume((strike + rangeDown) % tickSpacing != 0 || (strike - rangeUp) % tickSpacing != 0);
-
-        // We now construct the tokenId with properly bounded fuzz values
-        TokenId tokenId = harness.addTickSpacing(TokenId.wrap(0), tickSpacing);
-        tokenId = harness.addWidth(tokenId, width, 0); // width
-        tokenId = harness.addStrike(tokenId, strike, 0); // strike
-
-        vm.expectRevert(Errors.TicksNotInitializable.selector);
-        // Test the asTicks function
-        harness.asTicks(tokenId, 0);
-    }
-
-    function test_Fail_asTicks_belowMinTick(
-        uint256 widthSeed,
-        int256 strikeSeed,
-        int24 poolStatusSeed
-    ) public {
-        // fuzzes a valid currentTick
-        setPoolStatus(poolStatusSeed);
-
-        // Width must be > 0 < 4096
-        int24 width = int24(uint24(bound(widthSeed, 1, 4095)));
-
-        int24 rangeDown;
-        int24 rangeUp;
-        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, tickSpacing);
-
-        vm.assume(minTick != TickMath.MIN_TICK);
-
-        // The position must extend beyond the min tick
-        int24 strike = int24(bound(strikeSeed, TickMath.MIN_TICK, minTick + rangeDown - 1));
-
-        // assume for now
-        vm.assume(
-            (strike - rangeDown) % tickSpacing == 0 || (strike + rangeDown) % tickSpacing == 0
-        );
-
-        // We now construct the tokenId with properly bounded fuzz values
-        TokenId tokenId = harness.addTickSpacing(TokenId.wrap(0), tickSpacing);
-        tokenId = harness.addWidth(tokenId, width, 0); // width
-        tokenId = harness.addStrike(tokenId, strike, 0); // strike
-
-        // Test the asTicks function
-        vm.expectRevert(Errors.TicksNotInitializable.selector);
-        harness.asTicks(tokenId, 0);
-    }
-
-    function test_Fail_asTicks_aboveMaxTick(
-        uint256 widthSeed,
-        int256 strikeSeed,
-        int24 poolStatusSeed
-    ) public {
-        // fuzzes a valid currentTick
-        setPoolStatus(poolStatusSeed);
-
-        // Width must be > 0 < 4095 (4095 is full range)
-        int24 width = int24(int256(bound(widthSeed, 1, 4094)));
-
-        int24 rangeDown;
-        int24 rangeUp;
-        (rangeDown, rangeUp) = PanopticMath.getRangesFromStrike(width, tickSpacing);
-
-        vm.assume(maxTick != TickMath.MAX_TICK);
-
-        // The position must extend beyond the max tick
-        int24 strike = int24(bound(strikeSeed, maxTick - rangeUp + 1, TickMath.MAX_TICK));
-
-        // assume for now
-        vm.assume(
-            (strike - rangeDown) % tickSpacing == 0 || (strike + rangeDown) % tickSpacing == 0
-        );
-
-        // We now construct the tokenId with properly bounded fuzz values
-        TokenId tokenId = harness.addTickSpacing(TokenId.wrap(0), tickSpacing);
-        tokenId = harness.addWidth(tokenId, width, 0); // width
-        tokenId = harness.addStrike(tokenId, strike, 0); // strike
-
-        // Test the asTicks function
-        vm.expectRevert(Errors.TicksNotInitializable.selector);
-        harness.asTicks(tokenId, 0);
     }
 
     /*//////////////////////////////////////////////////////////////

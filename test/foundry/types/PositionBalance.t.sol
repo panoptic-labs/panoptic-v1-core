@@ -21,7 +21,7 @@ contract PositionBalanceTest is Test {
         harness = new PositionBalanceHarness();
     }
 
-    function test_Success_storeBalanceData(uint128 y, uint16 z, uint16 u, uint96 w) public {
+    function test_Success_storeBalanceData(uint128 y, uint16 z, uint16 u, uint96 w) public view {
         uint32 utilizations = uint32(z) + (uint32(u) << 16);
         PositionBalance x = harness.storeBalanceData(y, utilizations, w);
         assertEq(harness.positionSize(x), y);
@@ -31,14 +31,14 @@ contract PositionBalanceTest is Test {
         assertEq(harness.tickData(x), w);
     }
 
-    function test_Success_storeBalanceData_utilizations(uint128 y, uint32 z, uint96 u) public {
+    function test_Success_storeBalanceData_utilizations(uint128 y, uint32 z, uint96 u) public view {
         PositionBalance x = harness.storeBalanceData(y, z, u);
         assertEq(harness.positionSize(x), y);
         assertEq(harness.utilizations(x), z);
         assertEq(harness.tickData(x), u);
     }
 
-    function test_Success_packTickData(int24 y, int24 z, int24 u, int24 w) public {
+    function test_Success_packTickData(int24 y, int24 z, int24 u, int24 w) public view {
         uint96 x = harness.packTickData(y, z, u, w);
 
         console2.log("x", x);

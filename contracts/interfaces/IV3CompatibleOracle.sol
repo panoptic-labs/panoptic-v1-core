@@ -8,7 +8,7 @@ pragma solidity >=0.5.0;
 interface IV3CompatibleOracle {
     /// @notice The 0th storage slot in the oracle stores many values, and is exposed as a single method to save gas
     /// when accessed externally.
-    /// @return sqrtPriceX96 The current price of the oracle as a sqrt(token1/token0) Q64.96 value
+    /// @return sqrtPriceX96 The current price of the oracle as a sqrt(currency1/currency0) Q64.96 value
     /// @return tick The current tick of the oracle, i.e. according to the last tick transition that was run.
     /// This value may not always be equal to SqrtTickMath.getTickAtSqrtRatio(sqrtPriceX96) if the price is on a tick
     /// boundary
@@ -27,7 +27,7 @@ interface IV3CompatibleOracle {
             bool
         );
 
-    /// @notice Returns data about a specific observation index
+    /// @notice Returns data about a specific observation index.
     /// @param index The element of the observations array to fetch
     /// @return blockTimestamp The timestamp of the observation
     /// @return tickCumulative The tick multiplied by seconds elapsed for the life of the pool as of the observation timestamp
@@ -45,12 +45,12 @@ interface IV3CompatibleOracle {
             bool initialized
         );
 
-    /// @notice Returns the cumulative tick and liquidity as of each timestamp `secondsAgo` from the current block timestamp
+    /// @notice Returns the cumulative tick and liquidity as of each timestamp `secondsAgo` from the current block timestamp.
     /// @dev To get a time weighted average tick or liquidity-in-range, you must call this with two values, one representing
     /// the beginning of the period and another for the end of the period. E.g., to get the last hour time-weighted average tick,
     /// you must call it with secondsAgos = [3600, 0].
     /// @dev The time weighted average tick represents the geometric time weighted average price of the pool, in
-    /// log base sqrt(1.0001) of token1 / token0. The TickMath library can be used to go from a tick value to a ratio.
+    /// log base sqrt(1.0001) of currency1 / currency0. The TickMath library can be used to go from a tick value to a ratio.
     /// @param secondsAgos From how long ago each cumulative tick and liquidity value should be returned
     /// @return tickCumulatives Cumulative tick values as of each `secondsAgos` from the current block timestamp
     /// @return secondsPerLiquidityCumulativeX128s Cumulative seconds per liquidity-in-range value as of each `secondsAgos` from the current block
@@ -65,7 +65,7 @@ interface IV3CompatibleOracle {
             uint160[] memory secondsPerLiquidityCumulativeX128s
         );
 
-    /// @notice Increase the maximum number of price and liquidity observations that this oracle will store
+    /// @notice Increase the maximum number of price and liquidity observations that this oracle will store.
     /// @param observationCardinalityNext The desired minimum number of observations for the oracle to store
     function increaseObservationCardinalityNext(uint16 observationCardinalityNext) external;
 }

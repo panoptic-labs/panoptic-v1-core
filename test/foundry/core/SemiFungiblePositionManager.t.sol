@@ -39,9 +39,11 @@ import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {V4RouterSimple} from "../testUtils/V4RouterSimple.sol";
 
 contract SemiFungiblePositionManagerHarness is SemiFungiblePositionManager {
-    constructor(IPoolManager _manager) SemiFungiblePositionManager(_manager) {}
+    constructor(
+        IPoolManager _manager
+    ) SemiFungiblePositionManager(_manager, 10 ** 13, 10 ** 13, 0) {}
 
-    function getPoolIdWithInitBit(PoolId poolId) external view returns (uint256) {
+    function getPoolIdData(PoolId poolId) external view returns (PoolIdData memory) {
         return s_V4toSFPMIdData[poolId];
     }
 }
@@ -271,7 +273,7 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
     }
 
     function setUp() public {
-        manager = new PoolManager();
+        manager = new PoolManager(address(0));
         routerV4 = new V4RouterSimple(manager);
 
         sfpm = new SemiFungiblePositionManagerHarness(manager);
@@ -985,9 +987,11 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
 
         // Check that the pool ID is set correctly
         assertEq(
-            sfpm.getPoolIdWithInitBit(poolKey.toId()),
-            PanopticMath.getPoolId(poolKey.toId(), poolKey.tickSpacing) + 2 ** 255
+            uint256(sfpm.getPoolIdData(poolKey.toId()).poolId),
+            PanopticMath.getPoolId(poolKey.toId(), poolKey.tickSpacing)
         );
+
+        assertTrue(sfpm.getPoolIdData(poolKey.toId()).initialized);
     }
 
     function test_Success_initializeAMMPool_Multiple() public {
@@ -1007,9 +1011,11 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
 
             // Check that the pool ID is set correctly
             assertEq(
-                sfpm.getPoolIdWithInitBit(poolKey.toId()),
-                PanopticMath.getPoolId(poolKey.toId(), poolKey.tickSpacing) + 2 ** 255
+                uint256(sfpm.getPoolIdData(poolKey.toId()).poolId),
+                PanopticMath.getPoolId(poolKey.toId(), poolKey.tickSpacing)
             );
+
+            assertTrue(sfpm.getPoolIdData(poolKey.toId()).initialized);
         }
     }
 
@@ -3841,7 +3847,7 @@ contract SemiFungiblePositionManagerTest is PositionUtils {
                                  SANITY
     //////////////////////////////////////////////////////////////*/
 
-    function test_Sanity_ITMSwapApprox(uint256 price, int256 itm0, int256 itm1) public {
+    function test_Sanity_ITMSwapApprox(uint256 price, int256 itm0, int256 itm1) public pure {
         price = bound(price, 10 ** 3, 10 ** 9);
         itm0 = bound(itm0, -10 ** 27, 10 ** 27);
         itm1 = bound(itm1, -10 ** 27, 10 ** 27);

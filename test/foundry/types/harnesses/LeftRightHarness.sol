@@ -172,6 +172,17 @@ contract LeftRightHarness {
         return r;
     }
 
+    /**
+     * @notice Subtract two int256 bit LeftRight-encoded words; rectify to 0 on negative result.
+     * @param x the minuend
+     * @param y the subtrahend
+     * @return z the difference x - y
+     */
+    function subRect(LeftRightSigned x, LeftRightSigned y) public pure returns (LeftRightUnsigned) {
+        LeftRightUnsigned r = LeftRightLibrary.subRect(x, y);
+        return r;
+    }
+
     function addCapped(
         LeftRightUnsigned x,
         LeftRightUnsigned dx,

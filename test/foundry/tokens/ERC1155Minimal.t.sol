@@ -55,15 +55,15 @@ contract ERC1155Minimal is Test {
         token = new ERC1155MinimalHarness();
     }
 
-    function testSuccess_supportsInterface_ERC165() public {
+    function testSuccess_supportsInterface_ERC165() public view {
         assertTrue(token.supportsInterface(0x01ffc9a7));
     }
 
-    function testSuccess_supportsInterface_ERC1155() public {
+    function testSuccess_supportsInterface_ERC1155() public view {
         assertTrue(token.supportsInterface(0xd9b67a26));
     }
 
-    function testSuccess_supportsInterface_unsupported(bytes4 identifier) public {
+    function testSuccess_supportsInterface_unsupported(bytes4 identifier) public view {
         vm.assume(identifier != 0x01ffc9a7);
         vm.assume(identifier != 0xd9b67a26);
         assertTrue(!token.supportsInterface(0xdeadbeef));

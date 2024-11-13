@@ -85,11 +85,11 @@ contract POC_Test is Test, PositionUtils {
     function setUp() public {
         vm.startPrank(Deployer);
 
-        manager = IPoolManager(address(new PoolManager()));
+        manager = IPoolManager(address(new PoolManager(address(0))));
 
         routerV4 = new V4RouterSimple(manager);
 
-        sfpm = new SemiFungiblePositionManager(manager);
+        sfpm = new SemiFungiblePositionManager(manager, 10 ** 13, 10 ** 13, 0);
 
         ph = new PanopticHelper(sfpm);
 
@@ -140,7 +140,6 @@ contract POC_Test is Test, PositionUtils {
         vm.startPrank(Deployer);
 
         factory = new PanopticFactory(
-            address(token1),
             sfpm,
             manager,
             poolReference,
@@ -160,9 +159,7 @@ contract POC_Test is Test, PositionUtils {
                 factory.deployNewPool(
                     IV3CompatibleOracle(address(uniPool)),
                     poolKey,
-                    uint96(block.timestamp),
-                    type(uint256).max,
-                    type(uint256).max
+                    uint96(block.timestamp)
                 )
             )
         );

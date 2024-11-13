@@ -3,28 +3,24 @@ pragma solidity ^0.8.24;
 
 // Interfaces
 import {CollateralTracker} from "@contracts/CollateralTracker.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {IV3CompatibleOracle} from "@interfaces/IV3CompatibleOracle.sol";
 import {PanopticPool} from "@contracts/PanopticPool.sol";
 import {SemiFungiblePositionManager} from "@contracts/SemiFungiblePositionManager.sol";
-import {IV3CompatibleOracle} from "@interfaces/IV3CompatibleOracle.sol";
 // Inherited implementations
 import {Multicall} from "@base/Multicall.sol";
 import {FactoryNFT} from "@base/FactoryNFT.sol";
 // External libraries
 import {ClonesWithImmutableArgs} from "clones-with-immutable-args/ClonesWithImmutableArgs.sol";
-// Internal libraries
+// Libraries
 import {Constants} from "@libraries/Constants.sol";
 import {Errors} from "@libraries/Errors.sol";
-import {Math} from "@libraries/Math.sol";
 import {PanopticMath} from "@libraries/PanopticMath.sol";
-import {SafeTransferLib} from "@libraries/SafeTransferLib.sol";
 import {V4StateReader} from "@libraries/V4StateReader.sol";
 // Custom types
 import {Pointer} from "@types/Pointer.sol";
-import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
-import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-import {Currency} from "v4-core/types/Currency.sol";
-import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
 
 /// @title Panoptic Factory which creates and registers Panoptic Pools.
 /// @author Axicon Labs Limited
@@ -37,19 +33,15 @@ contract PanopticFactory is FactoryNFT, Multicall {
     /// @notice Emitted when a Panoptic Pool is created.
     /// @param poolAddress Address of the deployed Panoptic pool
     /// @param oracleContract The external oracle contract used by the newly deployed Panoptic Pool
-    /// @param poolKey The Uniswap V4 pool key associated with the Panoptic Pool
-    /// @param collateralTracker0 Address of the collateral tracker contract for token0
-    /// @param collateralTracker1 Address of the collateral tracker contract for token1
-    /// @param amount0 The amount of token0 deployed at full range
-    /// @param amount1 The amount of token1 deployed at full range
+    /// @param idV4 The Uniswap V4 pool identifier (hash of `poolKey`) associated with the Panoptic Pool
+    /// @param collateralTracker0 Address of the collateral tracker contract for currency0
+    /// @param collateralTracker1 Address of the collateral tracker contract for currency1
     event PoolDeployed(
         PanopticPool indexed poolAddress,
         IV3CompatibleOracle indexed oracleContract,
-        PoolKey poolKey,
+        PoolId indexed idV4,
         CollateralTracker collateralTracker0,
-        CollateralTracker collateralTracker1,
-        uint256 amount0,
-        uint256 amount1
+        CollateralTracker collateralTracker1
     );
 
     /*//////////////////////////////////////////////////////////////
@@ -74,17 +66,6 @@ contract PanopticFactory is FactoryNFT, Multicall {
     /// @notice Reference implementation of the `CollateralTracker` to clone.
     address internal immutable COLLATERAL_REFERENCE;
 
-    /// @notice Address of the Wrapped Ether (or other numeraire token) contract.
-    address internal immutable WETH;
-
-    /// @notice An amount of `WETH` deployed when initializing the SFPM against a new AMM pool.
-    /// @dev If we know one of the tokens is WETH, we deploy 0.1 ETH worth in tokens.
-    uint256 internal constant FULL_RANGE_LIQUIDITY_AMOUNT_WETH = 0.1 ether;
-
-    /// @notice An amount of another token that's deployed when initializing the SFPM against a new AMM pool.
-    /// @dev Deploy 1e6 worth of tokens if not WETH.
-    uint256 internal constant FULL_RANGE_LIQUIDITY_AMOUNT_TOKEN = 1e6;
-
     /// @notice The `observationCardinalityNext` to set on the Uniswap pool when a new PanopticPool is deployed.
     uint16 internal constant CARDINALITY_INCREASE = 51;
 
@@ -92,7 +73,7 @@ contract PanopticFactory is FactoryNFT, Multicall {
                                 STORAGE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Mapping from keccak256(Uniswap V4 pool id, oracle contract address) to address(PanopticPool) that stores the address of all deployed Panoptic Pools.
+    /// @notice Mapping from hash(Uniswap V4 pool key, oracle contract address) to address(PanopticPool) that stores the address of all deployed Panoptic Pools.
     mapping(bytes32 panopticPoolKey => PanopticPool panopticPool) internal s_getPanopticPool;
 
     /*//////////////////////////////////////////////////////////////
@@ -100,7 +81,6 @@ contract PanopticFactory is FactoryNFT, Multicall {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Set immutable variables and store metadata pointers.
-    /// @param _WETH9 Address of the Wrapped Ether (or other numeraire token) contract
     /// @param _SFPM The canonical `SemiFungiblePositionManager` deployment
     /// @param manager The canonical Uniswap V4 pool manager
     /// @param _poolReference The reference implementation of the `PanopticPool` to clone
@@ -109,7 +89,6 @@ contract PanopticFactory is FactoryNFT, Multicall {
     /// @param indices A nested array of keys for K-V metadata pairs for each property in `properties`
     /// @param pointers Contains pointers to the metadata values stored in contract data slices for each index in `indices`
     constructor(
-        address _WETH9,
         SemiFungiblePositionManager _SFPM,
         IPoolManager manager,
         address _poolReference,
@@ -118,7 +97,6 @@ contract PanopticFactory is FactoryNFT, Multicall {
         uint256[][] memory indices,
         Pointer[][] memory pointers
     ) FactoryNFT(properties, indices, pointers) {
-        WETH = _WETH9;
         SFPM = _SFPM;
         POOL_MANAGER_V4 = manager;
         POOL_REFERENCE = _poolReference;
@@ -126,92 +104,26 @@ contract PanopticFactory is FactoryNFT, Multicall {
     }
 
     /*//////////////////////////////////////////////////////////////
-                        UNISWAP V4 LOCK CALLBACK
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Uniswap V4 unlock callback implementation.
-    /// @dev Parameters are `(PoolKey key, int24 tickLower, int24 tickUpper, uint128 liquidity, address payer)`.
-    /// @dev Adds `liquidity` to the Uniswap V4 pool `key` at `tickLower-tickUpper` and transfers the tokens from `payer`.
-    /// @param data The encoded data containing the input parameters
-    /// @return `(uint256 token0Delta, uint256 token1Delta)` The amount of token0 and token1 used to create `liquidity` in the Uniswap pool
-    function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(POOL_MANAGER_V4)) revert Errors.UnauthorizedUniswapCallback();
-
-        (
-            PoolKey memory key,
-            int24 tickLower,
-            int24 tickUpper,
-            uint128 liquidity,
-            address payer
-        ) = abi.decode(data, (PoolKey, int24, int24, uint128, address));
-        (BalanceDelta delta, BalanceDelta feesAccrued) = POOL_MANAGER_V4.modifyLiquidity(
-            key,
-            IPoolManager.ModifyLiquidityParams(
-                tickLower,
-                tickUpper,
-                int256(uint256(liquidity)),
-                bytes32(0)
-            ),
-            ""
-        );
-
-        if (delta.amount0() < 0) {
-            POOL_MANAGER_V4.sync(key.currency0);
-            SafeTransferLib.safeTransferFrom(
-                Currency.unwrap(key.currency0),
-                payer,
-                address(POOL_MANAGER_V4),
-                uint128(-delta.amount0())
-            );
-            POOL_MANAGER_V4.settle();
-        } else if (delta.amount0() > 0) {
-            POOL_MANAGER_V4.clear(key.currency0, uint128(delta.amount0()));
-        }
-
-        if (delta.amount1() < 0) {
-            POOL_MANAGER_V4.sync(key.currency1);
-            SafeTransferLib.safeTransferFrom(
-                Currency.unwrap(key.currency1),
-                payer,
-                address(POOL_MANAGER_V4),
-                uint128(-delta.amount1())
-            );
-            POOL_MANAGER_V4.settle();
-        } else if (delta.amount1() > 0) {
-            POOL_MANAGER_V4.clear(key.currency1, uint128(delta.amount1()));
-        }
-
-        return
-            abi.encode(
-                feesAccrued.amount0() - delta.amount0(),
-                feesAccrued.amount1() - delta.amount1()
-            );
-    }
-
-    /*//////////////////////////////////////////////////////////////
                             POOL DEPLOYMENT
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Create a new Panoptic Pool linked to the given Uniswap pool identified uniquely by the incoming parameters.
+    /// @notice Create a new Panoptic Pool linked to the given Uniswap pool identified by the incoming parameters.
     /// @dev There is a 1:1 mapping between a Panoptic Pool and a Uniswap Pool.
-    /// @dev A Uniswap pool is uniquely identified by its tokens and the fee.
     /// @dev Salt used in PanopticPool creation is `[leading 20 msg.sender chars][uint80(uint256(keccak256(abi.encode(V4PoolKey, oracleContractAddress))))][salt]`.
     /// @param oracleContract The external oracle contract to be used by the newly deployed Panoptic Pool
     /// @param key The Uniswap V4 pool key
     /// @param salt User-defined component of salt used in deployment process for the PanopticPool
-    /// @param amount0Max The maximum amount of token0 to spend on the full-range deployment
-    /// @param amount1Max The maximum amount of token1 to spend on the full-range deployment
     /// @return newPoolContract The address of the newly deployed Panoptic pool
     function deployNewPool(
         IV3CompatibleOracle oracleContract,
         PoolKey calldata key,
-        uint96 salt,
-        uint256 amount0Max,
-        uint256 amount1Max
+        uint96 salt
     ) external returns (PanopticPool newPoolContract) {
+        PoolId idV4 = key.toId();
+
         bytes32 panopticPoolKey = keccak256(abi.encode(key, oracleContract));
 
-        if (V4StateReader.getSqrtPriceX96(POOL_MANAGER_V4, key.toId()) == 0)
+        if (V4StateReader.getSqrtPriceX96(POOL_MANAGER_V4, idV4) == 0)
             revert Errors.UniswapPoolNotInitialized();
 
         if (address(s_getPanopticPool[panopticPoolKey]) != address(0))
@@ -268,7 +180,7 @@ contract PanopticFactory is FactoryNFT, Multicall {
                     collateralTracker0,
                     collateralTracker1,
                     oracleContract,
-                    key.toId(),
+                    idV4,
                     abi.encode(key)
                 ),
                 salt32
@@ -286,24 +198,15 @@ contract PanopticFactory is FactoryNFT, Multicall {
         // When that happens, there will be a period of time where the PanopticPool is deployed, but not (safely) usable
         oracleContract.increaseObservationCardinalityNext(CARDINALITY_INCREASE);
 
-        // Mints the full-range initial deposit
-        // which is why the deployer becomes also a "donor" of full-range liquidity
-        (uint256 amount0, uint256 amount1) = _mintFullRange(key, key.toId());
-
-        if (amount0 > amount0Max || amount1 > amount1Max) revert Errors.PriceBoundFail();
-
-        // Issue reward NFT to donor
         uint256 tokenId = uint256(uint160(address(newPoolContract)));
         _mint(msg.sender, tokenId);
 
         emit PoolDeployed(
             newPoolContract,
             oracleContract,
-            key,
+            idV4,
             collateralTracker0,
-            collateralTracker1,
-            amount0,
-            amount1
+            collateralTracker1
         );
     }
 
@@ -315,6 +218,8 @@ contract PanopticFactory is FactoryNFT, Multicall {
     /// @dev The rarity is defined in terms of how many leading zeros the Panoptic pool address has.
     /// @dev Note that the final salt may overflow if too many loops are given relative to the amount in `salt`.
     /// @param deployerAddress Address of the account that deploys the new PanopticPool
+    /// @param oracleContract The external oracle contract to be used by the newly deployed Panoptic Pool
+    /// @param key The Uniswap V4 pool key
     /// @param salt Salt value to start from, useful as a checkpoint across multiple calls
     /// @param loops The number of mining operations starting from `salt` in trying to find the highest rarity
     /// @param minTargetRarity The minimum target rarity to mine for. The internal loop stops when this is reached *or* when no more iterations
@@ -367,77 +272,6 @@ contract PanopticFactory is FactoryNFT, Multicall {
                 salt += 1;
             }
         }
-    }
-
-    /// @notice Seeds Uniswap V4 pool with a full-tick-range liquidity deployment using funds from caller.
-    /// @param key The Uniswap V4 pool key
-    /// @param idV4 The Uniswap V4 pool id (hash of `key`)
-    /// @return The amount of token0 deployed at full range
-    /// @return The amount of token1 deployed at full range
-    function _mintFullRange(PoolKey memory key, PoolId idV4) internal returns (uint256, uint256) {
-        uint160 currentSqrtPriceX96 = V4StateReader.getSqrtPriceX96(POOL_MANAGER_V4, idV4);
-
-        // For full range: L = Δx * sqrt(P) = Δy / sqrt(P)
-        // We start with fixed token amounts and apply this equation to calculate the liquidity
-        // Note that for pools with a tickSpacing that is not a power of 2 or greater than 8 (887272 % ts != 0),
-        // a position at the maximum and minimum allowable ticks will be wide, but not necessarily full-range.
-        // In this case, the `fullRangeLiquidity` will always be an underestimate in respect to the token amounts required to mint.
-        uint128 fullRangeLiquidity;
-        unchecked {
-            // Since we know one of the tokens is WETH, we simply add 0.1 ETH + worth in tokens
-            if (Currency.unwrap(key.currency0) == WETH) {
-                fullRangeLiquidity = uint128(
-                    Math.mulDiv96RoundingUp(FULL_RANGE_LIQUIDITY_AMOUNT_WETH, currentSqrtPriceX96)
-                );
-            } else if (Currency.unwrap(key.currency1) == WETH) {
-                fullRangeLiquidity = uint128(
-                    Math.mulDivRoundingUp(
-                        FULL_RANGE_LIQUIDITY_AMOUNT_WETH,
-                        Constants.FP96,
-                        currentSqrtPriceX96
-                    )
-                );
-            } else {
-                // Find the resulting liquidity for providing 1e6 of both tokens
-                uint128 liquidity0 = uint128(
-                    Math.mulDiv96RoundingUp(FULL_RANGE_LIQUIDITY_AMOUNT_TOKEN, currentSqrtPriceX96)
-                );
-                uint128 liquidity1 = uint128(
-                    Math.mulDivRoundingUp(
-                        FULL_RANGE_LIQUIDITY_AMOUNT_TOKEN,
-                        Constants.FP96,
-                        currentSqrtPriceX96
-                    )
-                );
-
-                // Pick the greater of the liquidities - i.e the more "expensive" option
-                // This ensures that the liquidity added is sufficiently large
-                fullRangeLiquidity = liquidity0 > liquidity1 ? liquidity0 : liquidity1;
-            }
-        }
-
-        // The maximum range we can mint is determined by the tickSpacing of the pool
-        // The upper and lower ticks must be divisible by `tickSpacing`, so
-        // tickSpacing = 1: tU/L = +/-887272
-        // tickSpacing = 10: tU/L = +/-887270
-        // tickSpacing = 60: tU/L = +/-887220
-        // tickSpacing = 200: tU/L = +/-887200
-        // etc...
-        int24 tickLower;
-        int24 tickUpper;
-        unchecked {
-            int24 tickSpacing = key.tickSpacing;
-            tickLower = (Constants.MIN_V4POOL_TICK / tickSpacing) * tickSpacing;
-            tickUpper = -tickLower;
-        }
-
-        return
-            abi.decode(
-                POOL_MANAGER_V4.unlock(
-                    abi.encode(key, tickLower, tickUpper, fullRangeLiquidity, msg.sender)
-                ),
-                (uint256, uint256)
-            );
     }
 
     /*//////////////////////////////////////////////////////////////

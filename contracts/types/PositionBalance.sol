@@ -12,8 +12,8 @@ using PositionBalanceLibrary for PositionBalance global;
 // =================================================================================================
 //  From the LSB to the MSB:
 // (1) positionSize     128bits : The size of this position (uint128).
-// (2) poolUtilization0 16bits  : The pool utilization of token0, stored as (10000 * inAMM0)/totalAssets0 (uint16).
-// (3) poolUtilization1 16bits  : The pool utilization of token1, stored as (10000 * inAMM1)/totalAssets1 (uint16).
+// (2) poolUtilization0 16bits  : The pool utilization of currency0, stored as (10000 * inAMM0)/totalAssets0 (uint16).
+// (3) poolUtilization1 16bits  : The pool utilization of currency1, stored as (10000 * inAMM1)/totalAssets1 (uint16).
 // (4) currentTick      24bits  : The currentTick at mint (int24).
 // (5) fastOracleTick   24bits  : The fastOracleTick at mint (int24).
 // (6) slowOracleTick   24bits  : The slowOracleTick at mint (int24).
@@ -36,8 +36,8 @@ library PositionBalanceLibrary {
 
     /// @notice Create a new `PositionBalance` given by positionSize, utilizations, and its tickData.
     /// @param _positionSize The amount of option minted
-    /// @param _utilizations Packing of two uint16 utilizations into a 32 bit word
-    /// @param _tickData Packing of 4 int25s into a single uint96
+    /// @param _utilizations Packed data containing pool utilizations for token0 and token1 at mint
+    /// @param _tickData Packed data containing ticks at mint (currentTick, fastOracleTick, slowOracleTick, lastObservedTick)
     /// @return The new PositionBalance with the given positionSize, utilization, and tickData
     function storeBalanceData(
         uint128 _positionSize,
@@ -56,8 +56,8 @@ library PositionBalanceLibrary {
 
     /// @notice Concatenate all oracle ticks into a single uint96.
     /// @param _currentTick The current tick
-    /// @param _fastOracleTick The fast Oracle tick
-    /// @param _slowOracleTick The slow Oracle tick
+    /// @param _fastOracleTick The fast oracle tick
+    /// @param _slowOracleTick The slow oracle tick
     /// @param _lastObservedTick The last observed tick
     /// @return A 96bit word concatenating all 4 input ticks
     function packTickData(
@@ -140,27 +140,27 @@ library PositionBalanceLibrary {
         );
     }
 
-    /// @notice Get token0 utilization of `self`.
-    /// @param self The PositionBalance to retrieve the token0 utilization from
-    /// @return The token0 utilization, stored in bips
+    /// @notice Get currency0 utilization of `self`.
+    /// @param self The PositionBalance to retrieve the currency0 utilization from
+    /// @return The currency0 utilization in basis points
     function utilization0(PositionBalance self) internal pure returns (int256) {
         unchecked {
             return int256((PositionBalance.unwrap(self) >> 128) % 2 ** 16);
         }
     }
 
-    /// @notice Get token1 utilization of `self`.
-    /// @param self The PositionBalance to retrieve the token1 utilization from
-    /// @return The token1 utilization, stored in bips
+    /// @notice Get currency1 utilization of `self`.
+    /// @param self The PositionBalance to retrieve the currency1 utilization from
+    /// @return The currency1 utilization in basis points
     function utilization1(PositionBalance self) internal pure returns (int256) {
         unchecked {
             return int256((PositionBalance.unwrap(self) >> 144) % 2 ** 16);
         }
     }
 
-    /// @notice Get both token0 and token1 utilizations of `self`.
+    /// @notice Get both currency0 and currency1 utilizations of `self`.
     /// @param self The PositionBalance to retrieve the utilizations from
-    /// @return The token utilizations, stored in bips
+    /// @return The packed currency utilizations in basis points
     function utilizations(PositionBalance self) internal pure returns (uint32) {
         unchecked {
             return uint32(PositionBalance.unwrap(self) >> 128);
@@ -182,8 +182,8 @@ library PositionBalanceLibrary {
     /// @return fastOracleTickAtMint Fast oracle tick at mint
     /// @return slowOracleTickAtMint Slow oracle tick at mint
     /// @return lastObservedTickAtMint Last observed tick at mint
-    /// @return utilization0AtMint Utilization of token0 at mint
-    /// @return utilization1AtMint Utilization of token1 at mint
+    /// @return utilization0AtMint Utilization of currency0 at mint
+    /// @return utilization1AtMint Utilization of currency1 at mint
     /// @return _positionSize Size of the position
     function unpackAll(
         PositionBalance self

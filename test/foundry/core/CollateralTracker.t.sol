@@ -65,7 +65,7 @@ contract CollateralTrackerHarness is CollateralTracker, PositionUtils, MiniPosit
 
     // whether the current instance is token 0
     function underlyingIsToken0() external pure returns (bool) {
-        return _underlyingIsToken0();
+        return _underlyingIsCurrency0();
     }
 
     function _inAMM() external view returns (uint256) {
@@ -156,7 +156,9 @@ contract PanopticPoolHarness is PanopticPool {
 }
 
 contract SemiFungiblePositionManagerHarness is SemiFungiblePositionManager {
-    constructor(IPoolManager _manager) SemiFungiblePositionManager(_manager) {}
+    constructor(
+        IPoolManager _manager
+    ) SemiFungiblePositionManager(_manager, 10 ** 13, 10 ** 13, 0) {}
 
     function accountLiquidity(
         bytes32 positionKey
@@ -410,7 +412,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
     }
 
     function _deployCustomPanopticPool() internal {
-        manager = new PoolManager();
+        manager = new PoolManager(address(0));
         routerV4 = new V4RouterSimple(manager);
 
         vm.startPrank(Swapper);
@@ -5869,7 +5871,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 actualValue1 = collateralToken1.maxRedeem(Bob);
 
         // if there are option positions this should return 0
-        if (panopticPool.numberOfPositions(Bob) != 0) {
+        if (panopticPool.numberOfLegs(Bob) != 0) {
             assertEq(0, actualValue0);
             assertEq(0, actualValue1);
             // if available is greater than the user balance
@@ -5930,7 +5932,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 actualValue1 = collateralToken1.maxWithdraw(Bob);
 
         // if there are option positions this should return 0
-        if (panopticPool.numberOfPositions(Bob) != 0) {
+        if (panopticPool.numberOfLegs(Bob) != 0) {
             assertEq(0, actualValue0, "with open positions 0");
             assertEq(0, actualValue1, "with open positions 1");
             // if available is greater than the user balance

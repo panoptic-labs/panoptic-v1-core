@@ -21,9 +21,6 @@ contract DeployProtocol is Script {
     function run() public {
         uint256 DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
-        // 0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14: sepolia
-        address WETH9 = vm.envAddress("WETH9");
-
         IPoolManager manager = IPoolManager(vm.envAddress("POOL_MANAGER"));
 
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
@@ -79,10 +76,13 @@ contract DeployProtocol is Script {
         }
 
         IPoolManager _manager = manager;
-
-        SemiFungiblePositionManager sfpm = new SemiFungiblePositionManager(_manager);
+        SemiFungiblePositionManager sfpm = new SemiFungiblePositionManager(
+            _manager,
+            10 ** 13,
+            10 ** 13,
+            0
+        );
         new PanopticFactory(
-            WETH9,
             sfpm,
             _manager,
             address(new PanopticPool(sfpm, _manager)),

@@ -21,7 +21,7 @@ contract LiquidityChunkTest is Test {
         harness = new LiquidityChunkHarness();
     }
 
-    function test_Success_AddLiq(uint128 y) public {
+    function test_Success_AddLiq(uint128 y) public view {
         LiquidityChunk x;
 
         x = harness.addLiquidity(x, y);
@@ -30,7 +30,7 @@ contract LiquidityChunkTest is Test {
         assertEq(y, z);
     }
 
-    function test_Success_TickLower(int24 y) public {
+    function test_Success_TickLower(int24 y) public view {
         LiquidityChunk x;
 
         x = harness.addTickLower(x, y);
@@ -39,7 +39,7 @@ contract LiquidityChunkTest is Test {
         assertEq(y, z);
     }
 
-    function test_Success_TickUpper(int24 y) public {
+    function test_Success_TickUpper(int24 y) public view {
         LiquidityChunk x;
 
         x = harness.addTickUpper(x, y);
@@ -48,7 +48,7 @@ contract LiquidityChunkTest is Test {
         assertEq(y, z);
     }
 
-    function test_Success_AddTicksLiquidity(int24 y, int24 z, uint128 u) public {
+    function test_Success_AddTicksLiquidity(int24 y, int24 z, uint128 u) public view {
         LiquidityChunk x = harness.createChunk(y, z, u);
 
         assertEq(harness.tickLower(x), y);
@@ -56,7 +56,7 @@ contract LiquidityChunkTest is Test {
         assertEq(harness.liquidity(x), u);
     }
 
-    function test_Success_updateTickLower(int24 y1, int24 y2) public {
+    function test_Success_updateTickLower(int24 y1, int24 y2) public view {
         LiquidityChunk x;
 
         x = harness.updateTickLower(x, y1);
@@ -68,7 +68,7 @@ contract LiquidityChunkTest is Test {
         assertEq(y2, z);
     }
 
-    function test_Success_updateTickUpper(int24 y1, int24 y2) public {
+    function test_Success_updateTickUpper(int24 y1, int24 y2) public view {
         LiquidityChunk x;
 
         x = harness.updateTickUpper(x, y1);
