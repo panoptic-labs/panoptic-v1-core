@@ -8,7 +8,7 @@ os.makedirs('./safe-txns', exist_ok=True)
 
 for idx, contract in enumerate(deploymentInfo["dataContracts"]):
     safeTx = {
-        "chainId": "1",
+        "chainId": os.environ.get("CHAIN_ID") or "1",
         "meta": {
             "name": f"Deploy data contract {idx} at {contract["address"]}",
         },
@@ -39,7 +39,7 @@ for idx, contract in enumerate(deploymentInfo["dataContracts"]):
                     "payable": False
                 },
                 "contractInputsValues": {
-                    "to": "0x82BF455e9ebd6a541EF10b683dE1edCaf05cE7A1",
+                    "to": contract["salt"][:42],
                     "id": str(int(contract["salt"], 16)),
                     "nonce": str(contract["nonce"])
                 }
@@ -65,7 +65,6 @@ for idx, contract in enumerate(deploymentInfo["dataContracts"]):
                     "payable": True
                 },
                 "contractInputsValues": {
-                    "to": "0x82BF455e9ebd6a541EF10b683dE1edCaf05cE7A1",
                     "id": str(int(contract["salt"], 16)),
                     "initcode": contract["initcode"]
                 }
@@ -78,7 +77,7 @@ for idx, contract in enumerate(deploymentInfo["dataContracts"]):
 
 for idx, contract in enumerate(deploymentInfo["logicContracts"]):
     safeTx = {
-        "chainId": "1",
+        "chainId": os.environ.get("CHAIN_ID") or "1",
         "meta": {
             "name": f"Deploy contract {contract["contractName"]} at {contract["address"]}",
         },
@@ -109,7 +108,7 @@ for idx, contract in enumerate(deploymentInfo["logicContracts"]):
                     "payable": False
                 },
                 "contractInputsValues": {
-                    "to": "0x82BF455e9ebd6a541EF10b683dE1edCaf05cE7A1",
+                    "to": contract["salt"][:42],
                     "id": str(int(contract["salt"], 16)),
                     "nonce": str(contract["nonce"])
                 }
@@ -135,7 +134,6 @@ for idx, contract in enumerate(deploymentInfo["logicContracts"]):
                     "payable": True
                 },
                 "contractInputsValues": {
-                    "to": "0x82BF455e9ebd6a541EF10b683dE1edCaf05cE7A1",
                     "id": str(int(contract["salt"], 16)),
                     "initcode": contract["initcode"]
                 }
