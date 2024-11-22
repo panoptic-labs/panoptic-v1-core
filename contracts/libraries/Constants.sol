@@ -31,7 +31,7 @@ library Constants {
     uint256 internal constant MEDIAN_PERIOD = 60;
 
     /// @notice Amount of Uniswap observations to include in the "fast" oracle price.
-    uint256 internal constant FAST_ORACLE_CARDINALITY = 3;
+    uint256 internal constant FAST_ORACLE_CARDINALITY = 19;
 
     /// @dev Amount of observation indices to skip in between each observation for the "fast" oracle price.
     /// @dev Note that the *minimum* total observation time is determined by the blocktime and may need to be adjusted by chain.

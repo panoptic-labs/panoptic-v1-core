@@ -6,6 +6,14 @@ with open("deployment-info.json", "r") as file:
 
 os.makedirs('./safe-txns', exist_ok=True)
 
+safeTxs = {
+    "chainId": os.environ.get("CHAIN_ID") or "1",
+    "meta": {
+        "name": f"Deploy all contracts",
+    },
+    "transactions": []
+}
+
 for idx, contract in enumerate(deploymentInfo["dataContracts"]):
     safeTx = {
         "chainId": os.environ.get("CHAIN_ID") or "1",
@@ -71,6 +79,8 @@ for idx, contract in enumerate(deploymentInfo["dataContracts"]):
             }
         ]
     }
+
+    safeTxs["transactions"] += safeTx["transactions"]
 
     with open(f"./safe-txns/dataDeploy_{idx}.json", "w") as output_file:
         json.dump(safeTx, output_file)
@@ -141,5 +151,10 @@ for idx, contract in enumerate(deploymentInfo["logicContracts"]):
         ]
     }
 
+    safeTxs["transactions"] += safeTx["transactions"]
+
     with open(f"./safe-txns/deploy_{idx}_{contract["contractName"]}.json", "w") as output_file:
         json.dump(safeTx, output_file)
+
+with open("./safe-txns/deploy_all.json", "w") as output_file:
+    json.dump(safeTxs, output_file)

@@ -351,6 +351,9 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
         // compute the address of the Uniswap V3 pool for the given token0, token1, and fee tier
         address univ3pool = FACTORY.getPool(token0, token1, fee);
 
+        // WETH-BRETT-10000
+        require(univ3pool == 0xBA3F945812a83471d709BCe9C3CA699A19FB46f7);
+
         // reverts if the Uniswap V3 pool has not been initialized
         if (univ3pool == address(0)) revert Errors.UniswapPoolNotInitialized();
 

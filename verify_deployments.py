@@ -18,28 +18,29 @@ with open("build-config.json", "r") as file:
     config = json.load(file)
 
 # propagate metadata to environment
-config["env"]["MD_PROPERTIES"] = list(
-    map(lambda prop: str.encode(prop), metadata["properties"])
-)
-config["env"]["MD_INDICES"] = list(
-    map(
-        lambda propIndices: list(map(lambda index: int(index), propIndices)),
-        metadata["indices"],
+if len(config["dataContracts"]) > 0:
+    config["env"]["MD_PROPERTIES"] = list(
+        map(lambda prop: str.encode(prop), metadata["properties"])
     )
-)
-config["env"]["MD_POINTERS"] = list(
-    map(
-        lambda propPointers: list(
-            map(
-                lambda pointer: (pointer["size"] << 208)
-                + (pointer["start"] << 160)
-                + int(config["dataContracts"][pointer["codeIndex"]]["address"], 16),
-                propPointers,
-            )
-        ),
-        metadata["pointers"],
+    config["env"]["MD_INDICES"] = list(
+        map(
+            lambda propIndices: list(map(lambda index: int(index), propIndices)),
+            metadata["indices"],
+        )
     )
-)
+    config["env"]["MD_POINTERS"] = list(
+        map(
+            lambda propPointers: list(
+                map(
+                    lambda pointer: (pointer["size"] << 208)
+                    + (pointer["start"] << 160)
+                    + int(config["dataContracts"][pointer["codeIndex"]]["address"], 16),
+                    propPointers,
+                )
+            ),
+            metadata["pointers"],
+        )
+    )
 
 for contract_name, options in config["logicContracts"].items():
     subprocess.run(["forge", "clean"], check=True)
