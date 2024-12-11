@@ -539,6 +539,47 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
                        PUBLIC MINT/BURN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    // collects and upgates premium for all chunks in a tokenId without minting or burning the position itself
+    function collectPremium(
+        TokenId tokenId
+    ) external returns (LeftRightUnsigned[4] memory collectedByLeg) {
+        IUniswapV3Pool univ3pool = s_poolIdToPoolData[tokenId.poolId()].pool;
+        for (uint256 i = 0; i < tokenId.countLegs(); i++) {
+            LiquidityChunk liquidityChunk = PanopticMath.getLiquidityChunk(tokenId, i, 0);
+
+            bytes32 positionKey = keccak256(
+                abi.encodePacked(
+                    address(univ3pool),
+                    msg.sender,
+                    tokenId.tokenType(i),
+                    liquidityChunk.tickLower(),
+                    liquidityChunk.tickUpper()
+                )
+            );
+
+            LeftRightUnsigned currentLiquidity = s_accountLiquidity[positionKey];
+
+            // poke pool to update fee growths inside
+            univ3pool.burn(liquidityChunk.tickLower(), liquidityChunk.tickUpper(), 0);
+
+            collectedByLeg[i] = _collectAndWritePositionData(
+                liquidityChunk,
+                univ3pool,
+                currentLiquidity,
+                positionKey,
+                LeftRightSigned.wrap(0),
+                0
+            );
+
+            s_accountFeesBase[positionKey] = _getFeesBase(
+                univ3pool,
+                currentLiquidity.rightSlot(),
+                liquidityChunk,
+                true
+            );
+        }
+    }
+
     /// @notice Burn a new position containing up to 4 legs wrapped in a ERC1155 token.
     /// @dev Auto-collect all accumulated fees.
     /// @param tokenId The tokenId of the minted position, which encodes information about up to 4 legs
