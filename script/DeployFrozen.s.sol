@@ -53,11 +53,25 @@ contract DeployFrozen is Script {
             vm.parseJson(deploymentInfo, ".logicContracts"),
             (NamedDeploymentEntry[])
         );
+
+        address[] memory deployedContracts = new address[](logicContracts.length);
         for (uint256 i = 0; i < logicContracts.length; i++) {
             c3.mint(deployer, uint256(logicContracts[i].salt), logicContracts[i].nonce);
             c3.ownerOf(uint256(logicContracts[i].salt));
-            c3.deploy(uint256(logicContracts[i].salt), logicContracts[i].initcode);
+            deployedContracts[i] = c3.deploy(
+                uint256(logicContracts[i].salt),
+                logicContracts[i].initcode
+            );
         }
+
+        vm.writeFile(
+            "panoptic-pool-code.txt",
+            vm.toString(deployedContracts[deployedContracts.length - 2].code)
+        );
+        vm.writeFile(
+            "sfpm-code.txt",
+            vm.toString(deployedContracts[deployedContracts.length - 1].code)
+        );
 
         vm.stopBroadcast();
     }
