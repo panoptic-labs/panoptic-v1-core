@@ -468,6 +468,15 @@ contract PanopticPool is ERC1155Holder, Multicall {
                           MINT/BURN INTERFACE
     //////////////////////////////////////////////////////////////*/
 
+    // collects premium from Uniswap without creating or burning a position
+    function collectPremium(TokenId tokenId) external {
+        LeftRightUnsigned[4] memory collectedByLeg = SFPM.collectPremium(tokenId);
+
+        _updateSettlementPostMint(tokenId, collectedByLeg, 0, MAX_SPREAD);
+
+        _updatePositionsHash(msg.sender, tokenId, !ADD);
+    }
+
     /// @notice Validates the current options of the user, and mints a new position.
     /// @param positionIdList The list of currently held positions by the user, where the newly minted position(token) will be the last element in `positionIdList`
     /// @param positionSize The size of the position to be minted, expressed in terms of the asset
