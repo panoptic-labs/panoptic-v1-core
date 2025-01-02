@@ -5437,7 +5437,7 @@ contract PanopticPoolTest is PositionUtils {
         }
     }
 
-    function test_Success_getExerciseDeltas(
+    function test_Success_getRefundAmounts(
         uint256 x,
         uint256 balance0,
         uint256 balance1,
@@ -5471,7 +5471,7 @@ contract PanopticPoolTest is PositionUtils {
                 int256(ct0.balanceOf(Charlie)) -
                 int256(ct0.convertToShares(uint256(-refund0)));
 
-            LeftRightSigned refundAmounts = PanopticMath.getExerciseDeltas(
+            LeftRightSigned refundAmounts = PanopticMath.getRefundAmounts(
                 Charlie,
                 LeftRightSigned.wrap(0).toRightSlot(int128(refund0)).toLeftSlot(int128(refund1)),
                 int24(atTick),

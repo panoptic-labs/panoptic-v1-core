@@ -128,10 +128,17 @@ library PanopticMath {
         uint256 updatedHash = uint248(existingHash) ^
             (uint248(uint256(keccak256(abi.encode(tokenId)))));
 
+        uint256 positionLegs = tokenId.countLegs();
+
         // increment the upper 8 bits (leg counter) if addFlag=true, decrement otherwise
-        uint256 newLegCount = addFlag
-            ? uint8(existingHash >> 248) + uint8(tokenId.countLegs())
-            : uint8(existingHash >> 248) - tokenId.countLegs();
+        uint256 newLegCount;
+        if (addFlag) {
+            newLegCount = uint8(existingHash >> 248) + uint8(positionLegs);
+        } else {
+            unchecked {
+                newLegCount = (existingHash >> 248) - positionLegs;
+            }
+        }
 
         unchecked {
             return uint256(updatedHash) + (newLegCount << 248);
@@ -412,7 +419,7 @@ library PanopticMath {
         //  The following function takes this into account when computing the liquidity of the leg and switches between
         //  the definition for getLiquidityForAmount0 or getLiquidityForAmount1 when relevant.
 
-        uint256 amount = uint256(positionSize) * tokenId.optionRatio(legIndex);
+        uint256 amount = positionSize * tokenId.optionRatio(legIndex);
         if (tokenId.asset(legIndex) == 0) {
             return Math.getLiquidityForAmount0(tickLower, tickUpper, amount);
         } else {
@@ -1029,15 +1036,15 @@ library PanopticMath {
         }
     }
 
-    /// @notice Redistribute the final exercise fee deltas between tokens if necessary according to the available collateral from the exercised user.
-    /// @param exercisee The address of the user being exercised
-    /// @param exerciseFees Pre-adjustment exercise fees to debit from exercisor (rightSlot = currency0 left = currency1)
-    /// @param atTick The tick at which to convert between currency0/currency1 when redistributing the exercise fees
+    /// @notice Substitutes surplus tokens with the caller in exchange for any potential token shortages prior to revoking virtual shares
+    /// @param callee The address of the user being exercised/settled
+    /// @param exerciseFees Pre-adjustment exercise fees to debit from caller (rightSlot = currency0 left = currency1), 0 for `settleLongPremium`
+    /// @param atTick The tick at which to convert between currency0/currency1 when redistributing the surplus tokens
     /// @param ct0 The collateral tracker for currency0
     /// @param ct1 The collateral tracker for currency1
-    /// @return The LeftRight-packed deltas for currency0/currency1 to move from the exercisor to the exercisee
-    function getExerciseDeltas(
-        address exercisee,
+    /// @return The LeftRight-packed deltas for currency0/currency1 to move from the caller to the exercisee/settlee
+    function getRefundAmounts(
+        address callee,
         LeftRightSigned exerciseFees,
         int24 atTick,
         CollateralTracker ct0,
@@ -1045,10 +1052,10 @@ library PanopticMath {
     ) external view returns (LeftRightSigned) {
         uint160 sqrtPriceX96 = Math.getSqrtRatioAtTick(atTick);
         unchecked {
-            // if the refunder lacks sufficient currency0 to pay back the virtual shares, have the exercisor cover the difference in exchange for currency1 (and vice versa)
+            // if the refunder lacks sufficient currency0 to pay back the virtual shares, have the caller cover the difference in exchange for currency1 (and vice versa)
 
             int256 balanceShortage = int256(uint256(type(uint248).max)) -
-                int256(ct0.balanceOf(exercisee)) -
+                int256(ct0.balanceOf(callee)) -
                 int256(ct0.convertToShares(uint128(-exerciseFees.rightSlot())));
 
             if (balanceShortage > 0) {
@@ -1081,7 +1088,7 @@ library PanopticMath {
 
             balanceShortage =
                 int256(uint256(type(uint248).max)) -
-                int256(ct1.balanceOf(exercisee)) -
+                int256(ct1.balanceOf(callee)) -
                 int256(ct1.convertToShares(uint128(-exerciseFees.leftSlot())));
             if (balanceShortage > 0) {
                 return
@@ -1112,7 +1119,7 @@ library PanopticMath {
             }
         }
 
-        // otherwise, no need to deviate from the original exercise fee deltas
+        // otherwise, no need to deviate from the original deltas
         return exerciseFees;
     }
 }
