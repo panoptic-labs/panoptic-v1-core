@@ -21,7 +21,7 @@ script="DO_NOT_COMPILE"
 fork_block_number = 18963715
 
 [profile.ci_sizes]
-optimizer_runs = 300
+optimizer_runs = 1
 test = 'DO_NOT_COMPILE'
 
 [profile.ci_sizes_ir]
