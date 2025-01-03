@@ -1536,7 +1536,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         CollateralTracker ct0 = collateralToken0();
         CollateralTracker ct1 = collateralToken1();
 
-        // The protocol delegates some virtual shares to ensure the burn can be settled.
+        // The protocol delegates some virtual shares to ensure the premia can be settled.
         ct0.delegate(owner);
         ct1.delegate(owner);
 
