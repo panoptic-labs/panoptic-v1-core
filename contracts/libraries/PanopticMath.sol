@@ -1036,7 +1036,7 @@ library PanopticMath {
         }
     }
 
-    /// @notice Substitutes surplus tokens with the caller in exchange for any potential token shortages prior to revoking virtual shares
+    /// @notice Substitutes surplus tokens with the caller in exchange for any potential token shortages prior to revoking virtual shares.
     /// @param callee The address of the user being exercised/settled
     /// @param exerciseFees Pre-adjustment exercise fees to debit from caller (rightSlot = currency0 left = currency1), 0 for `settleLongPremium`
     /// @param atTick The tick at which to convert between currency0/currency1 when redistributing the surplus tokens
