@@ -340,7 +340,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         address user,
         TokenId[] calldata positionIdList
     ) external view {
-        _validateSolvency(user, positionIdList, BP_DECREASE_BUFFER);
+        _validateSolvency(user, positionIdList, BP_DECREASE_BUFFER, COMPUTE_ALL_PREMIA);
     }
 
     /// @notice Returns the total amount of premium accumulated for a list of positions and a list containing the corresponding `PositionBalance` information for each position.
@@ -496,19 +496,22 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// denominated as X32 = (`ratioLimit * 2^32`)
     /// @param tickLimitLow The lower bound of an acceptable open interval for the ending price
     /// @param tickLimitHigh The upper bound of an acceptable open interval for the ending price
+    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user (true), or just owed premia for long legs (false)
     function mintOptions(
         TokenId[] calldata positionIdList,
         uint128 positionSize,
         uint64 effectiveLiquidityLimitX32,
         int24 tickLimitLow,
-        int24 tickLimitHigh
+        int24 tickLimitHigh,
+        bool computeAllPremia
     ) external {
         _mintOptions(
             positionIdList,
             positionSize,
             effectiveLiquidityLimitX32,
             tickLimitLow,
-            tickLimitHigh
+            tickLimitHigh,
+            computeAllPremia
         );
     }
 
@@ -536,11 +539,13 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// @param newPositionIdList The new positionIdList without the token(s) being burnt
     /// @param tickLimitLow The lower bound of an acceptable open interval for the ending price
     /// @param tickLimitHigh The upper bound of an acceptable open interval for the ending price
+    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user (true), or just owed premia for long legs (false)
     function burnOptions(
         TokenId[] calldata positionIdList,
         TokenId[] calldata newPositionIdList,
         int24 tickLimitLow,
-        int24 tickLimitHigh
+        int24 tickLimitHigh,
+        bool computeAllPremia
     ) external {
         _burnAllOptionsFrom(
             msg.sender,
@@ -550,7 +555,12 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
             positionIdList
         );
 
-        uint256 medianData = _validateSolvency(msg.sender, newPositionIdList, NO_BUFFER);
+        uint256 medianData = _validateSolvency(
+            msg.sender,
+            newPositionIdList,
+            NO_BUFFER,
+            computeAllPremia
+        );
 
         // Update `s_miniMedian` with a new observation if the last observation is old enough (returned medianData is nonzero)
         if (medianData != 0) s_miniMedian = medianData;
@@ -567,12 +577,14 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// denominated as X32 = (`ratioLimit * 2^32`)
     /// @param tickLimitLow The lower bound of an acceptable open interval for the ending price
     /// @param tickLimitHigh The upper bound of an acceptable open interval for the ending price
+    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user (true), or just owed premia for long legs (false)
     function _mintOptions(
         TokenId[] calldata positionIdList,
         uint128 positionSize,
         uint64 effectiveLiquidityLimitX32,
         int24 tickLimitLow,
-        int24 tickLimitHigh
+        int24 tickLimitHigh,
+        bool computeAllPremia
     ) internal {
         // the new tokenId will be the last element in `positionIdList`
         TokenId tokenId;
@@ -634,7 +646,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
 
         // Perform solvency check on user's account to ensure they had enough buying power to mint the option
         // Add an initial buffer to the collateral requirement to prevent users from minting their account close to insolvency
-        _checkSolvency(msg.sender, positionIdList, tickData, BP_DECREASE_BUFFER, LONG_PREMIA_ONLY);
+        _checkSolvency(msg.sender, positionIdList, tickData, BP_DECREASE_BUFFER, computeAllPremia);
 
         emit OptionMinted(msg.sender, tokenId, balanceData, commissions);
     }
@@ -799,11 +811,13 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// @param user The account to validate
     /// @param positionIdList The list of positions to validate solvency for
     /// @param buffer The buffer to apply to the collateral requirement for `user`
+    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user (true), or just owed premia for long legs (false)
     /// @return If nonzero (enough time has passed since last observation), the updated value for `s_miniMedian` with a new observation
     function _validateSolvency(
         address user,
         TokenId[] calldata positionIdList,
-        uint256 buffer
+        uint256 buffer,
+        bool computeAllPremia
     ) internal view returns (uint256) {
         (
             int24 fastOracleTick,
@@ -819,7 +833,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
             lastObservedTick
         );
 
-        _checkSolvency(user, positionIdList, tickData, buffer, COMPUTE_ALL_PREMIA);
+        _checkSolvency(user, positionIdList, tickData, buffer, computeAllPremia);
 
         return medianData;
     }
@@ -1094,7 +1108,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         );
 
         // ensure the liquidator is still solvent after the liquidation
-        _validateSolvency(msg.sender, positionIdListLiquidator, NO_BUFFER);
+        _validateSolvency(msg.sender, positionIdListLiquidator, NO_BUFFER, COMPUTE_ALL_PREMIA);
 
         emit AccountLiquidated(msg.sender, liquidatee, bonusAmounts);
     }
@@ -1166,14 +1180,19 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         ct0.revoke(account);
         ct1.revoke(account);
 
-        _validateSolvency(account, positionIdListExercisee, NO_BUFFER);
+        _validateSolvency(account, positionIdListExercisee, NO_BUFFER, COMPUTE_ALL_PREMIA);
 
         // the exercisor's position list is validated above
         // we need to assert their solvency against their collateral requirement plus a buffer
         // force exercises involve a collateral decrease with open positions, so there is a higher standard for solvency
         // a similar buffer is also invoked when minting options, which also decreases the available collateral
         if (positionIdListExercisor.length > 0)
-            _validateSolvency(msg.sender, positionIdListExercisor, BP_DECREASE_BUFFER);
+            _validateSolvency(
+                msg.sender,
+                positionIdListExercisor,
+                BP_DECREASE_BUFFER,
+                COMPUTE_ALL_PREMIA
+            );
 
         emit ForcedExercised(msg.sender, account, tokenId, exerciseFees);
     }
@@ -1631,7 +1650,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         ct1.revoke(owner);
 
         // ensure the owner is solvent (insolvent accounts are not permitted to pay premium unless they are being liquidated)
-        _validateSolvency(owner, positionIdList, NO_BUFFER);
+        _validateSolvency(owner, positionIdList, NO_BUFFER, COMPUTE_ALL_PREMIA);
     }
 
     /// @notice Adds collected tokens to `s_settledTokens` and adjusts `s_grossPremiumLast` for any liquidity added.
