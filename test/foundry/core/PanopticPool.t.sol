@@ -1678,7 +1678,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSizes[0],
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -1707,7 +1708,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSizes[1],
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             twoWaySwap(swapSizeSeed);
@@ -1813,7 +1815,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         premiaSeed[0] = bound(premiaSeed[0], 2 ** 64, 2 ** 120);
@@ -1910,7 +1913,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize * 2,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.startPrank(Alice);
@@ -1938,7 +1942,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             type(uint64).max,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         assertEq(
@@ -2032,7 +2037,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize * 2,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.startPrank(Alice);
@@ -2060,7 +2066,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             type(uint64).max - 1,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), positionSize);
@@ -2146,7 +2153,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize * 2,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.startPrank(Alice);
@@ -2160,7 +2168,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
     }
 
@@ -2196,7 +2205,7 @@ contract PanopticPoolTest is PositionUtils {
         TokenId[] memory posIdList = new TokenId[](1);
         posIdList[0] = tokenId;
 
-        pp.mintOptions(posIdList, positionSize, 0, TickMath.MIN_TICK, TickMath.MAX_TICK);
+        pp.mintOptions(posIdList, positionSize, 0, TickMath.MIN_TICK, TickMath.MAX_TICK, true);
 
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), positionSize);
 
@@ -2288,7 +2297,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), positionSize);
@@ -2378,7 +2388,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), positionSize);
@@ -2490,7 +2501,7 @@ contract PanopticPoolTest is PositionUtils {
 
             // reversing the tick limits here to make sure they get entered into the SFPM properly
             // this test will fail if it does not (because no ITM swaps will occur)
-            pp.mintOptions(posIdList, positionSize, 0, TickMath.MAX_TICK, TickMath.MIN_TICK);
+            pp.mintOptions(posIdList, positionSize, 0, TickMath.MAX_TICK, TickMath.MIN_TICK, true);
         }
 
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), positionSize);
@@ -2595,7 +2606,7 @@ contract PanopticPoolTest is PositionUtils {
         TokenId[] memory posIdList = new TokenId[](1);
         posIdList[0] = tokenId;
 
-        pp.mintOptions(posIdList, positionSize, 0, TickMath.MIN_TICK, TickMath.MAX_TICK);
+        pp.mintOptions(posIdList, positionSize, 0, TickMath.MIN_TICK, TickMath.MAX_TICK, true);
 
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), positionSize);
 
@@ -2748,7 +2759,8 @@ contract PanopticPoolTest is PositionUtils {
                     positionSize,
                     0,
                     Constants.MAX_V4POOL_TICK,
-                    Constants.MIN_V4POOL_TICK
+                    Constants.MIN_V4POOL_TICK,
+                    true
                 );
             }
 
@@ -2906,7 +2918,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 0,
                 Constants.MIN_V4POOL_TICK,
-                Constants.MAX_V4POOL_TICK
+                Constants.MAX_V4POOL_TICK,
+                true
             );
         }
         currentTick = V4StateReader.getTick(manager, poolKey.toId());
@@ -3053,7 +3066,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSizes[0],
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -3174,7 +3188,8 @@ contract PanopticPoolTest is PositionUtils {
                     positionSizes[1],
                     type(uint64).max,
                     Constants.MAX_V4POOL_TICK,
-                    Constants.MIN_V4POOL_TICK
+                    Constants.MIN_V4POOL_TICK,
+                    true
                 );
             }
 
@@ -3298,7 +3313,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSizes[0],
                 0,
                 Constants.MIN_V4POOL_TICK,
-                Constants.MAX_V4POOL_TICK
+                Constants.MAX_V4POOL_TICK,
+                true
             );
         }
 
@@ -3368,7 +3384,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSizes[1],
                 type(uint64).max,
                 Constants.MIN_V4POOL_TICK,
-                Constants.MAX_V4POOL_TICK
+                Constants.MAX_V4POOL_TICK,
+                true
             );
         }
 
@@ -3482,7 +3499,7 @@ contract PanopticPoolTest is PositionUtils {
         posIdList[0] = tokenId;
 
         vm.expectRevert(Errors.PriceBoundFail.selector);
-        pp.mintOptions(posIdList, positionSize, 0, 0, 0);
+        pp.mintOptions(posIdList, positionSize, 0, 0, 0, true);
     }
 
     function test_Fail_mintOptions_LowerPriceBoundFail(
@@ -3518,7 +3535,7 @@ contract PanopticPoolTest is PositionUtils {
         posIdList[0] = tokenId;
 
         vm.expectRevert(Errors.PriceBoundFail.selector);
-        pp.mintOptions(posIdList, positionSize, 0, TickMath.MAX_TICK - 1, TickMath.MAX_TICK);
+        pp.mintOptions(posIdList, positionSize, 0, TickMath.MAX_TICK - 1, TickMath.MAX_TICK, true);
     }
 
     function test_Fail_mintOptions_UpperPriceBoundFail(
@@ -3554,7 +3571,7 @@ contract PanopticPoolTest is PositionUtils {
         posIdList[0] = tokenId;
 
         vm.expectRevert(Errors.PriceBoundFail.selector);
-        pp.mintOptions(posIdList, positionSize, 0, TickMath.MIN_TICK, TickMath.MIN_TICK + 1);
+        pp.mintOptions(posIdList, positionSize, 0, TickMath.MIN_TICK, TickMath.MIN_TICK + 1, true);
     }
 
     function test_Fail_mintOptions_IncorrectPool(
@@ -3595,7 +3612,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
     }
 
@@ -3636,7 +3654,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         posIdList = new TokenId[](2);
@@ -3649,7 +3668,8 @@ contract PanopticPoolTest is PositionUtils {
             uint128(positionSize),
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
     }
 
@@ -3691,7 +3711,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize * 0,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
     }
 
@@ -3746,7 +3767,8 @@ contract PanopticPoolTest is PositionUtils {
             uint128(positionSize),
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
     }
 
@@ -3772,7 +3794,8 @@ contract PanopticPoolTest is PositionUtils {
                 1_000_000,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             if (i > 25) break;
@@ -3828,9 +3851,16 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
-        pp.burnOptions(tokenId, emptyList, Constants.MAX_V4POOL_TICK, Constants.MIN_V4POOL_TICK);
+        pp.burnOptions(
+            tokenId,
+            emptyList,
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK,
+            true
+        );
 
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), 0);
 
@@ -3929,7 +3959,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -3958,7 +3989,8 @@ contract PanopticPoolTest is PositionUtils {
                 tokenId,
                 emptyList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), 0);
@@ -4088,7 +4120,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -4118,7 +4151,8 @@ contract PanopticPoolTest is PositionUtils {
                 tokenId,
                 emptyList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
         assertEq(sfpm.balanceOf(address(pp), TokenId.unwrap(tokenId)), 0);
@@ -4259,7 +4293,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             (tokensOwed0, tokensOwed1) = getTokensOwed(tickLower, tickUpper, 0);
@@ -4277,7 +4312,8 @@ contract PanopticPoolTest is PositionUtils {
                 (positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000,
                 type(uint64).max,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             twoWaySwap(swapSizeSeed);
@@ -4297,7 +4333,8 @@ contract PanopticPoolTest is PositionUtils {
                 (((positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000) * 100) / 89,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             (tokensOwed0, tokensOwed1) = getTokensOwed(tickLower, tickUpper, 0);
@@ -4330,7 +4367,8 @@ contract PanopticPoolTest is PositionUtils {
                 tokenIds[0],
                 emptyList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -4445,7 +4483,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 0,
                 Constants.MIN_V4POOL_TICK,
-                Constants.MAX_V4POOL_TICK
+                Constants.MAX_V4POOL_TICK,
+                true
             );
 
             (tokensOwed0, tokensOwed1) = getTokensOwed(tickLower, tickUpper, 0);
@@ -4463,7 +4502,8 @@ contract PanopticPoolTest is PositionUtils {
                 (positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000,
                 type(uint64).max,
                 Constants.MIN_V4POOL_TICK,
-                Constants.MAX_V4POOL_TICK
+                Constants.MAX_V4POOL_TICK,
+                true
             );
 
             twoWaySwap(swapSizeSeed);
@@ -4483,7 +4523,8 @@ contract PanopticPoolTest is PositionUtils {
                 (((positionSize * uint128(bound(longPercentageSeed, 1, 899))) / 1000) * 100) / 89,
                 0,
                 Constants.MIN_V4POOL_TICK,
-                Constants.MAX_V4POOL_TICK
+                Constants.MAX_V4POOL_TICK,
+                true
             );
 
             (tokensOwed0, tokensOwed1) = getTokensOwed(tickLower, tickUpper, 0);
@@ -4516,7 +4557,8 @@ contract PanopticPoolTest is PositionUtils {
                 tokenIds[0],
                 emptyList,
                 Constants.MIN_V4POOL_TICK,
-                Constants.MAX_V4POOL_TICK
+                Constants.MAX_V4POOL_TICK,
+                true
             );
         }
 
@@ -4625,7 +4667,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSizes[0],
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -4639,14 +4682,16 @@ contract PanopticPoolTest is PositionUtils {
                 uint128(positionSizes[1]),
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             pp.burnOptions(
                 posIdList,
                 emptyList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             (uint256 token0Balance, , ) = ph.optionPositionInfo(pp, Alice, tokenId);
@@ -4732,7 +4777,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize * 10,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -4757,7 +4803,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 type(uint64).max,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             if ($posIdLists[3].length < legsToBurn) {
@@ -4777,14 +4824,16 @@ contract PanopticPoolTest is PositionUtils {
                     $posIdLists[3],
                     $posIdLists[2],
                     Constants.MAX_V4POOL_TICK,
-                    Constants.MIN_V4POOL_TICK
+                    Constants.MIN_V4POOL_TICK,
+                    true
                 );
             } else {
                 pp.burnOptions(
                     $posIdLists[3][0],
                     $posIdLists[2],
                     Constants.MAX_V4POOL_TICK,
-                    Constants.MIN_V4POOL_TICK
+                    Constants.MIN_V4POOL_TICK,
+                    true
                 );
             }
 
@@ -4894,14 +4943,16 @@ contract PanopticPoolTest is PositionUtils {
                 $posIdLists[3],
                 $posIdLists[2],
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         } else {
             pp.burnOptions(
                 $posIdLists[3][0],
                 $posIdLists[2],
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
     }
@@ -4943,12 +4994,19 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.expectRevert(Errors.InputListFail.selector);
 
-        pp.burnOptions(tokenId, posIdList, Constants.MAX_V4POOL_TICK, Constants.MIN_V4POOL_TICK);
+        pp.burnOptions(
+            tokenId,
+            posIdList,
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK,
+            true
+        );
     }
 
     function test_fail_burnOptions_burnAllOptionsFrom(
@@ -5039,7 +5097,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSizes[0],
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             vm.expectRevert(Errors.InputListFail.selector);
@@ -5047,7 +5106,8 @@ contract PanopticPoolTest is PositionUtils {
                 tokenId,
                 posIdList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -5061,7 +5121,8 @@ contract PanopticPoolTest is PositionUtils {
                 uint128(positionSizes[1]),
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             vm.expectRevert(Errors.InputListFail.selector);
@@ -5069,7 +5130,8 @@ contract PanopticPoolTest is PositionUtils {
                 tokenId,
                 emptyList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
         {
@@ -5083,7 +5145,8 @@ contract PanopticPoolTest is PositionUtils {
                 uint128(positionSizes[0]),
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             vm.expectRevert(Errors.InputListFail.selector);
@@ -5091,7 +5154,8 @@ contract PanopticPoolTest is PositionUtils {
                 tokenId,
                 posIdList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -5107,7 +5171,8 @@ contract PanopticPoolTest is PositionUtils {
                 uint128(positionSizes[1]),
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             TokenId[] memory burnIdList = new TokenId[](2);
@@ -5119,7 +5184,8 @@ contract PanopticPoolTest is PositionUtils {
                 burnIdList,
                 posIdList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
 
             TokenId[] memory leftoverIdList = new TokenId[](2);
@@ -5130,7 +5196,8 @@ contract PanopticPoolTest is PositionUtils {
                 burnIdList,
                 leftoverIdList,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
     }
@@ -5220,7 +5287,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize * 2,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         // now we can mint the long option we are force exercising
@@ -5253,7 +5321,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 type(uint64).max,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             )
         {} catch (bytes memory reason) {
             if (bytes4(reason) == Errors.TransferFailed.selector) {
@@ -5633,7 +5702,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize * 10,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -5673,7 +5743,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 type(uint64).max,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -5845,7 +5916,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize * 2,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -5885,7 +5957,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 type(uint64).max,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -6054,7 +6127,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize * 2,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -6082,7 +6156,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             type(uint64).max,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         twoWaySwap(swapSizeSeed);
@@ -6139,7 +6214,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         posIdList = new TokenId[](2);
@@ -6163,7 +6239,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.startPrank(Bob);
@@ -6206,7 +6283,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.startPrank(Bob);
@@ -6294,7 +6372,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize * 2,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -6322,7 +6401,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 type(uint64).max,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -6892,7 +6972,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize * 2,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         twoWaySwap(swapSizeSeed);
@@ -6918,7 +6999,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             type(uint64).max,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         twoWaySwap(swapSizeSeed);
@@ -7444,7 +7526,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         posIdList = new TokenId[](2);
@@ -7468,7 +7551,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.startPrank(Bob);
@@ -7518,7 +7602,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.startPrank(Bob);
@@ -7528,7 +7613,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         editCollateral(ct0, Alice, 2);
@@ -7576,7 +7662,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         vm.startPrank(Bob);
@@ -7586,7 +7673,8 @@ contract PanopticPoolTest is PositionUtils {
             positionSize,
             0,
             Constants.MAX_V4POOL_TICK,
-            Constants.MIN_V4POOL_TICK
+            Constants.MIN_V4POOL_TICK,
+            true
         );
 
         editCollateral(ct0, Alice, 2);
@@ -7699,7 +7787,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize * 2,
                 0,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
@@ -7727,7 +7816,8 @@ contract PanopticPoolTest is PositionUtils {
                 positionSize,
                 type(uint64).max,
                 Constants.MAX_V4POOL_TICK,
-                Constants.MIN_V4POOL_TICK
+                Constants.MIN_V4POOL_TICK,
+                true
             );
         }
 
