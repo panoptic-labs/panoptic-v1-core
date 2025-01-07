@@ -104,6 +104,9 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// @notice Flag that signals to compute premia for both the short and long legs of a position.
     bool internal constant COMPUTE_ALL_PREMIA = true;
 
+    /// @notice Flag that signals to compute premia for only the long legs of a position.
+    bool internal constant LONG_PREMIA_ONLY = false;
+
     /// @notice Flag that indicates only to include the share of (settled) premium that is available to collect when calling `_calculateAccumulatedPremia`.
     bool internal constant ONLY_AVAILABLE_PREMIUM = false;
 
@@ -631,7 +634,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
 
         // Perform solvency check on user's account to ensure they had enough buying power to mint the option
         // Add an initial buffer to the collateral requirement to prevent users from minting their account close to insolvency
-        _checkSolvency(msg.sender, positionIdList, tickData, BP_DECREASE_BUFFER);
+        _checkSolvency(msg.sender, positionIdList, tickData, BP_DECREASE_BUFFER, LONG_PREMIA_ONLY);
 
         emit OptionMinted(msg.sender, tokenId, balanceData, commissions);
     }
@@ -816,7 +819,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
             lastObservedTick
         );
 
-        _checkSolvency(user, positionIdList, tickData, buffer);
+        _checkSolvency(user, positionIdList, tickData, buffer, COMPUTE_ALL_PREMIA);
 
         return medianData;
     }
@@ -826,11 +829,13 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// @param positionIdList The list of positions to validate solvency for
     /// @param tickData The packed tick data to check solvency at
     /// @param buffer The buffer to apply to the collateral requirement for `user`
+    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user (true), or just owed premia for long legs (false)
     function _checkSolvency(
         address user,
         TokenId[] calldata positionIdList,
         uint96 tickData,
-        uint256 buffer
+        uint256 buffer,
+        bool computeAllPremia
     ) internal view {
         // check that the provided positionIdList matches the positions in memory
         _validatePositionList(user, positionIdList, 0);
@@ -867,7 +872,15 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
             }
         }
 
-        _checkSolvencyAtTicks(user, positionIdList, currentTick, atTicks, buffer, ASSERT_SOLVENCY);
+        _checkSolvencyAtTicks(
+            user,
+            positionIdList,
+            currentTick,
+            atTicks,
+            buffer,
+            ASSERT_SOLVENCY,
+            computeAllPremia
+        );
     }
 
     /// @notice Burns and handles the exercise of options.
@@ -978,7 +991,8 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
                 currentTick,
                 atTicks,
                 NO_BUFFER,
-                ASSERT_INSOLVENCY
+                ASSERT_INSOLVENCY,
+                COMPUTE_ALL_PREMIA
             );
         }
 
@@ -1176,13 +1190,15 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// @param atTicks An array of ticks to check solvency at
     /// @param buffer The buffer to apply to the collateral requirement
     /// @param expectedSolvent Whether the account is expected to be solvent (true) or insolvent (false) at all provided `atTicks`
+    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user (true), or just owed premia for long legs (false)
     function _checkSolvencyAtTicks(
         address account,
         TokenId[] calldata positionIdList,
         int24 currentTick,
         int24[] memory atTicks,
         uint256 buffer,
-        bool expectedSolvent
+        bool expectedSolvent,
+        bool computeAllPremia
     ) internal view {
         (
             LeftRightUnsigned shortPremium,
@@ -1191,7 +1207,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         ) = _calculateAccumulatedPremia(
                 account,
                 positionIdList,
-                COMPUTE_ALL_PREMIA,
+                computeAllPremia,
                 ONLY_AVAILABLE_PREMIUM,
                 currentTick
             );
