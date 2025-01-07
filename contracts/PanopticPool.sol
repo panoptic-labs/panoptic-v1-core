@@ -104,9 +104,6 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// @notice Flag that signals to compute premia for both the short and long legs of a position.
     bool internal constant COMPUTE_ALL_PREMIA = true;
 
-    /// @notice Flag that signals to compute premia for only the long legs of a position.
-    bool internal constant LONG_PREMIA_ONLY = false;
-
     /// @notice Flag that indicates only to include the share of (settled) premium that is available to collect when calling `_calculateAccumulatedPremia`.
     bool internal constant ONLY_AVAILABLE_PREMIUM = false;
 
