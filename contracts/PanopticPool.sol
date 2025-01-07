@@ -517,15 +517,22 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// @param newPositionIdList The new positionIdList without the token being burnt
     /// @param tickLimitLow The lower bound of an acceptable open interval for the ending price
     /// @param tickLimitHigh The upper bound of an acceptable open interval for the ending price
+    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user (true), or just owed premia for long legs (false)
     function burnOptions(
         TokenId tokenId,
         TokenId[] calldata newPositionIdList,
         int24 tickLimitLow,
-        int24 tickLimitHigh
+        int24 tickLimitHigh,
+        bool computeAllPremia
     ) external {
         _burnOptions(COMMIT_LONG_SETTLED, tokenId, msg.sender, tickLimitLow, tickLimitHigh);
 
-        uint256 medianData = _validateSolvency(msg.sender, newPositionIdList, NO_BUFFER);
+        uint256 medianData = _validateSolvency(
+            msg.sender,
+            newPositionIdList,
+            NO_BUFFER,
+            computeAllPremia
+        );
 
         // Update `s_miniMedian` with a new observation if the last observation is old enough (returned medianData is nonzero)
         if (medianData != 0) s_miniMedian = medianData;
