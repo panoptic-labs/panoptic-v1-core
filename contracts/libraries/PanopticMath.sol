@@ -1077,7 +1077,7 @@ library PanopticMath {
                         .toLeftSlot(
                             int128(
                                 int256(
-                                    PanopticMath.convert0to1(
+                                    PanopticMath.convert0to1RoundingUp(
                                         ct0.convertToAssets(uint256(balanceShortage)),
                                         sqrtPriceX96
                                     )
@@ -1097,7 +1097,7 @@ library PanopticMath {
                         .toRightSlot(
                             int128(
                                 int256(
-                                    PanopticMath.convert1to0(
+                                    PanopticMath.convert1to0RoundingUp(
                                         ct1.convertToAssets(uint256(balanceShortage)),
                                         sqrtPriceX96
                                     )

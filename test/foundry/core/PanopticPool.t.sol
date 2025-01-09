@@ -7599,7 +7599,7 @@ contract PanopticPoolTest is PositionUtils {
         pp.liquidate(posIdList, Alice, posIdList);
     }
 
-    function test_Fail_liquidate_StaleTWAP(uint256 x, uint256 sqrtPriceTarget) public {
+    function test_Fail_liquidate_StaleOracle(uint256 x, uint256 sqrtPriceTarget) public {
         _initPool(x);
 
         sqrtPriceTarget = bound(
@@ -7620,7 +7620,7 @@ contract PanopticPoolTest is PositionUtils {
         vm.startPrank(Swapper);
         routerV4.swapTo(address(0), poolKey, uint160(sqrtPriceTarget));
 
-        vm.expectRevert(Errors.StaleTWAP.selector);
+        vm.expectRevert(Errors.StaleOracle.selector);
         pp.liquidate(new TokenId[](0), Alice, $posIdList);
     }
 
