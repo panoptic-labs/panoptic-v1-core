@@ -1702,6 +1702,7 @@ contract PanopticPool is Clone, Multicall {
                 Math.abs(lastObservedTick - fastOracleTick) > MAX_TICK_DELTA_SUBSTITUTION ||
                 Math.abs(lastObservedTick - slowOracleTick) > MAX_TICK_DELTA_SUBSTITUTION
             ) revert Errors.StaleOracle();
+
             tickData = PositionBalanceLibrary.packTickData(
                 V4StateReader.getTick(POOL_MANAGER_V4, _V4PoolId()),
                 fastOracleTick,
