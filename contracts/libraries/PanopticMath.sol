@@ -244,8 +244,11 @@ library PanopticMath {
                     int256(timestamps[i] - timestamps[i + 1]);
             }
 
+            // the `ticks` array descends from the most recent Uniswap observation prior to the sort
+            int24 latestObservation = int24(ticks[0]);
+
             // get the median of the `ticks` array (assuming `cardinality` is odd)
-            return (int24(Math.sort(ticks)[cardinality / 2]), int24(ticks[0]));
+            return (int24(Math.sort(ticks)[cardinality / 2]), latestObservation);
         }
     }
 
