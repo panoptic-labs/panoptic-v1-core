@@ -128,6 +128,10 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
     /// @dev Mitigates manipulation of the currentTick that causes positions to be liquidated at a less favorable price.
     int256 internal constant MAX_TWAP_DELTA_LIQUIDATION = 513;
 
+    /// @notice The maximum allowed delta (~2%) between the lastObservedTick and the slowOracleTick/fastOracleTick during forceExercise/settleLongPremium.
+    /// @dev Ensures token substitution between two accounts is settled safely at a price close to market.
+    int256 internal constant MAX_TICK_DELTA_SUBSTITUTION = 203;
+
     /// @notice The maximum allowed cumulative delta between the fast & slow oracle tick, the current & slow oracle tick, and the last-observed & slow oracle tick.
     /// @dev Falls back on the more conservative (less solvent) tick during times of extreme volatility, where the price moves ~10% in <4 minutes.
     int256 internal constant MAX_TICKS_DELTA = 953;
@@ -993,7 +997,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
 
             unchecked {
                 if (Math.abs(currentTick - twapTick) > MAX_TWAP_DELTA_LIQUIDATION)
-                    revert Errors.StaleTWAP();
+                    revert Errors.StaleOracle();
             }
 
             // Ensure the account is insolvent at twapTick (in place of slowOracleTick), currentTick, fastOracleTick, and lastObservedTick
@@ -1131,10 +1135,23 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         // validate the exercisor's position list (the exercisee's list will be evaluated after their position is force exercised)
         _validatePositionList(msg.sender, positionIdListExercisor, 0);
 
-        int24 twapTick = getOracleTWAP();
+        int24 lastObservedTick;
+        {
+            int24 fastOracleTick;
+            int24 slowOracleTick;
+            (fastOracleTick, slowOracleTick, lastObservedTick, ) = PanopticMath.getOracleTicks(
+                oracleContract(),
+                s_miniMedian
+            );
+
+            if (
+                Math.abs(lastObservedTick - fastOracleTick) > MAX_TICK_DELTA_SUBSTITUTION ||
+                Math.abs(lastObservedTick - slowOracleTick) > MAX_TICK_DELTA_SUBSTITUTION
+            ) revert Errors.StaleOracle();
+        }
 
         // to be eligible for force exercise, the price *must* be outside the position's range for at least 1 leg
-        tokenId.validateIsExercisable(twapTick);
+        tokenId.validateIsExercisable(lastObservedTick);
 
         CollateralTracker ct0 = collateralToken0();
         CollateralTracker ct1 = collateralToken1();
@@ -1152,7 +1169,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
             // Include any deltas in long legs between the current and oracle tick in the exercise fee
             exerciseFees = ct0.exerciseCost(
                 V4StateReader.getTick(POOL_MANAGER_V4, _V4PoolId()),
-                twapTick,
+                lastObservedTick,
                 tokenId,
                 positionSize,
                 longAmounts
@@ -1171,7 +1188,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         LeftRightSigned refundAmounts = PanopticMath.getRefundAmounts(
             account,
             exerciseFees,
-            twapTick,
+            lastObservedTick,
             ct0,
             ct1
         );
@@ -1638,10 +1655,32 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
             emit PremiumSettled(owner, tokenId, legIndex, realizedPremia);
         }
 
+        int24 lastObservedTick;
+        uint96 tickData;
+        {
+            int24 fastOracleTick;
+            int24 slowOracleTick;
+            (fastOracleTick, slowOracleTick, lastObservedTick, ) = PanopticMath.getOracleTicks(
+                oracleContract(),
+                s_miniMedian
+            );
+
+            if (
+                Math.abs(lastObservedTick - fastOracleTick) > MAX_TICK_DELTA_SUBSTITUTION ||
+                Math.abs(lastObservedTick - slowOracleTick) > MAX_TICK_DELTA_SUBSTITUTION
+            ) revert Errors.StaleOracle();
+            tickData = PositionBalanceLibrary.packTickData(
+                V4StateReader.getTick(POOL_MANAGER_V4, _V4PoolId()),
+                fastOracleTick,
+                slowOracleTick,
+                lastObservedTick
+            );
+        }
+
         LeftRightSigned refundAmounts = PanopticMath.getRefundAmounts(
             owner,
             LeftRightSigned.wrap(0),
-            getOracleTWAP(),
+            lastObservedTick,
             ct0,
             ct1
         );
@@ -1654,7 +1693,7 @@ contract PanopticPool is Clone, ERC1155Holder, Multicall {
         ct1.revoke(owner);
 
         // ensure the owner is solvent (insolvent accounts are not permitted to pay premium unless they are being liquidated)
-        _validateSolvency(owner, positionIdList, NO_BUFFER, COMPUTE_ALL_PREMIA);
+        _checkSolvency(owner, positionIdList, tickData, NO_BUFFER);
     }
 
     /// @notice Adds collected tokens to `s_settledTokens` and adjusts `s_grossPremiumLast` for any liquidity added.

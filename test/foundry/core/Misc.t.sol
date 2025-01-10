@@ -3045,6 +3045,11 @@ contract Misctest is Test, PositionUtils {
         token0.approve(address(swapperc), type(uint128).max);
         token1.approve(address(swapperc), type(uint128).max);
 
+        swapperc.swapTo(uniPool, Math.getSqrtRatioAtTick(100));
+        vm.warp(block.timestamp + 12);
+        vm.roll(block.number + 1);
+        swapperc.swapTo(uniPool, 2 ** 96);
+
         $posIdLists[0].push(
             TokenId.wrap(0).addPoolId(sfpm.getPoolId(poolKey.toId())).addLeg(
                 0,
@@ -3110,9 +3115,7 @@ contract Misctest is Test, PositionUtils {
         int256 premium0 = 10388;
         int256 premium1 = 10388989;
 
-        uint160 twapPrice = Math.getSqrtRatioAtTick(
-            PanopticMath.twapFilter(pp.oracleContract(), 600)
-        );
+        uint160 lastObservedPrice = Math.getSqrtRatioAtTick(100);
 
         vm.startPrank(Alice);
 
@@ -3132,7 +3135,11 @@ contract Misctest is Test, PositionUtils {
         int256 balanceDelta1 = int256(ct1.convertToAssets(ct1.balanceOf(Buyers[0]))) -
             int256(settleeBalanceBefore1);
 
-        assertEq(-balanceDelta0, premium0 + PanopticMath.convert1to0(premium1, twapPrice));
+        assertEq(
+            -balanceDelta0,
+            premium0 +
+                int256(PanopticMath.convert1to0RoundingUp(uint256(premium1), lastObservedPrice))
+        );
         assertEq(balanceDelta1, 0);
 
         assertEq(
@@ -3163,7 +3170,11 @@ contract Misctest is Test, PositionUtils {
             int256(settleeBalanceBefore1);
 
         assertEq(balanceDelta0, 0);
-        assertEq(-balanceDelta1, premium1 + PanopticMath.convert0to1(premium0, twapPrice));
+        assertEq(
+            -balanceDelta1,
+            premium1 +
+                int256(PanopticMath.convert0to1RoundingUp(uint256(premium0), lastObservedPrice))
+        );
 
         assertEq(
             int256(settlerBalanceBefore0) - int256(ct0.convertToAssets(ct0.balanceOf(Alice))),

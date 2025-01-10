@@ -244,8 +244,11 @@ library PanopticMath {
                     int256(timestamps[i] - timestamps[i + 1]);
             }
 
+            // the `ticks` array descends from the most recent Uniswap observation prior to the sort
+            int24 latestObservation = int24(ticks[0]);
+
             // get the median of the `ticks` array (assuming `cardinality` is odd)
-            return (int24(Math.sort(ticks)[cardinality / 2]), int24(ticks[0]));
+            return (int24(Math.sort(ticks)[cardinality / 2]), latestObservation);
         }
     }
 
@@ -1077,7 +1080,7 @@ library PanopticMath {
                         .toLeftSlot(
                             int128(
                                 int256(
-                                    PanopticMath.convert0to1(
+                                    PanopticMath.convert0to1RoundingUp(
                                         ct0.convertToAssets(uint256(balanceShortage)),
                                         sqrtPriceX96
                                     )
@@ -1097,7 +1100,7 @@ library PanopticMath {
                         .toRightSlot(
                             int128(
                                 int256(
-                                    PanopticMath.convert1to0(
+                                    PanopticMath.convert1to0RoundingUp(
                                         ct1.convertToAssets(uint256(balanceShortage)),
                                         sqrtPriceX96
                                     )
