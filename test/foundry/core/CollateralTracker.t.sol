@@ -798,8 +798,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 assetsToken1 = convertToAssets(returnedShares1, collateralToken1);
 
         // withdraw tokens
-        collateralToken0.withdraw(assetsToken0, Bob, Bob, new TokenId[](0));
-        collateralToken1.withdraw(assetsToken1, Bob, Bob, new TokenId[](0));
+        collateralToken0.withdraw(assetsToken0, Bob, Bob, new TokenId[](0), true);
+        collateralToken1.withdraw(assetsToken1, Bob, Bob, new TokenId[](0), true);
 
         // Total amount of shares after withdrawal (after burn)
         uint256 sharesAfter0 = convertToAssets(collateralToken0.totalSupply(), collateralToken0);
@@ -877,7 +877,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // attempt to withdraw
         // fail as assets > maxWithdraw(owner)
         vm.expectRevert(stdError.arithmeticError);
-        collateralToken0.withdraw(maxAssets + 1, Bob, Bob, new TokenId[](0));
+        collateralToken0.withdraw(maxAssets + 1, Bob, Bob, new TokenId[](0), true);
     }
 
     function test_Fail_mintGTAvailableAssets(
@@ -1116,7 +1116,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
 
         // no erc4626 maxWithdraw check, so s_poolAssets math underflows instead
         vm.expectRevert(stdError.arithmeticError);
-        collateralToken0.withdraw(assets, Bob, Bob, new TokenId[](0));
+        collateralToken0.withdraw(assets, Bob, Bob, new TokenId[](0), true);
     }
 
     function test_Success_withdraw_OnBehalf(uint256 x, uint104 assets) public {
@@ -1185,8 +1185,8 @@ contract CollateralTrackerTest is Test, PositionUtils {
         uint256 balanceBefore1 = IERC20Partial(token1).balanceOf(Alice);
 
         // attempt to withdraw
-        collateralToken0.withdraw(assets, Alice, Bob, new TokenId[](0));
-        collateralToken1.withdraw(assets, Alice, Bob, new TokenId[](0));
+        collateralToken0.withdraw(assets, Alice, Bob, new TokenId[](0), true);
+        collateralToken1.withdraw(assets, Alice, Bob, new TokenId[](0), true);
 
         // Bob's token balance after withdraw
         uint256 balanceAfter0 = IERC20Partial(token0).balanceOf(Alice);
@@ -1248,7 +1248,7 @@ contract CollateralTrackerTest is Test, PositionUtils {
         // attempt to withdraw
         // fail as user does not have approval to transfer on behalf
         vm.expectRevert(stdError.arithmeticError);
-        collateralToken0.withdraw(100, Alice, Bob, new TokenId[](0));
+        collateralToken0.withdraw(100, Alice, Bob, new TokenId[](0), true);
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -1854,7 +1854,13 @@ contract Misctest is Test, PositionUtils {
         PanopticMath.twapFilter(IV3CompatibleOracle(address(uniPool)), 600);
 
         vm.startPrank(Bob);
-        pp.forceExercise(Alice, $posIdList[0], new TokenId[](0), new TokenId[](0));
+        pp.forceExercise(
+            Alice,
+            $posIdList[0],
+            new TokenId[](0),
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
     }
 
     function test_parity_maxmint_previewmint() public view {
@@ -2716,7 +2722,7 @@ contract Misctest is Test, PositionUtils {
 
         // collect buyer 1's three relevant chunks
         for (uint256 i = 0; i < 3; ++i) {
-            pp.settleLongPremium(collateralIdLists[i], Buyers[0], 0);
+            pp.settleLongPremium(collateralIdLists[i], Buyers[0], 0, true);
         }
 
         assertEq(
@@ -2791,9 +2797,9 @@ contract Misctest is Test, PositionUtils {
         // now, settle the dummy chunks for all the buyers/positions and see that the settled ratio for primary doesn't change
 
         for (uint256 i = 0; i < Buyers.length; ++i) {
-            pp.settleLongPremium(collateralIdLists[1], Buyers[i], 1);
+            pp.settleLongPremium(collateralIdLists[1], Buyers[i], 1, true);
 
-            pp.settleLongPremium(collateralIdLists[3], Buyers[i], 0);
+            pp.settleLongPremium(collateralIdLists[3], Buyers[i], 0, true);
         }
 
         assertEq(
@@ -2866,9 +2872,9 @@ contract Misctest is Test, PositionUtils {
         assetsBefore1Arr[2] = ct1.convertToAssets(ct1.balanceOf(Buyers[2]));
 
         for (uint256 i = 0; i < Buyers.length; ++i) {
-            pp.settleLongPremium(collateralIdLists[1], Buyers[i], 1);
+            pp.settleLongPremium(collateralIdLists[1], Buyers[i], 1, true);
 
-            pp.settleLongPremium(collateralIdLists[3], Buyers[i], 0);
+            pp.settleLongPremium(collateralIdLists[3], Buyers[i], 0, true);
         }
 
         assertEq(
@@ -2916,11 +2922,11 @@ contract Misctest is Test, PositionUtils {
         assetsBefore1Arr[2] = ct1.convertToAssets(ct1.balanceOf(Buyers[2]));
 
         for (uint256 i = 0; i < Buyers.length; ++i) {
-            pp.settleLongPremium(collateralIdLists[0], Buyers[i], 0);
+            pp.settleLongPremium(collateralIdLists[0], Buyers[i], 0, true);
 
-            pp.settleLongPremium(collateralIdLists[1], Buyers[i], 0);
+            pp.settleLongPremium(collateralIdLists[1], Buyers[i], 0, true);
 
-            pp.settleLongPremium(collateralIdLists[2], Buyers[i], 0);
+            pp.settleLongPremium(collateralIdLists[2], Buyers[i], 0, true);
         }
 
         assertEq(
@@ -2986,7 +2992,7 @@ contract Misctest is Test, PositionUtils {
 
         // test long leg validation
         vm.expectRevert(Errors.NotALongLeg.selector);
-        pp.settleLongPremium(collateralIdLists[2], Buyers[0], 1);
+        pp.settleLongPremium(collateralIdLists[2], Buyers[0], 1, true);
 
         // test positionIdList validation
         // snapshot so we don't have to reset changes to collateralIdLists array
@@ -2994,7 +3000,7 @@ contract Misctest is Test, PositionUtils {
 
         collateralIdLists[0].pop();
         vm.expectRevert(Errors.InputListFail.selector);
-        pp.settleLongPremium(collateralIdLists[0], Buyers[0], 0);
+        pp.settleLongPremium(collateralIdLists[0], Buyers[0], 0, true);
         vm.revertTo(snap);
 
         // test collateral checking (basic)
@@ -3005,7 +3011,7 @@ contract Misctest is Test, PositionUtils {
             deal(address(ct0), Buyers[i], i ** 15);
             deal(address(ct1), Buyers[i], i ** 15);
             vm.expectRevert(Errors.AccountInsolvent.selector);
-            pp.settleLongPremium(collateralIdLists[0], Buyers[i], 0);
+            pp.settleLongPremium(collateralIdLists[0], Buyers[i], 0, true);
             vm.revertTo(snap);
         }
 
@@ -3128,7 +3134,7 @@ contract Misctest is Test, PositionUtils {
         uint256 settleeBalanceBefore0 = ct0.convertToAssets(ct0.balanceOf(Buyers[0]));
         uint256 settleeBalanceBefore1 = ct1.convertToAssets(ct1.balanceOf(Buyers[0]));
 
-        pp.settleLongPremium($posIdLists[1], Buyers[0], 0);
+        pp.settleLongPremium($posIdLists[1], Buyers[0], 0, true);
 
         int256 balanceDelta0 = int256(ct0.convertToAssets(ct0.balanceOf(Buyers[0]))) -
             int256(settleeBalanceBefore0);
@@ -3160,7 +3166,7 @@ contract Misctest is Test, PositionUtils {
         settleeBalanceBefore0 = ct0.convertToAssets(ct0.balanceOf(Buyers[1]));
         settleeBalanceBefore1 = ct1.convertToAssets(ct1.balanceOf(Buyers[1]));
 
-        pp.settleLongPremium($posIdLists[1], Buyers[1], 0);
+        pp.settleLongPremium($posIdLists[1], Buyers[1], 0, true);
 
         balanceDelta0 =
             int256(ct0.convertToAssets(ct0.balanceOf(Buyers[1]))) -
@@ -3190,7 +3196,7 @@ contract Misctest is Test, PositionUtils {
         editCollateral(ct1, Buyers[2], 0);
 
         vm.expectRevert(stdError.arithmeticError);
-        pp.settleLongPremium($posIdLists[1], Buyers[2], 0);
+        pp.settleLongPremium($posIdLists[1], Buyers[2], 0, true);
     }
 
     function test_success_settledPremiumDistribution() public {
@@ -3461,7 +3467,7 @@ contract Misctest is Test, PositionUtils {
         editCollateral(ct0, Bob, ct0.convertToShares(266263));
         editCollateral(ct1, Bob, 0);
 
-        pp.validateCollateralWithdrawable(Bob, $posIdList);
+        pp.validateCollateralWithdrawable(Bob, $posIdList, true);
     }
 
     function test_Success_WithdrawWithOpenPositions() public {
@@ -3500,7 +3506,7 @@ contract Misctest is Test, PositionUtils {
         editCollateral(ct0, Bob, ct0.convertToShares(1_000_000));
         editCollateral(ct1, Bob, 0);
 
-        ct0.withdraw(1_000_000 - 266263, Bob, Bob, $posIdList);
+        ct0.withdraw(1_000_000 - 266263, Bob, Bob, $posIdList, true);
     }
 
     function test_Fail_validateCollateralWithdrawable() public {
@@ -3540,7 +3546,7 @@ contract Misctest is Test, PositionUtils {
         editCollateral(ct1, Bob, 0);
 
         vm.expectRevert(Errors.AccountInsolvent.selector);
-        pp.validateCollateralWithdrawable(Bob, $posIdList);
+        pp.validateCollateralWithdrawable(Bob, $posIdList, true);
     }
 
     function test_Fail_WithdrawWithOpenPositions_AccountInsolvent() public {
@@ -3580,7 +3586,7 @@ contract Misctest is Test, PositionUtils {
         editCollateral(ct1, Bob, 0);
 
         vm.expectRevert(Errors.AccountInsolvent.selector);
-        ct0.withdraw(1_000_000 - 266262, Bob, Bob, $posIdList);
+        ct0.withdraw(1_000_000 - 266262, Bob, Bob, $posIdList, true);
     }
 
     function test_Fail_InsolventAtCurrentTick_itmPut() public {
@@ -4090,7 +4096,7 @@ contract Misctest is Test, PositionUtils {
         editCollateral(ct1, Bob, 0);
 
         vm.expectRevert(Errors.AccountInsolvent.selector);
-        ct0.withdraw(1_000_000 - 266262, Alice, Bob, $posIdList);
+        ct0.withdraw(1_000_000 - 266262, Alice, Bob, $posIdList, true);
     }
 
     function test_Success_SafeMode_down() public {

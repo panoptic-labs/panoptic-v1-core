@@ -5416,7 +5416,13 @@ contract PanopticPoolTest is PositionUtils {
         exerciseFeeAmounts[0] += (longAmounts.rightSlot() * (-exerciseFee)) / 10_000;
         exerciseFeeAmounts[1] += (longAmounts.leftSlot() * (-exerciseFee)) / 10_000;
 
-        pp.forceExercise(Alice, posIdList[0], new TokenId[](0), new TokenId[](0));
+        pp.forceExercise(
+            Alice,
+            posIdList[0],
+            new TokenId[](0),
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
 
         assertApproxEqAbs(
             int256(ct0.balanceOf(Bob)) - int256(uint256(type(uint104).max)),
@@ -5757,7 +5763,13 @@ contract PanopticPoolTest is PositionUtils {
             uint256 snap = vm.snapshot();
 
             vm.startPrank(Bob);
-            pp.forceExercise(Alice, $posIdLists[2][0], $posIdLists[3], $posIdLists[0]);
+            pp.forceExercise(
+                Alice,
+                $posIdLists[2][0],
+                $posIdLists[3],
+                $posIdLists[0],
+                LeftRightUnsigned.wrap(1).toLeftSlot(1)
+            );
 
             int256 balanceDelta0 = int256(ct0.balanceOf(Alice)) -
                 int256(lastCollateralBalance0[Alice]);
@@ -5825,7 +5837,13 @@ contract PanopticPoolTest is PositionUtils {
         vm.startPrank(Bob);
 
         vm.expectRevert();
-        pp.forceExercise(Alice, $posIdLists[2][0], $posIdLists[3], $posIdLists[0]);
+        pp.forceExercise(
+            Alice,
+            $posIdLists[2][0],
+            $posIdLists[3],
+            $posIdLists[0],
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
     }
 
     function test_Fail_forceExercise_ExerciseeNotSolvent(
@@ -5971,7 +5989,13 @@ contract PanopticPoolTest is PositionUtils {
             uint256 snap = vm.snapshot();
 
             vm.startPrank(Bob);
-            pp.forceExercise(Alice, $posIdLists[2][0], $posIdLists[3], new TokenId[](0));
+            pp.forceExercise(
+                Alice,
+                $posIdLists[2][0],
+                $posIdLists[3],
+                new TokenId[](0),
+                LeftRightUnsigned.wrap(1).toLeftSlot(1)
+            );
 
             int256 balanceDelta0 = int256(ct0.balanceOf(Alice)) -
                 int256(lastCollateralBalance0[Alice]);
@@ -6037,7 +6061,13 @@ contract PanopticPoolTest is PositionUtils {
         vm.startPrank(Bob);
 
         vm.expectRevert();
-        pp.forceExercise(Alice, $posIdLists[2][0], $posIdLists[3], new TokenId[](0));
+        pp.forceExercise(
+            Alice,
+            $posIdLists[2][0],
+            $posIdLists[3],
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
     }
 
     function test_Fail_forceExercise_InvalidExerciseeList(
@@ -6165,7 +6195,13 @@ contract PanopticPoolTest is PositionUtils {
         vm.startPrank(Bob);
 
         vm.expectRevert(Errors.InputListFail.selector);
-        pp.forceExercise(Alice, $posIdLists[1][0], $posIdLists[0], new TokenId[](0));
+        pp.forceExercise(
+            Alice,
+            $posIdLists[1][0],
+            $posIdLists[0],
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
     }
 
     function test_Fail_forceExercise_InvalidExercisorList(
@@ -6249,7 +6285,13 @@ contract PanopticPoolTest is PositionUtils {
         posIdList[0] = tokenId2;
 
         vm.expectRevert(Errors.InputListFail.selector);
-        pp.forceExercise(Alice, TokenId.wrap(0), new TokenId[](0), posIdList);
+        pp.forceExercise(
+            Alice,
+            TokenId.wrap(0),
+            new TokenId[](0),
+            posIdList,
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
     }
 
     function test_Fail_forceExercise_PositionNotExercisable(uint256 x) public {
@@ -6290,7 +6332,13 @@ contract PanopticPoolTest is PositionUtils {
         vm.startPrank(Bob);
 
         vm.expectRevert(Errors.NoLegsExercisable.selector);
-        pp.forceExercise(Alice, touchedIds[0], touchedIds, new TokenId[](0));
+        pp.forceExercise(
+            Alice,
+            touchedIds[0],
+            touchedIds,
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
