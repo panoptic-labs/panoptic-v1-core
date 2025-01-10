@@ -5308,7 +5308,8 @@ contract PanopticPoolTest is PositionUtils {
 
             rangesFromStrike = legRanges > rangesFromStrike ? legRanges : rangesFromStrike;
 
-            medianSqrtPriceX96 = TickMath.getSqrtRatioAtTick(TWAPtick);
+            (, , , TWAPtick, ) = pp.getOracleTicks();
+            uint160 lastObservedPrice = TickMath.getSqrtRatioAtTick(TWAPtick);
 
             LiquidityChunk liquidityChunk = PanopticMath.getLiquidityChunk(
                 tokenId,
@@ -5324,7 +5325,7 @@ contract PanopticPoolTest is PositionUtils {
             );
 
             (medianValue0, medianValue1) = LiquidityAmounts.getAmountsForLiquidity(
-                medianSqrtPriceX96,
+                lastObservedPrice,
                 TickMath.getSqrtRatioAtTick(liquidityChunk.tickLower()),
                 TickMath.getSqrtRatioAtTick(liquidityChunk.tickUpper()),
                 liquidityChunk.liquidity()
