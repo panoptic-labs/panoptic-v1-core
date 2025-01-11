@@ -8,7 +8,6 @@ import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IV3CompatibleOracle} from "@interfaces/IV3CompatibleOracle.sol";
 // Inherited implementations
 import {Clone} from "clones-with-immutable-args/Clone.sol";
-import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import {Multicall} from "@base/Multicall.sol";
 // Libraries
 import {Constants} from "@libraries/Constants.sol";
