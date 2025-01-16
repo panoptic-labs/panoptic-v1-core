@@ -1043,16 +1043,16 @@ library PanopticMath {
         }
     }
 
-    /// @notice Substitutes surplus tokens with the caller in exchange for any potential token shortages prior to revoking virtual shares.
-    /// @param callee The address of the user being exercised/settled
-    /// @param exerciseFees Pre-adjustment exercise fees to debit from caller (rightSlot = currency0 left = currency1), 0 for `settleLongPremium`
+    /// @notice Substitutes surplus tokens to a caller in exchange for any potential token shortages prior to revoking virtual shares from a payor.
+    /// @param payor The address of the user being exercised/settled
+    /// @param fees If applicable, fees to debit from caller (rightSlot = currency0 left = currency1), 0 for `settleLongPremium`
     /// @param atTick The tick at which to convert between currency0/currency1 when redistributing the surplus tokens
     /// @param ct0 The collateral tracker for currency0
     /// @param ct1 The collateral tracker for currency1
-    /// @return The LeftRight-packed deltas for currency0/currency1 to move from the caller to the exercisee/settlee
+    /// @return The LeftRight-packed deltas for currency0/currency1 to move from the caller to the payor
     function getRefundAmounts(
-        address callee,
-        LeftRightSigned exerciseFees,
+        address payor,
+        LeftRightSigned fees,
         int24 atTick,
         CollateralTracker ct0,
         CollateralTracker ct1
@@ -1062,8 +1062,8 @@ library PanopticMath {
             // if the refunder lacks sufficient currency0 to pay back the virtual shares, have the caller cover the difference in exchange for currency1 (and vice versa)
 
             int256 balanceShortage = int256(uint256(type(uint248).max)) -
-                int256(ct0.balanceOf(callee)) -
-                int256(ct0.convertToShares(uint128(-exerciseFees.rightSlot())));
+                int256(ct0.balanceOf(payor)) -
+                int256(ct0.convertToShares(uint128(-fees.rightSlot())));
 
             if (balanceShortage > 0) {
                 return
@@ -1071,7 +1071,7 @@ library PanopticMath {
                         .wrap(0)
                         .toRightSlot(
                             int128(
-                                exerciseFees.rightSlot() -
+                                fees.rightSlot() -
                                     int256(
                                         Math.mulDivRoundingUp(
                                             uint256(balanceShortage),
@@ -1088,15 +1088,15 @@ library PanopticMath {
                                         ct0.convertToAssets(uint256(balanceShortage)),
                                         sqrtPriceX96
                                     )
-                                ) + exerciseFees.leftSlot()
+                                ) + fees.leftSlot()
                             )
                         );
             }
 
             balanceShortage =
                 int256(uint256(type(uint248).max)) -
-                int256(ct1.balanceOf(callee)) -
-                int256(ct1.convertToShares(uint128(-exerciseFees.leftSlot())));
+                int256(ct1.balanceOf(payor)) -
+                int256(ct1.convertToShares(uint128(-fees.leftSlot())));
             if (balanceShortage > 0) {
                 return
                     LeftRightSigned
@@ -1108,12 +1108,12 @@ library PanopticMath {
                                         ct1.convertToAssets(uint256(balanceShortage)),
                                         sqrtPriceX96
                                     )
-                                ) + exerciseFees.rightSlot()
+                                ) + fees.rightSlot()
                             )
                         )
                         .toLeftSlot(
                             int128(
-                                exerciseFees.leftSlot() -
+                                fees.leftSlot() -
                                     int256(
                                         Math.mulDivRoundingUp(
                                             uint256(balanceShortage),
@@ -1127,6 +1127,6 @@ library PanopticMath {
         }
 
         // otherwise, no need to deviate from the original deltas
-        return exerciseFees;
+        return fees;
     }
 }
