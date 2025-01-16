@@ -213,7 +213,7 @@ contract PanopticMathTest is Test, PositionUtils {
         );
     }
 
-    function test_Success_getPoolId(PoolId poolId, uint256 _tickSpacing) public {
+    function test_Success_getPoolId(PoolId poolId, uint256 _tickSpacing) public view {
         _tickSpacing = bound(_tickSpacing, 0, uint16(type(int16).max));
 
         assertEq(
