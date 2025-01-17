@@ -1230,7 +1230,7 @@ contract PanopticPool is Clone, Multicall {
             account,
             positionIdListExercisee,
             NO_BUFFER,
-            computeAllPremia.rightSlot() > 0 ? true : false
+            computeAllPremia.rightSlot() > 0
         );
 
         // the exercisor's position list is validated above
@@ -1242,7 +1242,7 @@ contract PanopticPool is Clone, Multicall {
                 msg.sender,
                 positionIdListExercisor,
                 BP_DECREASE_BUFFER,
-                computeAllPremia.leftSlot() > 0 ? true : false
+                computeAllPremia.leftSlot() > 0
             );
 
         emit ForcedExercised(msg.sender, account, tokenId, exerciseFees);
