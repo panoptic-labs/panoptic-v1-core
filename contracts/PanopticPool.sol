@@ -101,7 +101,7 @@ contract PanopticPool is Clone, Multicall {
     int24 internal constant MAX_SWAP_TICK = Constants.MAX_V4POOL_TICK + 1;
 
     /// @notice Flag that signals to compute premia for both the short and long legs of a position.
-    bool internal constant COMPUTE_ALL_PREMIA = true;
+    bool internal constant COMPUTE_PREMIA_AS_COLLATERAL = true;
 
     /// @notice Flag that indicates only to include the share of (settled) premium that is available to collect when calling `_calculateAccumulatedPremia`.
     bool internal constant ONLY_AVAILABLE_PREMIUM = false;
@@ -354,13 +354,13 @@ contract PanopticPool is Clone, Multicall {
     /// @dev Reverts if account is not solvent with `BP_DECREASE_BUFFER`.
     /// @param user The account to check for collateral withdrawal eligibility
     /// @param positionIdList The list of all option positions held by `user`
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     function validateCollateralWithdrawable(
         address user,
         TokenId[] calldata positionIdList,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) external view {
-        _validateSolvency(user, positionIdList, BP_DECREASE_BUFFER, computeAllPremia);
+        _validateSolvency(user, positionIdList, BP_DECREASE_BUFFER, usePremiaAsCollateral);
     }
 
     /// @notice Returns the total amount of premium accumulated for a list of positions and a list containing the corresponding `PositionBalance` information for each position.
@@ -380,7 +380,7 @@ contract PanopticPool is Clone, Multicall {
             _calculateAccumulatedPremia(
                 user,
                 positionIdList,
-                COMPUTE_ALL_PREMIA,
+                COMPUTE_PREMIA_AS_COLLATERAL,
                 includePendingPremium,
                 V4StateReader.getTick(POOL_MANAGER_V4, _V4PoolId())
             );
@@ -389,7 +389,7 @@ contract PanopticPool is Clone, Multicall {
     /// @notice Calculate the accumulated premia owed from the option buyer to the option seller.
     /// @param user The holder of options
     /// @param positionIdList The list of all option positions held by user
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     /// @param includePendingPremium If true, include premium that is owed to the user but has not yet settled; if false, only include premium that is available to collect
     /// @param atTick The current tick of the Uniswap pool
     /// @return shortPremium The total amount of premium owed (which may `includePendingPremium`) to the short legs in `positionIdList` (currency0: right slot, currency1: left slot)
@@ -398,7 +398,7 @@ contract PanopticPool is Clone, Multicall {
     function _calculateAccumulatedPremia(
         address user,
         TokenId[] calldata positionIdList,
-        bool computeAllPremia,
+        bool usePremiaAsCollateral,
         bool includePendingPremium,
         int24 atTick
     )
@@ -428,7 +428,7 @@ contract PanopticPool is Clone, Multicall {
                     tokenId,
                     LeftRightUnsigned.wrap(balances[k][1]).rightSlot(),
                     user,
-                    computeAllPremia,
+                    usePremiaAsCollateral,
                     atTick
                 );
 
@@ -517,14 +517,14 @@ contract PanopticPool is Clone, Multicall {
     /// denominated as X32 = (`ratioLimit * 2^32`)
     /// @param tickLimitLow The lower bound of an acceptable open interval for the ending price
     /// @param tickLimitHigh The upper bound of an acceptable open interval for the ending price
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     function mintOptions(
         TokenId[] calldata positionIdList,
         uint128 positionSize,
         uint64 effectiveLiquidityLimitX32,
         int24 tickLimitLow,
         int24 tickLimitHigh,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) external {
         _mintOptions(
             positionIdList,
@@ -532,7 +532,7 @@ contract PanopticPool is Clone, Multicall {
             effectiveLiquidityLimitX32,
             tickLimitLow,
             tickLimitHigh,
-            computeAllPremia
+            usePremiaAsCollateral
         );
     }
 
@@ -541,13 +541,13 @@ contract PanopticPool is Clone, Multicall {
     /// @param newPositionIdList The new positionIdList without the token being burnt
     /// @param tickLimitLow The lower bound of an acceptable open interval for the ending price
     /// @param tickLimitHigh The upper bound of an acceptable open interval for the ending price
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     function burnOptions(
         TokenId tokenId,
         TokenId[] calldata newPositionIdList,
         int24 tickLimitLow,
         int24 tickLimitHigh,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) external {
         _burnOptions(COMMIT_LONG_SETTLED, tokenId, msg.sender, tickLimitLow, tickLimitHigh);
 
@@ -555,7 +555,7 @@ contract PanopticPool is Clone, Multicall {
             msg.sender,
             newPositionIdList,
             NO_BUFFER,
-            computeAllPremia
+            usePremiaAsCollateral
         );
 
         // Update `s_miniMedian` with a new observation if the last observation is old enough (returned medianData is nonzero)
@@ -567,13 +567,13 @@ contract PanopticPool is Clone, Multicall {
     /// @param newPositionIdList The new positionIdList without the token(s) being burnt
     /// @param tickLimitLow The lower bound of an acceptable open interval for the ending price
     /// @param tickLimitHigh The upper bound of an acceptable open interval for the ending price
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     function burnOptions(
         TokenId[] calldata positionIdList,
         TokenId[] calldata newPositionIdList,
         int24 tickLimitLow,
         int24 tickLimitHigh,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) external {
         _burnAllOptionsFrom(
             msg.sender,
@@ -587,7 +587,7 @@ contract PanopticPool is Clone, Multicall {
             msg.sender,
             newPositionIdList,
             NO_BUFFER,
-            computeAllPremia
+            usePremiaAsCollateral
         );
 
         // Update `s_miniMedian` with a new observation if the last observation is old enough (returned medianData is nonzero)
@@ -605,14 +605,14 @@ contract PanopticPool is Clone, Multicall {
     /// denominated as X32 = (`ratioLimit * 2^32`)
     /// @param tickLimitLow The lower bound of an acceptable open interval for the ending price
     /// @param tickLimitHigh The upper bound of an acceptable open interval for the ending price
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     function _mintOptions(
         TokenId[] calldata positionIdList,
         uint128 positionSize,
         uint64 effectiveLiquidityLimitX32,
         int24 tickLimitLow,
         int24 tickLimitHigh,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) internal {
         // the new tokenId will be the last element in `positionIdList`
         TokenId tokenId;
@@ -673,7 +673,13 @@ contract PanopticPool is Clone, Multicall {
 
         // Perform solvency check on user's account to ensure they had enough buying power to mint the option
         // Add an initial buffer to the collateral requirement to prevent users from minting their account close to insolvency
-        _checkSolvency(msg.sender, positionIdList, tickData, BP_DECREASE_BUFFER, computeAllPremia);
+        _checkSolvency(
+            msg.sender,
+            positionIdList,
+            tickData,
+            BP_DECREASE_BUFFER,
+            usePremiaAsCollateral
+        );
 
         emit OptionMinted(msg.sender, tokenId, balanceData, commissions);
     }
@@ -838,13 +844,13 @@ contract PanopticPool is Clone, Multicall {
     /// @param user The account to validate
     /// @param positionIdList The list of positions to validate solvency for
     /// @param buffer The buffer to apply to the collateral requirement for `user`
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     /// @return If nonzero (enough time has passed since last observation), the updated value for `s_miniMedian` with a new observation
     function _validateSolvency(
         address user,
         TokenId[] calldata positionIdList,
         uint256 buffer,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) internal view returns (uint256) {
         (
             int24 fastOracleTick,
@@ -863,7 +869,7 @@ contract PanopticPool is Clone, Multicall {
                 lastObservedTick
             ),
             buffer,
-            computeAllPremia
+            usePremiaAsCollateral
         );
 
         return medianData;
@@ -874,13 +880,13 @@ contract PanopticPool is Clone, Multicall {
     /// @param positionIdList The list of positions to validate solvency for
     /// @param tickData The packed tick data to check solvency at
     /// @param buffer The buffer to apply to the collateral requirement for `user`
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     function _checkSolvency(
         address user,
         TokenId[] calldata positionIdList,
         uint96 tickData,
         uint256 buffer,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) internal view {
         // check that the provided positionIdList matches the positions in memory
         _validatePositionList(user, positionIdList, 0);
@@ -924,7 +930,7 @@ contract PanopticPool is Clone, Multicall {
             atTicks,
             buffer,
             ASSERT_SOLVENCY,
-            computeAllPremia
+            usePremiaAsCollateral
         );
     }
 
@@ -1037,7 +1043,7 @@ contract PanopticPool is Clone, Multicall {
                 atTicks,
                 NO_BUFFER,
                 ASSERT_INSOLVENCY,
-                COMPUTE_ALL_PREMIA
+                COMPUTE_PREMIA_AS_COLLATERAL
             );
         }
 
@@ -1050,7 +1056,7 @@ contract PanopticPool is Clone, Multicall {
             (shortPremium, longPremium, positionBalanceArray) = _calculateAccumulatedPremia(
                 liquidatee,
                 positionIdList,
-                COMPUTE_ALL_PREMIA,
+                COMPUTE_PREMIA_AS_COLLATERAL,
                 ONLY_AVAILABLE_PREMIUM,
                 currentTick
             );
@@ -1139,7 +1145,12 @@ contract PanopticPool is Clone, Multicall {
         );
 
         // ensure the liquidator is still solvent after the liquidation
-        _validateSolvency(msg.sender, positionIdListLiquidator, NO_BUFFER, COMPUTE_ALL_PREMIA);
+        _validateSolvency(
+            msg.sender,
+            positionIdListLiquidator,
+            NO_BUFFER,
+            COMPUTE_PREMIA_AS_COLLATERAL
+        );
 
         emit AccountLiquidated(msg.sender, liquidatee, bonusAmounts);
     }
@@ -1149,13 +1160,13 @@ contract PanopticPool is Clone, Multicall {
     /// @param tokenId The position to be force exercised; this position must contain at least one out-of-range long leg
     /// @param positionIdListExercisee Post-burn list of open positions in the exercisee's (`account`) account
     /// @param positionIdListExercisor List of open positions in the exercisor's (`msg.sender`) account
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the exercisee(right slot)/exercisor(left slot) for collateral (>0), or just owed premia for long legs (0)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the exercisee(right slot)/exercisor(left slot) for collateral (>0), or just owed premia for long legs (0)
     function forceExercise(
         address account,
         TokenId tokenId,
         TokenId[] calldata positionIdListExercisee,
         TokenId[] calldata positionIdListExercisor,
-        LeftRightUnsigned computeAllPremia
+        LeftRightUnsigned usePremiaAsCollateral
     ) external {
         // validate the exercisor's position list (the exercisee's list will be evaluated after their position is force exercised)
         _validatePositionList(msg.sender, positionIdListExercisor, 0);
@@ -1230,7 +1241,7 @@ contract PanopticPool is Clone, Multicall {
             account,
             positionIdListExercisee,
             NO_BUFFER,
-            computeAllPremia.rightSlot() > 0
+            usePremiaAsCollateral.rightSlot() > 0
         );
 
         // the exercisor's position list is validated above
@@ -1242,7 +1253,7 @@ contract PanopticPool is Clone, Multicall {
                 msg.sender,
                 positionIdListExercisor,
                 BP_DECREASE_BUFFER,
-                computeAllPremia.leftSlot() > 0
+                usePremiaAsCollateral.leftSlot() > 0
             );
 
         emit ForcedExercised(msg.sender, account, tokenId, exerciseFees);
@@ -1260,7 +1271,7 @@ contract PanopticPool is Clone, Multicall {
     /// @param atTicks An array of ticks to check solvency at
     /// @param buffer The buffer to apply to the collateral requirement
     /// @param expectedSolvent Whether the account is expected to be solvent (true) or insolvent (false) at all provided `atTicks`
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     function _checkSolvencyAtTicks(
         address account,
         TokenId[] calldata positionIdList,
@@ -1268,7 +1279,7 @@ contract PanopticPool is Clone, Multicall {
         int24[] memory atTicks,
         uint256 buffer,
         bool expectedSolvent,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) internal view {
         (
             LeftRightUnsigned shortPremium,
@@ -1277,7 +1288,7 @@ contract PanopticPool is Clone, Multicall {
         ) = _calculateAccumulatedPremia(
                 account,
                 positionIdList,
-                computeAllPremia,
+                usePremiaAsCollateral,
                 ONLY_AVAILABLE_PREMIUM,
                 currentTick
             );
@@ -1519,7 +1530,7 @@ contract PanopticPool is Clone, Multicall {
     /// @param tokenId The option position
     /// @param positionSize The number of contracts (size) of the option position
     /// @param owner The holder of the tokenId option
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     /// @param atTick The tick at which the premia is calculated -> use (`atTick < type(int24).max`) to compute it
     /// up to current block. `atTick = type(int24).max` will only consider fees as of the last on-chain transaction
     /// @return premiaByLeg The amount of premia owed to the user for each leg of the position
@@ -1528,7 +1539,7 @@ contract PanopticPool is Clone, Multicall {
         TokenId tokenId,
         uint128 positionSize,
         address owner,
-        bool computeAllPremia,
+        bool usePremiaAsCollateral,
         int24 atTick
     )
         internal
@@ -1541,7 +1552,7 @@ contract PanopticPool is Clone, Multicall {
         uint256 numLegs = tokenId.countLegs();
         for (uint256 leg = 0; leg < numLegs; ) {
             uint256 isLong = tokenId.isLong(leg);
-            if ((isLong == 1) || computeAllPremia) {
+            if ((isLong == 1) || usePremiaAsCollateral) {
                 LiquidityChunk liquidityChunk = PanopticMath.getLiquidityChunk(
                     tokenId,
                     leg,
@@ -1605,12 +1616,12 @@ contract PanopticPool is Clone, Multicall {
     /// @param positionIdList Exhaustive list of open positions for `owner` used for solvency checks where the tokenId to settle is placed at the last index
     /// @param owner The owner of the option position to make premium payments on
     /// @param legIndex the index of the leg in tokenId that is to be collected on (must be isLong=1)
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the settlee for collateral (true), or just owed premia for long legs (false)
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the settlee for collateral (true), or just owed premia for long legs (false)
     function settleLongPremium(
         TokenId[] calldata positionIdList,
         address owner,
         uint256 legIndex,
-        bool computeAllPremia
+        bool usePremiaAsCollateral
     ) external {
         _validatePositionList(owner, positionIdList, 0);
 
@@ -1726,7 +1737,7 @@ contract PanopticPool is Clone, Multicall {
         ct1.revoke(owner);
 
         // ensure the owner is solvent (insolvent accounts are not permitted to pay premium unless they are being liquidated)
-        _checkSolvency(owner, positionIdList, tickData, NO_BUFFER, computeAllPremia);
+        _checkSolvency(owner, positionIdList, tickData, NO_BUFFER, usePremiaAsCollateral);
     }
 
     /// @notice Adds collected tokens to `s_settledTokens` and adjusts `s_grossPremiumLast` for any liquidity added.
@@ -1944,7 +1955,7 @@ contract PanopticPool is Clone, Multicall {
             tokenId,
             positionSize,
             owner,
-            COMPUTE_ALL_PREMIA,
+            COMPUTE_PREMIA_AS_COLLATERAL,
             type(int24).max
         );
 
