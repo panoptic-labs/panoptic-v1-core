@@ -1149,7 +1149,7 @@ contract PanopticPool is Clone, Multicall {
     /// @param tokenId The position to be force exercised; this position must contain at least one out-of-range long leg
     /// @param positionIdListExercisee Post-burn list of open positions in the exercisee's (`account`) account
     /// @param positionIdListExercisor List of open positions in the exercisor's (`msg.sender`) account
-    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the exercisee(right slot)/exercisor(left slot) for collateral (1), or just owed premia for long legs (0)
+    /// @param computeAllPremia Whether to compute accumulated premia for all legs held by the exercisee(right slot)/exercisor(left slot) for collateral (>0), or just owed premia for long legs (0)
     function forceExercise(
         address account,
         TokenId tokenId,
