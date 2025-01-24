@@ -1375,7 +1375,8 @@ contract PanopticPoolActions is CollateralActions {
             )
         {
             assertWithMsg(!$shouldRevert, "SettleLongPremium: missing revert");
-        } catch {
+        } catch (bytes memory revertData) {
+            if (bytes4(revertData) == Errors.StaleOracle.selector) revert();
             assertWithMsg($shouldRevert, "SettleLongPremium: unexpected revert");
             revert();
         }
@@ -1540,7 +1541,8 @@ contract PanopticPoolActions is CollateralActions {
             // check if the revert is due to an insufficient amount of tokens from the exercisor or the exercisor is insolvent
             if (
                 keccak256(reason) == keccak256(abi.encodeWithSignature("Panic(uint256)", 0x11)) ||
-                bytes4(reason) == Errors.AccountInsolvent.selector
+                bytes4(reason) == Errors.AccountInsolvent.selector ||
+                bytes4(reason) == Errors.StaleOracle.selector
             ) {
                 // if exercisor was insolvent beforehand, it's fine to revert
                 try
@@ -1578,6 +1580,7 @@ contract PanopticPoolActions is CollateralActions {
                     revert();
                 }
             } else {
+                if (bytes4(reason) == Errors.StaleOracle.selector) revert();
                 assertWithMsg($shouldRevert, "ForceExercise: unexpected revert");
                 revert();
             }
