@@ -1779,6 +1779,429 @@ contract Misctest is Test, PositionUtils {
         );
     }
 
+    function test_success_MintBurnWithdraw_ComputeLongPremium() public {
+        swapperc = new SwapperC();
+        vm.startPrank(Swapper);
+        token0.mint(Swapper, type(uint128).max);
+        token1.mint(Swapper, type(uint128).max);
+        token0.approve(address(swapperc), type(uint128).max);
+        token1.approve(address(swapperc), type(uint128).max);
+
+        vm.startPrank(Alice);
+
+        $posIdList.push(
+            TokenId.wrap(0).addPoolId(sfpm.getPoolId(poolKey.toId())).addLeg(
+                0,
+                1,
+                1,
+                0,
+                1,
+                0,
+                -35,
+                1
+            )
+        );
+
+        pp.mintOptions(
+            $posIdList,
+            2_000_000,
+            0,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        vm.startPrank(Swapper);
+
+        routerV4.swapTo(address(0), poolKey, Math.getSqrtRatioAtTick(-35));
+
+        accruePoolFeesInRange(
+            manager,
+            poolKey,
+            StateLibrary.getLiquidity(manager, poolKey.toId()) - 1,
+            1_000_000,
+            1_000_000_000
+        );
+
+        routerV4.swapTo(address(0), poolKey, 2 ** 96);
+
+        vm.startPrank(Alice);
+
+        editCollateral(ct0, Alice, ct0.convertToShares(5000));
+        editCollateral(ct1, Alice, ct1.convertToShares(5000));
+
+        $posIdList.push(
+            TokenId.wrap(0).addPoolId(sfpm.getPoolId(poolKey.toId())).addLeg(
+                0,
+                2,
+                1,
+                0,
+                1,
+                0,
+                -35,
+                1
+            )
+        );
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.mintOptions(
+            $posIdList,
+            1_000_000,
+            0,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            false
+        );
+
+        pp.mintOptions(
+            $posIdList,
+            1_000_000,
+            0,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        $tempIdList.push($posIdList[0]);
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.burnOptions(
+            $posIdList[1],
+            $tempIdList,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            false
+        );
+
+        $setupIdList.push($posIdList[1]);
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.burnOptions(
+            $setupIdList,
+            $tempIdList,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            false
+        );
+
+        uint256 snap = vm.snapshotState();
+        pp.burnOptions(
+            $posIdList[1],
+            $tempIdList,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+        vm.revertToState(snap);
+
+        pp.burnOptions(
+            $setupIdList,
+            $tempIdList,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        ct0.withdraw(1, Alice, Alice, $tempIdList, false);
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        ct1.withdraw(1, Alice, Alice, $tempIdList, false);
+
+        ct0.withdraw(1, Alice, Alice, $tempIdList, true);
+        ct1.withdraw(1, Alice, Alice, $tempIdList, true);
+    }
+
+    function test_success_ExerciseSettle_ComputeLongPremium() public {
+        swapperc = new SwapperC();
+        vm.startPrank(Swapper);
+        token0.mint(Swapper, type(uint128).max);
+        token1.mint(Swapper, type(uint128).max);
+        token0.approve(address(swapperc), type(uint128).max);
+        token1.approve(address(swapperc), type(uint128).max);
+
+        $posIdList.push(
+            TokenId.wrap(0).addPoolId(sfpm.getPoolId(poolKey.toId())).addLeg(
+                0,
+                1,
+                1,
+                0,
+                1,
+                0,
+                -35,
+                1
+            )
+        );
+
+        vm.startPrank(Seller);
+        pp.mintOptions(
+            $posIdList,
+            4_000_000,
+            0,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        vm.startPrank(Alice);
+        pp.mintOptions(
+            $posIdList,
+            2_000_000,
+            0,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        vm.startPrank(Bob);
+        pp.mintOptions(
+            $posIdList,
+            2_000_000,
+            0,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        vm.startPrank(Swapper);
+
+        routerV4.swapTo(address(0), poolKey, Math.getSqrtRatioAtTick(-35));
+
+        accruePoolFeesInRange(
+            manager,
+            poolKey,
+            StateLibrary.getLiquidity(manager, poolKey.toId()) - 1,
+            1_000_000,
+            1_000_000_000
+        );
+
+        routerV4.swapTo(address(0), poolKey, 2 ** 96);
+
+        editCollateral(ct0, Alice, ct0.convertToShares(5000));
+        editCollateral(ct1, Alice, ct1.convertToShares(5000));
+
+        editCollateral(ct0, Bob, ct0.convertToShares(5000));
+        editCollateral(ct1, Bob, ct1.convertToShares(5000));
+
+        vm.startPrank(Bob);
+
+        $tempIdList = $posIdList;
+
+        $posIdList.push(
+            TokenId.wrap(0).addPoolId(sfpm.getPoolId(poolKey.toId())).addLeg(
+                0,
+                1,
+                1,
+                1,
+                1,
+                0,
+                -35,
+                1
+            )
+        );
+
+        pp.mintOptions(
+            $posIdList,
+            2_000_000,
+            type(uint64).max,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        vm.startPrank(Alice);
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.settleLongPremium($posIdList, Bob, 0, false);
+
+        uint256 snap = vm.snapshotState();
+        pp.settleLongPremium($posIdList, Bob, 0, true);
+
+        vm.revertToState(snap);
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            $tempIdList,
+            $tempIdList,
+            LeftRightUnsigned.wrap(0).toLeftSlot(0)
+        );
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            $tempIdList,
+            $tempIdList,
+            LeftRightUnsigned.wrap(0).toLeftSlot(1)
+        );
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            $tempIdList,
+            $tempIdList,
+            LeftRightUnsigned.wrap(1).toLeftSlot(0)
+        );
+
+        snap = vm.snapshotState();
+        pp.burnOptions(
+            $posIdList[0],
+            new TokenId[](0),
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            $tempIdList,
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(0).toLeftSlot(0)
+        );
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            $tempIdList,
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(0).toLeftSlot(1)
+        );
+
+        uint256 snap2 = vm.snapshotState();
+
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            $tempIdList,
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(0)
+        );
+
+        vm.revertToState(snap2);
+
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            $tempIdList,
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
+
+        vm.revertToState(snap);
+
+        $setupIdList.push($posIdList[1]);
+
+        vm.startPrank(Bob);
+        pp.burnOptions(
+            $posIdList[0],
+            $setupIdList,
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        vm.startPrank(Alice);
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            new TokenId[](0),
+            $tempIdList,
+            LeftRightUnsigned.wrap(0).toLeftSlot(0)
+        );
+
+        vm.expectRevert(Errors.AccountInsolvent.selector);
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            new TokenId[](0),
+            $tempIdList,
+            LeftRightUnsigned.wrap(1).toLeftSlot(0)
+        );
+
+        snap2 = vm.snapshotState();
+
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            new TokenId[](0),
+            $tempIdList,
+            LeftRightUnsigned.wrap(0).toLeftSlot(1)
+        );
+
+        vm.revertToState(snap2);
+
+        snap2 = vm.snapshotState();
+
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            new TokenId[](0),
+            $tempIdList,
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
+
+        vm.revertToState(snap2);
+
+        pp.burnOptions(
+            $posIdList[0],
+            new TokenId[](0),
+            Constants.MIN_V4POOL_TICK,
+            Constants.MAX_V4POOL_TICK,
+            true
+        );
+
+        snap2 = vm.snapshotState();
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            new TokenId[](0),
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(0).toLeftSlot(0)
+        );
+
+        vm.revertToState(snap2);
+
+        snap2 = vm.snapshotState();
+
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            new TokenId[](0),
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(0).toLeftSlot(1)
+        );
+
+        vm.revertToState(snap2);
+
+        snap2 = vm.snapshotState();
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            new TokenId[](0),
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(0)
+        );
+
+        vm.revertToState(snap2);
+
+        snap2 = vm.snapshotState();
+
+        pp.forceExercise(
+            Bob,
+            $posIdList[1],
+            new TokenId[](0),
+            new TokenId[](0),
+            LeftRightUnsigned.wrap(1).toLeftSlot(1)
+        );
+    }
+
     // are delegations for ITM positions sufficient?
     function test_success_exercise_crossDelegate() public {
         swapperc = new SwapperC();
