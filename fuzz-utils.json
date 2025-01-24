@@ -1,0 +1,33 @@
+{
+  "generate": {
+    "targetContract": "FuzzDeployments",
+    "compilationPath": ".",
+    "corpusDir": "contracts/fuzz/corpus",
+    "fuzzer": "echidna",
+    "testsDir": "test/foundry",
+    "inheritancePath": "",
+    "namedInputs": false,
+    "allSequences": false
+  },
+  "template": {
+    "name": "DefaultHarness",
+    "mode": "simple",
+    "targets": [],
+    "outputDir": "./contracts/fuzz/test",
+    "compilationPath": ".",
+    "actors": [
+      {
+        "name": "Default",
+        "targets": [],
+        "number": 3,
+        "filters": {
+          "strict": false,
+          "onlyModifiers": [],
+          "onlyPayable": false,
+          "onlyExternalCalls": []
+        }
+      }
+    ],
+    "attacks": []
+  }
+}

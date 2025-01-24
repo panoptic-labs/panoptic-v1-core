@@ -6,8 +6,8 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 // Libraries
 import {PanopticMath} from "@libraries/PanopticMath.sol";
 
-/// @title InteractionHelper - contains helper functions for select external interactions.
-/// @notice This library contains helper functions for select external interactions.
+/// @title InteractionHelper - contains helper functions for select internal interactions.
+/// @notice This library contains helper functions for select internal interactions.
 /// @dev Generally employed when there is a need to save or reuse bytecode size
 /// on a core contract.
 /// @author Axicon Labs Limited
@@ -26,7 +26,7 @@ library InteractionHelper {
         bool isToken0,
         uint24 fee,
         string memory prefix
-    ) external view returns (string memory) {
+    ) internal view returns (string memory) {
         string memory symbol0 = PanopticMath.safeERC20Symbol(currency0);
         string memory symbol1 = PanopticMath.safeERC20Symbol(currency1);
 
@@ -53,14 +53,14 @@ library InteractionHelper {
     function computeSymbol(
         address token,
         string memory prefix
-    ) external view returns (string memory) {
+    ) internal view returns (string memory) {
         return string.concat(prefix, PanopticMath.safeERC20Symbol(token));
     }
 
     /// @notice Returns decimals of underlying asset (0 if not present).
     /// @param token The address of the underlying asset used to compute the decimals (`address(0)` = native asset)
     /// @return The decimals of the token
-    function computeDecimals(address token) external view returns (uint8) {
+    function computeDecimals(address token) internal view returns (uint8) {
         // not guaranteed that token supports metadata extension
         // so we need to let call fail and return placeholder if not
         try IERC20Metadata(token).decimals() returns (uint8 _decimals) {

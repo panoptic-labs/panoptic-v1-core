@@ -1,0 +1,76 @@
+{
+  "fuzzing": {
+    "workers": 16,
+    "workerResetLimit": 50,
+    "timeout": 0,
+    "testLimit": 0,
+    "shrinkLimit": 0,
+    "callSequenceLength": 2500,
+    "corpusDirectory": "test/echidna/medusa_corpus",
+    "coverageEnabled": true,
+    "targetContracts": ["EchidnaWrapper"],
+    "predeployedContracts": { "UniDeployer": "0xde0001" },
+    "targetContractsBalances": [],
+    "constructorArgs": {},
+    "deployerAddress": "0x30000",
+    "senderAddresses": ["0xa11ce", "0xb0b", "0xcafe", "0xda210", "0xedda"],
+    "blockNumberDelayMax": 60480,
+    "blockTimestampDelayMax": 604800,
+    "blockGasLimit": 1250000000,
+    "transactionGasLimit": 125000000,
+    "testing": {
+      "stopOnFailedTest": false,
+      "stopOnFailedContractMatching": false,
+      "stopOnNoTests": true,
+      "testAllContracts": false,
+      "traceAll": false,
+      "assertionTesting": {
+        "enabled": true,
+        "testViewMethods": true,
+        "panicCodeConfig": {
+          "failOnCompilerInsertedPanic": true,
+          "failOnAssertion": true,
+          "failOnArithmeticUnderflow": true,
+          "failOnDivideByZero": true,
+          "failOnEnumTypeConversionOutOfBounds": true,
+          "failOnIncorrectStorageAccess": true,
+          "failOnPopEmptyArray": true,
+          "failOnOutOfBoundsArrayAccess": true,
+          "failOnAllocateTooMuchMemory": true,
+          "failOnCallUninitializedVariable": true
+        }
+      },
+      "propertyTesting": {
+        "enabled": false,
+        "testPrefixes": ["property_"]
+      },
+      "optimizationTesting": {
+        "enabled": false,
+        "testPrefixes": ["optimize_"]
+      },
+      "targetFunctionSignatures": [],
+      "excludeFunctionSignatures": []
+    },
+    "chainConfig": {
+      "codeSizeCheckDisabled": true,
+      "cheatCodes": {
+        "cheatCodesEnabled": true,
+        "enableFFI": false
+      }
+    }
+  },
+  "compilation": {
+    "platform": "crytic-compile",
+    "platformConfig": {
+      "target": ".",
+      "solcVersion": "",
+      "exportDirectory": "",
+      "args": ["--foundry-compile-all"]
+    }
+  },
+  "logging": {
+    "level": "info",
+    "logDirectory": "",
+    "noColor": false
+  }
+}

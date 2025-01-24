@@ -1,6 +1,6 @@
 [profile.default]
 src = 'contracts'
-test = 'test/foundry'
+test = 'test/echidna'
 script = 'script'
 out = 'out'
 libs = ['lib']
