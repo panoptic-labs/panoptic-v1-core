@@ -2967,6 +2967,160 @@ contract Misctest is Test, PositionUtils {
         }
     }
 
+    function test_success_settleLongPremium_tokenSubstitution() public {
+        swapperc = new SwapperC();
+        vm.startPrank(Swapper);
+        token0.mint(Swapper, type(uint128).max);
+        token1.mint(Swapper, type(uint128).max);
+        token0.approve(address(swapperc), type(uint128).max);
+        token1.approve(address(swapperc), type(uint128).max);
+
+        swapperc.swapTo(uniPool, Math.getSqrtRatioAtTick(100));
+        vm.warp(block.timestamp + 12);
+        vm.roll(block.number + 1);
+        swapperc.swapTo(uniPool, 2 ** 96);
+
+        $posIdLists[0].push(
+            TokenId.wrap(0).addPoolId(sfpm.getPoolId(poolKey.toId())).addLeg(
+                0,
+                1,
+                1,
+                0,
+                0,
+                0,
+                15,
+                1
+            )
+        );
+
+        vm.startPrank(Alice);
+
+        pp.mintOptions(
+            $posIdLists[0],
+            100_000_000,
+            0,
+            Constants.MAX_V4POOL_TICK,
+            Constants.MIN_V4POOL_TICK
+        );
+
+        $posIdLists[1].push(
+            TokenId.wrap(0).addPoolId(sfpm.getPoolId(poolKey.toId())).addLeg(
+                0,
+                1,
+                1,
+                1,
+                0,
+                0,
+                15,
+                1
+            )
+        );
+
+        for (uint256 i = 0; i < 3; ++i) {
+            vm.startPrank(Buyers[i]);
+            pp.mintOptions(
+                $posIdLists[1],
+                1_000_000,
+                type(uint64).max,
+                Constants.MAX_V4POOL_TICK,
+                Constants.MIN_V4POOL_TICK
+            );
+        }
+
+        vm.startPrank(Swapper);
+
+        routerV4.swapTo(address(0), poolKey, Math.getSqrtRatioAtTick(10) + 1);
+        swapperc.swapTo(uniPool, Math.getSqrtRatioAtTick(10) + 1);
+
+        accruePoolFeesInRange(
+            manager,
+            poolKey,
+            StateLibrary.getLiquidity(manager, poolKey.toId()) - 1,
+            1_000_000,
+            1_000_000_000
+        );
+
+        int256 premium0 = 10388;
+        int256 premium1 = 10388989;
+
+        uint160 lastObservedPrice = Math.getSqrtRatioAtTick(100);
+
+        vm.startPrank(Alice);
+
+        uint256 settlerBalanceBefore0 = ct0.convertToAssets(ct0.balanceOf(Alice));
+        uint256 settlerBalanceBefore1 = ct1.convertToAssets(ct1.balanceOf(Alice));
+
+        // shortage of token1 - succeeds and token1 is converted to token0
+        editCollateral(ct1, Buyers[0], 0);
+
+        uint256 settleeBalanceBefore0 = ct0.convertToAssets(ct0.balanceOf(Buyers[0]));
+        uint256 settleeBalanceBefore1 = ct1.convertToAssets(ct1.balanceOf(Buyers[0]));
+
+        pp.settleLongPremium($posIdLists[1], Buyers[0], 0);
+
+        int256 balanceDelta0 = int256(ct0.convertToAssets(ct0.balanceOf(Buyers[0]))) -
+            int256(settleeBalanceBefore0);
+        int256 balanceDelta1 = int256(ct1.convertToAssets(ct1.balanceOf(Buyers[0]))) -
+            int256(settleeBalanceBefore1);
+
+        assertEq(
+            -balanceDelta0,
+            premium0 +
+                int256(PanopticMath.convert1to0RoundingUp(uint256(premium1), lastObservedPrice))
+        );
+        assertEq(balanceDelta1, 0);
+
+        assertEq(
+            int256(settlerBalanceBefore0) - int256(ct0.convertToAssets(ct0.balanceOf(Alice))),
+            balanceDelta0 + premium0
+        );
+        assertEq(
+            int256(settlerBalanceBefore1) - int256(ct1.convertToAssets(ct1.balanceOf(Alice))),
+            premium1 + 1
+        );
+
+        settlerBalanceBefore0 = ct0.convertToAssets(ct0.balanceOf(Alice));
+        settlerBalanceBefore1 = ct1.convertToAssets(ct1.balanceOf(Alice));
+
+        // shortage of token0 - succeeds and token0 is converted to token1
+        editCollateral(ct0, Buyers[1], 0);
+
+        settleeBalanceBefore0 = ct0.convertToAssets(ct0.balanceOf(Buyers[1]));
+        settleeBalanceBefore1 = ct1.convertToAssets(ct1.balanceOf(Buyers[1]));
+
+        pp.settleLongPremium($posIdLists[1], Buyers[1], 0);
+
+        balanceDelta0 =
+            int256(ct0.convertToAssets(ct0.balanceOf(Buyers[1]))) -
+            int256(settleeBalanceBefore0);
+        balanceDelta1 =
+            int256(ct1.convertToAssets(ct1.balanceOf(Buyers[1]))) -
+            int256(settleeBalanceBefore1);
+
+        assertEq(balanceDelta0, 0);
+        assertEq(
+            -balanceDelta1,
+            premium1 +
+                int256(PanopticMath.convert0to1RoundingUp(uint256(premium0), lastObservedPrice))
+        );
+
+        assertEq(
+            int256(settlerBalanceBefore0) - int256(ct0.convertToAssets(ct0.balanceOf(Alice))),
+            premium0 + 1
+        );
+        assertEq(
+            int256(settlerBalanceBefore1) - int256(ct1.convertToAssets(ct1.balanceOf(Alice))),
+            balanceDelta1 + premium1
+        );
+
+        // insolvent account - fails while revoking virtual shares
+        editCollateral(ct0, Buyers[2], 0);
+        editCollateral(ct1, Buyers[2], 0);
+
+        vm.expectRevert(stdError.arithmeticError);
+        pp.settleLongPremium($posIdLists[1], Buyers[2], 0);
+    }
+
     function test_success_settledPremiumDistribution() public {
         swapperc = new SwapperC();
         vm.startPrank(Swapper);

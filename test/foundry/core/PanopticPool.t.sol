@@ -5193,7 +5193,7 @@ contract PanopticPoolTest is PositionUtils {
             uint256 exerciseableCount;
             // make sure position is exercisable - the uniswap twap is used to determine exercisability
             // so it could potentially be both OTM and non-exercisable (in-range)
-            TWAPtick = pp.getOracleTWAP_();
+            (, , , TWAPtick, ) = pp.getOracleTicks();
             for (uint256 i = 0; i < numLegs; ++i) {
                 if (
                     (TWAPtick < (numLegs == 1 ? tickLower : tickLowers[i]) ||
@@ -5308,7 +5308,8 @@ contract PanopticPoolTest is PositionUtils {
 
             rangesFromStrike = legRanges > rangesFromStrike ? legRanges : rangesFromStrike;
 
-            medianSqrtPriceX96 = TickMath.getSqrtRatioAtTick(TWAPtick);
+            (, , , TWAPtick, ) = pp.getOracleTicks();
+            uint160 lastObservedPrice = TickMath.getSqrtRatioAtTick(TWAPtick);
 
             LiquidityChunk liquidityChunk = PanopticMath.getLiquidityChunk(
                 tokenId,
@@ -5324,7 +5325,7 @@ contract PanopticPoolTest is PositionUtils {
             );
 
             (medianValue0, medianValue1) = LiquidityAmounts.getAmountsForLiquidity(
-                medianSqrtPriceX96,
+                lastObservedPrice,
                 TickMath.getSqrtRatioAtTick(liquidityChunk.tickLower()),
                 TickMath.getSqrtRatioAtTick(liquidityChunk.tickUpper()),
                 liquidityChunk.liquidity()
@@ -5437,7 +5438,7 @@ contract PanopticPoolTest is PositionUtils {
         }
     }
 
-    function test_Success_getExerciseDeltas(
+    function test_Success_getRefundAmounts(
         uint256 x,
         uint256 balance0,
         uint256 balance1,
@@ -5471,7 +5472,7 @@ contract PanopticPoolTest is PositionUtils {
                 int256(ct0.balanceOf(Charlie)) -
                 int256(ct0.convertToShares(uint256(-refund0)));
 
-            LeftRightSigned refundAmounts = PanopticMath.getExerciseDeltas(
+            LeftRightSigned refundAmounts = PanopticMath.getRefundAmounts(
                 Charlie,
                 LeftRightSigned.wrap(0).toRightSlot(int128(refund0)).toLeftSlot(int128(refund1)),
                 int24(atTick),
@@ -5602,7 +5603,7 @@ contract PanopticPoolTest is PositionUtils {
             uint256 exerciseableCount;
             // make sure position is exercisable - the uniswap twap is used to determine exercisability
             // so it could potentially be both OTM and non-exercisable (in-range)
-            TWAPtick = pp.getOracleTWAP_();
+            (, , , TWAPtick, ) = pp.getOracleTicks();
             for (uint256 i = 0; i < numLegs; ++i) {
                 if (
                     (TWAPtick < (numLegs == 1 ? tickLower : tickLowers[i]) ||
@@ -5700,17 +5701,19 @@ contract PanopticPoolTest is PositionUtils {
         currentSqrtPriceX96 = V4StateReader.getSqrtPriceX96(manager, poolKey.toId());
         currentTick = V4StateReader.getTick(manager, poolKey.toId());
 
+        (, , , TWAPtick, ) = pp.getOracleTicks();
+
         (, uint256 totalCollateralRequired0) = ph.checkCollateral(
             pp,
             Bob,
-            pp.getOracleTWAP_(),
+            TWAPtick,
             $posIdLists[0]
         );
 
-        if (pp.getOracleTWAP_() > 0)
+        if (TWAPtick > 0)
             totalCollateralRequired0 = PanopticMath.convert1to0(
                 totalCollateralRequired0,
-                Math.getSqrtRatioAtTick(pp.getOracleTWAP_())
+                Math.getSqrtRatioAtTick(TWAPtick)
             );
 
         uint256 totalCollateralB0 = bound(
@@ -5722,10 +5725,8 @@ contract PanopticPoolTest is PositionUtils {
         vm.assume(
             int256(totalCollateralRequired0) +
                 int256(
-                    PanopticMath.convert1to0(
-                        $balanceDelta1,
-                        Math.getSqrtRatioAtTick(pp.getOracleTWAP_())
-                    ) + $balanceDelta0
+                    PanopticMath.convert1to0($balanceDelta1, Math.getSqrtRatioAtTick(TWAPtick)) +
+                        $balanceDelta0
                 ) *
                 2 >
                 int256(totalCollateralB0)
@@ -5745,7 +5746,7 @@ contract PanopticPoolTest is PositionUtils {
                 PanopticMath.convert0to1(
                     (totalCollateralB0 * (10_000 - bound(collateralRatioSeed, 5_000, 6_000))) /
                         10_000,
-                    Math.getSqrtRatioAtTick(pp.getOracleTWAP_())
+                    Math.getSqrtRatioAtTick(TWAPtick)
                 )
             )
         );
@@ -5814,7 +5815,7 @@ contract PanopticPoolTest is PositionUtils {
             uint256 exerciseableCount;
             // make sure position is exercisable - the uniswap twap is used to determine exercisability
             // so it could potentially be both OTM and non-exercisable (in-range)
-            TWAPtick = pp.getOracleTWAP_();
+            (, , , TWAPtick, ) = pp.getOracleTicks();
             for (uint256 i = 0; i < numLegs; ++i) {
                 if (
                     (TWAPtick < (numLegs == 1 ? tickLower : tickLowers[i]) ||
@@ -5911,18 +5912,19 @@ contract PanopticPoolTest is PositionUtils {
 
         currentSqrtPriceX96 = V4StateReader.getSqrtPriceX96(manager, poolKey.toId());
         currentTick = V4StateReader.getTick(manager, poolKey.toId());
+        (, , , TWAPtick, ) = pp.getOracleTicks();
 
         (, uint256 totalCollateralRequired0) = ph.checkCollateral(
             pp,
             Alice,
-            pp.getOracleTWAP_(),
+            TWAPtick,
             $posIdLists[3]
         );
 
-        if (pp.getOracleTWAP_() > 0)
+        if (TWAPtick > 0)
             totalCollateralRequired0 = PanopticMath.convert1to0(
                 totalCollateralRequired0,
-                Math.getSqrtRatioAtTick(pp.getOracleTWAP_())
+                Math.getSqrtRatioAtTick(TWAPtick)
             );
 
         uint256 totalCollateralB0 = bound(
@@ -5934,10 +5936,8 @@ contract PanopticPoolTest is PositionUtils {
         vm.assume(
             int256(totalCollateralRequired0) -
                 int256(
-                    PanopticMath.convert1to0(
-                        $balanceDelta1,
-                        Math.getSqrtRatioAtTick(pp.getOracleTWAP_())
-                    ) + $balanceDelta0
+                    PanopticMath.convert1to0($balanceDelta1, Math.getSqrtRatioAtTick(TWAPtick)) +
+                        $balanceDelta0
                 ) *
                 2 >
                 int256(totalCollateralB0)
@@ -5956,7 +5956,7 @@ contract PanopticPoolTest is PositionUtils {
             ct1.convertToShares(
                 PanopticMath.convert0to1(
                     (totalCollateralB0 * (10_000 - bound(collateralRatioSeed, 0, 10_000))) / 10_000,
-                    Math.getSqrtRatioAtTick(pp.getOracleTWAP_())
+                    Math.getSqrtRatioAtTick(TWAPtick)
                 )
             )
         );
@@ -6023,7 +6023,7 @@ contract PanopticPoolTest is PositionUtils {
             uint256 exerciseableCount;
             // make sure position is exercisable - the uniswap twap is used to determine exercisability
             // so it could potentially be both OTM and non-exercisable (in-range)
-            TWAPtick = pp.getOracleTWAP_();
+            (, , , TWAPtick, ) = pp.getOracleTicks();
             for (uint256 i = 0; i < numLegs; ++i) {
                 if (
                     (TWAPtick < (numLegs == 1 ? tickLower : tickLowers[i]) ||
@@ -7599,7 +7599,7 @@ contract PanopticPoolTest is PositionUtils {
         pp.liquidate(posIdList, Alice, posIdList);
     }
 
-    function test_Fail_liquidate_StaleTWAP(uint256 x, uint256 sqrtPriceTarget) public {
+    function test_Fail_liquidate_StaleOracle(uint256 x, uint256 sqrtPriceTarget) public {
         _initPool(x);
 
         sqrtPriceTarget = bound(
@@ -7620,7 +7620,7 @@ contract PanopticPoolTest is PositionUtils {
         vm.startPrank(Swapper);
         routerV4.swapTo(address(0), poolKey, uint160(sqrtPriceTarget));
 
-        vm.expectRevert(Errors.StaleTWAP.selector);
+        vm.expectRevert(Errors.StaleOracle.selector);
         pp.liquidate(new TokenId[](0), Alice, $posIdList);
     }
 

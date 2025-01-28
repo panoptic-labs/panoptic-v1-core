@@ -7,7 +7,7 @@ libs = ['lib']
 no_match_path = "contracts/*"
 evm_version = 'cancun'
 optimizer = true
-optimizer_runs = 300
+optimizer_runs = 1
 viaIR = false
 gas_limit = 9223372036854775807
 eth_rpc_url = "https://mainnet.infura.io/v3/901ff66ce2bd4fa89b01c5fd38f0ccc9"
@@ -21,7 +21,7 @@ script="DO_NOT_COMPILE"
 fork_block_number = 18963715
 
 [profile.ci_sizes]
-optimizer_runs = 300
+optimizer_runs = 1
 test = 'DO_NOT_COMPILE'
 
 [profile.ci_sizes_ir]
