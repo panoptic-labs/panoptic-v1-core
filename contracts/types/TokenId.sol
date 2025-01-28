@@ -359,26 +359,6 @@ library TokenIdLibrary {
     /// @return tokenId `self` with all `isLong` bits flipped
     function flipToBurnToken(TokenId self) internal pure returns (TokenId) {
         unchecked {
-            // NOTE: This is a hack to avoid blowing up the contract size.
-            // We copy the logic from the countLegs function, using it here adds 5K to the contract size with IR for some reason
-            // Strip all bits except for the option ratios
-            uint256 optionRatios = TokenId.unwrap(self) & OPTION_RATIO_MASK;
-
-            // The legs are filled in from least to most significant
-            // Each comparison here is to the start of the next leg's option ratio
-            // Since only the option ratios remain, we can be sure that no bits above the start of the inactive legs will be 1
-            if (optionRatios < 2 ** 64) {
-                optionRatios = 0;
-            } else if (optionRatios < 2 ** 112) {
-                optionRatios = 1;
-            } else if (optionRatios < 2 ** 160) {
-                optionRatios = 2;
-            } else if (optionRatios < 2 ** 208) {
-                optionRatios = 3;
-            } else {
-                optionRatios = 4;
-            }
-
             // We need to ensure that only active legs are flipped
             // In order to achieve this, we shift our long bit mask to the right by (4-# active legs)
             // i.e the whole mask is used to flip all legs with 4 legs, but only the first leg is flipped with 1 leg so we shift by 3 legs
@@ -386,7 +366,7 @@ library TokenIdLibrary {
             return
                 TokenId.wrap(
                     TokenId.unwrap(self) ^
-                        ((LONG_MASK >> (48 * (4 - optionRatios))) & CLEAR_POOLID_MASK)
+                        ((LONG_MASK >> (48 * (4 - self.countLegs()))) & CLEAR_POOLID_MASK)
                 );
         }
     }
@@ -419,24 +399,16 @@ library TokenIdLibrary {
     /// @notice Return the number of active legs in the option position.
     /// @dev ASSUMPTION: For any leg, the option ratio is always > 0 (the leg always has a number of contracts associated with it).
     /// @param self The TokenId to count active legs for
-    /// @return The number of active legs in `self` (in the range {0,...,4})
-    function countLegs(TokenId self) internal pure returns (uint256) {
+    /// @return numLegs The number of active legs in `self` (in the range {0,...,4})
+    function countLegs(TokenId self) internal pure returns (uint256 numLegs) {
         // Strip all bits except for the option ratios
-        uint256 optionRatios = TokenId.unwrap(self) & OPTION_RATIO_MASK;
+        uint256 optionRatios = (TokenId.unwrap(self) & OPTION_RATIO_MASK) >> 64;
 
-        // The legs are filled in from least to most significant
-        // Each comparison here is to the start of the next leg's option ratio section
-        // Since only the option ratios remain, we can be sure that no bits above the start of the inactive legs will be 1
-        if (optionRatios < 2 ** 64) {
-            return 0;
-        } else if (optionRatios < 2 ** 112) {
-            return 1;
-        } else if (optionRatios < 2 ** 160) {
-            return 2;
-        } else if (optionRatios < 2 ** 208) {
-            return 3;
+        unchecked {
+            while (optionRatios >= 1 << (48 * numLegs)) {
+                ++numLegs;
+            }
         }
-        return 4;
     }
 
     /// @notice Clear a leg in an option position at `legIndex`.

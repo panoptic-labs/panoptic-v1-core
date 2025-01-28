@@ -702,18 +702,22 @@ library PanopticMath {
         if (tokenId.tokenType(legIndex) == 0) {
             if (isShort) {
                 // if option is short, increment shorts by contracts
-                shorts = shorts.toRightSlot(Math.toInt128(amountsMoved.rightSlot()));
+                shorts = LeftRightSigned.wrap(0).toRightSlot(
+                    Math.toInt128(amountsMoved.rightSlot())
+                );
             } else {
                 // is option is long, increment longs by contracts
-                longs = longs.toRightSlot(Math.toInt128(amountsMoved.rightSlot()));
+                longs = LeftRightSigned.wrap(0).toRightSlot(
+                    Math.toInt128(amountsMoved.rightSlot())
+                );
             }
         } else {
             if (isShort) {
                 // if option is short, increment shorts by notional
-                shorts = shorts.toLeftSlot(Math.toInt128(amountsMoved.leftSlot()));
+                shorts = LeftRightSigned.wrap(0).toLeftSlot(Math.toInt128(amountsMoved.leftSlot()));
             } else {
                 // if option is long, increment longs by notional
-                longs = longs.toLeftSlot(Math.toInt128(amountsMoved.leftSlot()));
+                longs = LeftRightSigned.wrap(0).toLeftSlot(Math.toInt128(amountsMoved.leftSlot()));
             }
         }
     }

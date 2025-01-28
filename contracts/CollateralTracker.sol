@@ -595,11 +595,13 @@ contract CollateralTracker is Clone, ERC20Minimal, Multicall {
     /// @param owner User to burn the shares from
     /// @param positionIdList The list of all option positions held by `owner`
     /// @return shares The amount of shares burned to withdraw the desired amount of assets
+    /// @param usePremiaAsCollateral Whether to compute accumulated premia for all legs held by the user for collateral (true), or just owed premia for long legs (false)
     function withdraw(
         uint256 assets,
         address receiver,
         address owner,
-        TokenId[] calldata positionIdList
+        TokenId[] calldata positionIdList,
+        bool usePremiaAsCollateral
     ) external returns (uint256 shares) {
         shares = previewWithdraw(assets);
 
@@ -616,7 +618,11 @@ contract CollateralTracker is Clone, ERC20Minimal, Multicall {
         s_poolAssets -= uint128(assets);
 
         // reverts if account is not solvent/eligible to withdraw
-        _panopticPool().validateCollateralWithdrawable(owner, positionIdList);
+        _panopticPool().validateCollateralWithdrawable(
+            owner,
+            positionIdList,
+            usePremiaAsCollateral
+        );
 
         // transfer assets from the PanopticPool to the LP
         unchecked {
