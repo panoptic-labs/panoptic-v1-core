@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
-
+import "forge-std/Test.sol";
 // Interfaces
 import {IERC20Partial} from "@tokens/interfaces/IERC20Partial.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
@@ -504,10 +504,32 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
                         tickLimitHigh,
                         positionSize,
                         tokenId,
-                        isBurn
+                        isBurn,
+                        false
                     )
                 ),
                 (LeftRightUnsigned[4], LeftRightSigned)
+            );
+    }
+
+    function collectPremium(
+        TokenId tokenId
+    ) external returns (LeftRightUnsigned[4] memory collectedByLeg) {
+        return
+            abi.decode(
+                POOL_MANAGER_V4.unlock(
+                    abi.encode(
+                        msg.sender,
+                        s_poolIdToKey[tokenId.poolId()],
+                        0,
+                        0,
+                        0,
+                        tokenId,
+                        false,
+                        true
+                    )
+                ),
+                (LeftRightUnsigned[4])
             );
     }
 
@@ -527,27 +549,84 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
             int24 tickLimitHigh,
             uint128 positionSize,
             TokenId tokenId,
-            bool isBurn
-        ) = abi.decode(data, (address, PoolKey, int24, int24, uint128, TokenId, bool));
+            bool isBurn,
+            bool isCollectPremium
+        ) = abi.decode(data, (address, PoolKey, int24, int24, uint128, TokenId, bool, bool));
 
-        (
-            LeftRightUnsigned[4] memory collectedByLeg,
-            LeftRightSigned totalMoved
-        ) = _createPositionInAMM(
-                account,
-                key,
-                tickLimitLow,
-                tickLimitHigh,
-                positionSize,
-                tokenId,
-                isBurn
-            );
-        return abi.encode(collectedByLeg, totalMoved);
+        if (isCollectPremium) {
+            return abi.encode(collectPremiumUnlocked(tokenId, account));
+        } else {
+            (
+                LeftRightUnsigned[4] memory collectedByLeg,
+                LeftRightSigned totalMoved
+            ) = _createPositionInAMM(
+                    account,
+                    key,
+                    tickLimitLow,
+                    tickLimitHigh,
+                    positionSize,
+                    tokenId,
+                    isBurn
+                );
+            return abi.encode(collectedByLeg, totalMoved);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
                        PUBLIC MINT/BURN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+
+    // collects and upgates premium for all chunks in a tokenId without minting or burning the position itself
+    function collectPremiumUnlocked(
+        TokenId tokenId,
+        address account
+    ) internal returns (LeftRightUnsigned[4] memory collectedByLeg) {
+        PoolKey memory key = s_poolIdToKey[tokenId.poolId()];
+        for (uint256 i = 0; i < tokenId.countLegs(); i++) {
+            LiquidityChunk liquidityChunk = PanopticMath.getLiquidityChunk(tokenId, i, 0);
+
+            bytes32 positionKey = keccak256(
+                abi.encodePacked(
+                    key.toId(),
+                    account,
+                    tokenId.tokenType(i),
+                    liquidityChunk.tickLower(),
+                    liquidityChunk.tickUpper()
+                )
+            );
+
+            (, BalanceDelta feesAccrued) = POOL_MANAGER_V4.modifyLiquidity(
+                key,
+                IPoolManager.ModifyLiquidityParams(
+                    liquidityChunk.tickLower(),
+                    liquidityChunk.tickUpper(),
+                    0,
+                    positionKey
+                ),
+                ""
+            );
+
+            collectedByLeg[i] = LeftRightUnsigned
+                .wrap(0)
+                .toRightSlot(uint128(feesAccrued.amount0()))
+                .toLeftSlot(uint128(feesAccrued.amount1()));
+
+            _updateStoredPremia(positionKey, s_accountLiquidity[positionKey], collectedByLeg[i]);
+
+            if (collectedByLeg[i].rightSlot() > 0)
+                POOL_MANAGER_V4.mint(
+                    account,
+                    uint160(Currency.unwrap(key.currency0)),
+                    collectedByLeg[i].rightSlot()
+                );
+            if (collectedByLeg[i].leftSlot() > 0)
+                POOL_MANAGER_V4.mint(
+                    account,
+                    uint160(Currency.unwrap(key.currency1)),
+                    collectedByLeg[i].leftSlot()
+                );
+        }
+    }
 
     /// @notice Burn a new position containing up to 4 legs wrapped in a ERC1155 token.
     /// @dev Auto-collect all accumulated fees.
