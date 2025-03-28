@@ -1379,13 +1379,14 @@ contract CollateralTracker is ERC20Minimal, Multicall {
     /// @param atTick The tick at which to evaluate the account's positions
     /// @param poolUtilization The pool utilization: how much funds are in the Panoptic pool versus the AMM pool
     /// @return required The required amount of collateral needed for this leg `index`
+
     function _getRequiredCollateralSingleLegPartner(
         TokenId tokenId,
         uint256 index,
         uint128 positionSize,
         int24 atTick,
         int16 poolUtilization
-    ) internal view returns (uint256 required) {
+    ) public view returns (uint256 required) {
         // extract partner index (associated with another liquidity chunk)
         uint256 partnerIndex = tokenId.riskPartner(index);
 
@@ -1453,7 +1454,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         uint256 index,
         uint256 partnerIndex,
         int16 poolUtilization
-    ) internal view returns (uint256 spreadRequirement) {
+    ) public view returns (uint256 spreadRequirement) {
         // compute the total amount of funds moved for the position's current leg
         LeftRightUnsigned amountsMoved = PanopticMath.getAmountsMoved(tokenId, positionSize, index);
 
@@ -1539,7 +1540,7 @@ contract CollateralTracker is ERC20Minimal, Multicall {
         uint128 positionSize,
         int24 atTick,
         int16 poolUtilization
-    ) internal view returns (uint256 strangleRequired) {
+    ) public view returns (uint256 strangleRequired) {
         // If both tokenTypes are the same, then this is a short strangle.
         // A strangle is an options strategy in which the investor holds a position
         // in both a call and a put option with different strike prices,
