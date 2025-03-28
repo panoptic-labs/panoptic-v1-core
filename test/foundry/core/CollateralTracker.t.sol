@@ -547,17 +547,17 @@ contract CollateralTrackerTest is Test, PositionUtils {
                         START TOKEN TESTS
     //////////////////////////////////////////////////////////////*/
 
-   function test_getRequiredCollateralSingleLegPartner() public {
-       _initWorld(0);
-       CollateralTracker ct = new CollateralTracker(
-           10,
-           2_000,
-           1_000,
-           -1_024,
-           5_000,
-           9_000,
-           20_000
-       );
+    function test_getRequiredCollateralSingleLegPartner() public {
+        _initWorld(0);
+        CollateralTracker ct = new CollateralTracker(
+            10,
+            2_000,
+            1_000,
+            -1_024,
+            5_000,
+            9_000,
+            20_000
+        );
 
         TokenId _tokenId = TokenId.wrap(uint256(171273954543939400949303020575750440197272407412));
         // http://localhost:3000/positions/unichain/0xf09da04b12d0e8a82ad1250cee2f53424d65d2c0944c21e44188353273f02c0e%2317
@@ -566,15 +566,26 @@ contract CollateralTrackerTest is Test, PositionUtils {
         int24 atTick = 199966;
         int16 poolUtilization = 2566;
 
-        uint256 reqL0 = ct._getRequiredCollateralSingleLegPartner(_tokenId, indexL0, positionSize, atTick, poolUtilization);
+        uint256 reqL0 = ct._getRequiredCollateralSingleLegPartner(
+            _tokenId,
+            indexL0,
+            positionSize,
+            atTick,
+            poolUtilization
+        );
         console2.log("reqL0");
         console2.log(reqL0);
 
         uint256 indexL1 = 1;
-        uint256 reqL1 = ct._getRequiredCollateralSingleLegPartner(_tokenId, indexL1, positionSize, atTick, poolUtilization);
+        uint256 reqL1 = ct._getRequiredCollateralSingleLegPartner(
+            _tokenId,
+            indexL1,
+            positionSize,
+            atTick,
+            poolUtilization
+        );
         console2.log("reqL1");
         console2.log(reqL1);
-
     }
 
     //function test_Success_StartToken_virtualShares() public {
