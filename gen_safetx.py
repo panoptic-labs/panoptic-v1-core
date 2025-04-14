@@ -6,6 +6,14 @@ with open("deployment-info.json", "r") as file:
 
 os.makedirs('./safe-txns', exist_ok=True)
 
+safeTxs = {
+    "chainId": os.environ.get("CHAIN_ID") or "1",
+    "meta": {
+        "name": f"Deploy all contracts",
+    },
+    "transactions": []
+}
+
 deployBatches = []
 
 deployBatches.append({
@@ -108,6 +116,7 @@ for idx, contract in enumerate(deploymentInfo["dataContracts"]):
 
     if idx < 4: deployBatches[0]["transactions"] += safeTx["transactions"]
     else: deployBatches[1]["transactions"] += safeTx["transactions"]
+    safeTxs["transactions"] += safeTx["transactions"]
 
     with open(f"./safe-txns/dataDeploy_{idx}.json", "w") as output_file:
         json.dump(safeTx, output_file)
@@ -198,6 +207,8 @@ for idx, contract in enumerate(deploymentInfo["logicContracts"]):
     elif idx < 6: deployBatches[2]["transactions"] += safeTx["transactions"]
     else: deployBatches[3]["transactions"] += safeTx["transactions"]
 
+    safeTxs["transactions"] += safeTx["transactions"]
+
     with open(f"./safe-txns/deploy_{idx}_{contract["contractName"]}.json", "w") as output_file:
         json.dump(safeTx, output_file)
 
@@ -211,3 +222,6 @@ with open("./safe-txns/deploy_all_1_libraries.json", "w") as output_file:
 
 with open("./safe-txns/deploy_all_2_core.json", "w") as output_file:
     json.dump(coreTxs, output_file)
+
+with open("./safe-txns/deploy_all.json", "w") as output_file:
+    json.dump(safeTxs, output_file)
