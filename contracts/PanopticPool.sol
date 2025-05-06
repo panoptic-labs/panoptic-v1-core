@@ -90,6 +90,10 @@ contract PanopticPool is Clone, Multicall {
         LeftRightUnsigned commissions
     );
 
+    // @dev for debugging
+    event AssetsShares(uint index, uint256 totalAssets, uint256 totalSupply);
+    event PoolData(uint256 poolAssets, uint256 insideAMM, uint256 currentPoolUtilization);
+
     /*//////////////////////////////////////////////////////////////
                          IMMUTABLES & CONSTANTS
     //////////////////////////////////////////////////////////////*/
@@ -682,6 +686,20 @@ contract PanopticPool is Clone, Multicall {
         );
 
         emit OptionMinted(msg.sender, tokenId, balanceData, commissions);
+        {
+            // collat 0 emit
+            emit AssetsShares(
+                0,
+                s_collateralToken0.totalAssets(),
+                s_collateralToken0.totalSupply()
+            );
+            // (uint256 poolAssets, uint256 insideAMM, uint256 currentPoolUtilization) = s_collateralToken0.getPoolData();
+
+            // collat 1 emit
+            emit AssetsShares(s_collateralToken1.totalAssets(), s_collateralToken1.totalSupply());
+            // (uint256 poolAssets, uint256 insideAMM, uint256 currentPoolUtilization) = s_collateralToken1.getPoolData();
+            // emit PoolData(poolAssets, insideAMM, currentPoolUtilization);
+        }
     }
 
     /// @notice Move all the required liquidity to/from the AMM and settle any required collateral deltas.
