@@ -8003,14 +8003,22 @@ contract PanopticPoolTest is PositionUtils {
         // https://basescan.org/tx/0xe31abdbc9096921c52937dea261b8d8b330ee316924dc7223126a9833d099ad8#eventlog
         // but with my modified PanopticPool contract that logs some extra data about collaterals
 
-        // deploy new PanopticPool reference w/ new events
-        PanopticPool reference2 = new PanopticPool(
-            SemiFungiblePositionManager(0x0000000000000aAbbcfCA8100a9ee78124E97B33), PoolManager(0x498581fF718922c3f8e6A244956aF099B2652b2b)
+        PoolManager _manager = PoolManager(0x498581fF718922c3f8e6A244956aF099B2652b2b);
+
+        // deploy new PanopticPool reference w/ new events and console logs
+        PanopticPool newPPV1_1Reference = new PanopticPool(
+            SemiFungiblePositionManager(0x0000000000000aAbbcfCA8100a9ee78124E97B33), _manager
         );
 
         // vm.etch to replace existing PanopticPool reference address code with modified PanopticPool code
-        address panopticPoolV1_1_Base_Reference = 0x0000000000035D9945Bf4d24393828e920376bAe;
-        vm.etch(panopticPoolV1_1_Base_Reference, address(reference2).code);
+        address existingPanopticPoolV1_1_Base_Reference = 0x0000000000035D9945Bf4d24393828e920376bAe;
+        vm.etch(existingPanopticPoolV1_1_Base_Reference, address(newPPV1_1Reference).code);
+
+        // vm etch to replace CollateralTracker too for logging
+        CollateralTracker newCollateralV1_1Reference = new CollateralTracker(10, 2_000, 1_000, -128, 5_000, 9_000, 20, _manager);
+        address existingCollateralV1_1_Base_Reference = 0x00000000000308eA65EdD5142b8189A17D2DEcFA;
+        vm.etch(existingCollateralV1_1_Base_Reference, address(newCollateralV1_1Reference).code);
+
 
         // Replay the txn
         // Impersonate original sender

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
+import {console} from "forge-std/console.sol";
 // Interfaces
 import {PanopticPool} from "./PanopticPool.sol";
 // Inherited implementations
@@ -1050,6 +1051,8 @@ contract CollateralTracker is Clone, ERC20Minimal, Multicall {
         int128 swappedAmount,
         bool isCovered
     ) external onlyPanopticPool returns (uint32, uint128) {
+        console.log('[takeCommissionAddData] address: ', address(this));
+
         unchecked {
             // current available assets belonging to PLPs (updated after settlement) excluding any premium paid
             int256 updatedAssets = int256(uint256(s_poolAssets)) - swappedAmount;
@@ -1081,6 +1084,9 @@ contract CollateralTracker is Clone, ERC20Minimal, Multicall {
             // the inflow or outflow of pool assets is defined by the swappedAmount: it includes both the ITM swap amounts and the short/long amounts used to create the position
             // however, any intrinsic value is paid for by the users, so we only add the portion that comes from PLPs: the short/long amounts
             // premia is not included in the balance since it is the property of options buyers and sellers, not PLPs
+            console.log('poolAssets delta: ', updatedAssets);
+            console.log('inAMM delta: ', (shortAmount - longAmount));
+
             s_poolAssets = uint256(updatedAssets).toUint128();
             s_inAMM = uint256(int256(uint256(s_inAMM)) + (shortAmount - longAmount)).toUint128();
 
