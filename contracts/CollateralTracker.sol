@@ -1084,6 +1084,7 @@ contract CollateralTracker is Clone, ERC20Minimal, Multicall {
             // the inflow or outflow of pool assets is defined by the swappedAmount: it includes both the ITM swap amounts and the short/long amounts used to create the position
             // however, any intrinsic value is paid for by the users, so we only add the portion that comes from PLPs: the short/long amounts
             // premia is not included in the balance since it is the property of options buyers and sellers, not PLPs
+            console.log('pool assets: ', s_poolAssets);
             console.log('poolAssets delta: ', updatedAssets);
             console.log('inAMM delta: ', (shortAmount - longAmount));
 

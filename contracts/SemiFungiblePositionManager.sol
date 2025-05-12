@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
+import {console} from "forge-std/console.sol";
 import {IERC20Partial} from "@tokens/interfaces/IERC20Partial.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 // Inherited implementations
@@ -819,6 +820,9 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
                 TokenId _tokenId = tokenId;
                 bool _isBurn = isBurn;
 
+                // TODO: check that amounts here match with uniswap amounts
+                // assuming those match, dinf where subgraph diverges from them
+                // creates leg in amm, gets back movedLeg, amount moved for current leg, adds to swappedAmount (totalMoved)
                 (movedLeg, collectedByLeg[leg]) = _createLegInAMM(
                     _account,
                     _key,
@@ -827,6 +831,9 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
                     liquidityChunk,
                     _isBurn
                 );
+
+                console.log('leg: ', leg);
+                console.log('movedLeg: ',  movedLeg);
 
                 totalMoved = totalMoved.add(movedLeg);
                 totalCollected = totalCollected.add(collectedByLeg[leg]);
@@ -1030,6 +1037,7 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
             ),
             ""
         );
+        
 
         unchecked {
             moved = LeftRightSigned
