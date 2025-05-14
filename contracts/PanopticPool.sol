@@ -93,7 +93,12 @@ contract PanopticPool is Clone, Multicall {
 
     // @dev for debugging
     event AssetsShares(uint index, uint256 totalAssets, uint256 totalSupply);
-    event PoolData(uint index, uint256 poolAssets, uint256 insideAMM, uint256 currentPoolUtilization);
+    event PoolData(
+        uint index,
+        uint256 poolAssets,
+        uint256 insideAMM,
+        uint256 currentPoolUtilization
+    );
 
     /*//////////////////////////////////////////////////////////////
                          IMMUTABLES & CONSTANTS
@@ -619,7 +624,7 @@ contract PanopticPool is Clone, Multicall {
         int24 tickLimitHigh,
         bool usePremiaAsCollateral
     ) internal {
-        console.log('[_mintOptions] start');
+        console.log("[_mintOptions] start");
         {
             // LOG COLLATERAL
             // collat 0 emit
@@ -628,15 +633,26 @@ contract PanopticPool is Clone, Multicall {
                 collateralToken0().totalAssets(),
                 collateralToken0().totalSupply()
             );
-            (uint256 poolAssets0, uint256 insideAMM0, uint256 currentPoolUtilization0) = collateralToken0().getPoolData();
+            (
+                uint256 poolAssets0,
+                uint256 insideAMM0,
+                uint256 currentPoolUtilization0
+            ) = collateralToken0().getPoolData();
             emit PoolData(0, poolAssets0, insideAMM0, currentPoolUtilization0);
 
             // collat 1 emit
-            emit AssetsShares(1, collateralToken1().totalAssets(), collateralToken1().totalSupply());
-            (uint256 poolAssets1, uint256 insideAMM1, uint256 currentPoolUtilization1) = collateralToken1().getPoolData();
+            emit AssetsShares(
+                1,
+                collateralToken1().totalAssets(),
+                collateralToken1().totalSupply()
+            );
+            (
+                uint256 poolAssets1,
+                uint256 insideAMM1,
+                uint256 currentPoolUtilization1
+            ) = collateralToken1().getPoolData();
             emit PoolData(1, poolAssets1, insideAMM1, currentPoolUtilization1);
         }
-
 
         // the new tokenId will be the last element in `positionIdList`
         TokenId tokenId;
@@ -707,7 +723,7 @@ contract PanopticPool is Clone, Multicall {
 
         emit OptionMinted(msg.sender, tokenId, balanceData, commissions);
 
-        console.log('[_mintOptions] end');
+        console.log("[_mintOptions] end");
         {
             // LOG COLLATERAL
             // collat 0 emit
@@ -719,7 +735,11 @@ contract PanopticPool is Clone, Multicall {
             // (uint256 poolAssets, uint256 insideAMM, uint256 currentPoolUtilization) = collateralToken0().getPoolData();
 
             // collat 1 emit
-            emit AssetsShares(1, collateralToken1().totalAssets(), collateralToken1().totalSupply());
+            emit AssetsShares(
+                1,
+                collateralToken1().totalAssets(),
+                collateralToken1().totalSupply()
+            );
             // (uint256 poolAssets, uint256 insideAMM, uint256 currentPoolUtilization) = collateralToken1.getPoolData();
             // emit PoolData(poolAssets, insideAMM, currentPoolUtilization);
         }
@@ -793,6 +813,8 @@ contract PanopticPool is Clone, Multicall {
         console.log("shortAmount1: ", shortAmounts.leftSlot());
         console.log("longAmount0: ", longAmounts.rightSlot());
         console.log("longAmount1: ", longAmounts.leftSlot());
+        console.log("totalSwapped0: ", totalSwapped.rightSlot());
+        console.log("totalSwapped1: ", totalSwapped.leftSlot());
         (uint32 utilization0, uint128 commission0) = collateralToken0().takeCommissionAddData(
             msg.sender,
             longAmounts.rightSlot(),
@@ -801,7 +823,7 @@ contract PanopticPool is Clone, Multicall {
             isCovered
         );
 
-        console.log('[_payCommissionAndWriteData] takeCommissionAddData 0 | after logindex 170');
+        console.log("[_payCommissionAndWriteData] takeCommissionAddData 0 | after logindex 170");
         {
             // LOG COLLATERAL
             // collat 0 emit
@@ -810,19 +832,30 @@ contract PanopticPool is Clone, Multicall {
                 collateralToken0().totalAssets(),
                 collateralToken0().totalSupply()
             );
-            (uint256 poolAssets0, uint256 insideAMM0, uint256 currentPoolUtilization0) = collateralToken0().getPoolData();
+            (
+                uint256 poolAssets0,
+                uint256 insideAMM0,
+                uint256 currentPoolUtilization0
+            ) = collateralToken0().getPoolData();
             emit PoolData(0, poolAssets0, insideAMM0, currentPoolUtilization0);
 
             // collat 1 emit
-            emit AssetsShares(1, collateralToken1().totalAssets(), collateralToken1().totalSupply());
-            (uint256 poolAssets1, uint256 insideAMM1, uint256 currentPoolUtilization1) = collateralToken1().getPoolData();
+            emit AssetsShares(
+                1,
+                collateralToken1().totalAssets(),
+                collateralToken1().totalSupply()
+            );
+            (
+                uint256 poolAssets1,
+                uint256 insideAMM1,
+                uint256 currentPoolUtilization1
+            ) = collateralToken1().getPoolData();
             emit PoolData(1, poolAssets1, insideAMM1, currentPoolUtilization1);
         }
 
         /////////////////////////////////////////////////////////
         /////////////////////////////////////////////////////////
         /////////////////////////////////////////////////////////
-
 
         (uint32 utilization1, uint128 commission1) = collateralToken1().takeCommissionAddData(
             msg.sender,
@@ -831,7 +864,7 @@ contract PanopticPool is Clone, Multicall {
             totalSwapped.leftSlot(),
             isCovered
         );
-        console.log('[_payCommissionAndWriteData] takeCommissionAddData 1 | after logindex 171');
+        console.log("[_payCommissionAndWriteData] takeCommissionAddData 1 | after logindex 171");
         {
             // LOG COLLATERAL
             // collat 0 emit
@@ -843,11 +876,14 @@ contract PanopticPool is Clone, Multicall {
             // (uint256 poolAssets, uint256 insideAMM, uint256 currentPoolUtilization) = collateralToken0().getPoolData();
 
             // collat 1 emit
-            emit AssetsShares(1, collateralToken1().totalAssets(), collateralToken1().totalSupply());
+            emit AssetsShares(
+                1,
+                collateralToken1().totalAssets(),
+                collateralToken1().totalSupply()
+            );
             // (uint256 poolAssets, uint256 insideAMM, uint256 currentPoolUtilization) = collateralToken1.getPoolData();
             // emit PoolData(poolAssets, insideAMM, currentPoolUtilization);
         }
-
 
         // return pool utilizations as two uint16 (pool Utilization is always <= 10000)
         unchecked {

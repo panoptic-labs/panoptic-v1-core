@@ -7999,15 +7999,75 @@ contract PanopticPoolTest is PositionUtils {
     }
 
     function test_inspectCollateral() public {
+        PoolManager _manager = PoolManager(0x498581fF718922c3f8e6A244956aF099B2652b2b);
+
+        {
+            PoolId ethUsdc5BpsUniswapPoolId = PoolId.wrap(
+                0x96d4b53a38337a5733179751781178a2613306063c511b78cd02684739288c0a
+            );
+            (uint160 sqrtPriceX96, int24 tick, , ) = StateLibrary.getSlot0(
+                _manager,
+                ethUsdc5BpsUniswapPoolId
+            );
+            console2.log("sqrtPriceX96", sqrtPriceX96);
+            console2.log("tick", tick);
+
+            uint256 liquidityDeltaLogIndex165 = 4580143055;
+            (
+                uint256 modifyLiquidityLogIndex165Amount0,
+                uint256 modifyLiquidityLogIndex165Amount1
+            ) = LiquidityAmounts.getAmountsForLiquidity(
+                    sqrtPriceX96,
+                    TickMath.getSqrtRatioAtTick(-202560),
+                    TickMath.getSqrtRatioAtTick(-197760),
+                    uint128(liquidityDeltaLogIndex165)
+                );
+            console2.log(
+                "liquidityDeltaLogIndex165_amount0toks",
+                modifyLiquidityLogIndex165Amount0
+            );
+            console2.log(
+                "liquidityDeltaLogIndex165_amount1toks",
+                modifyLiquidityLogIndex165Amount1
+            );
+
+            uint256 liquidityDeltaLogIndex166 = 4580143055;
+            (
+                uint256 modifyLiquidityLogIndex166Amount0,
+                uint256 modifyLiquidityLogIndex166Amount1
+            ) = LiquidityAmounts.getAmountsForLiquidity(
+                    sqrtPriceX96,
+                    TickMath.getSqrtRatioAtTick(-202560),
+                    TickMath.getSqrtRatioAtTick(-197760),
+                    uint128(liquidityDeltaLogIndex166)
+                );
+            console2.log(
+                "liquidityDeltaLogIndex166_amount0toks",
+                modifyLiquidityLogIndex166Amount0
+            );
+            console2.log(
+                "liquidityDeltaLogIndex166_amount1toks",
+                modifyLiquidityLogIndex166Amount1
+            );
+        }
+
         // Re-run this transaction:
         // https://basescan.org/tx/0xe31abdbc9096921c52937dea261b8d8b330ee316924dc7223126a9833d099ad8#eventlog
         // but with my modified PanopticPool contract that logs some extra data about collaterals
 
-        PoolManager _manager = PoolManager(0x498581fF718922c3f8e6A244956aF099B2652b2b);
+        // vm.etch to replace existing SFPM reference address code with modified SFPM code
+        SemiFungiblePositionManager newSfpm = new SemiFungiblePositionManager(
+            IPoolManager(0x498581fF718922c3f8e6A244956aF099B2652b2b),
+            10 ** 13,
+            10 ** 13,
+            0
+        );
+        vm.etch(0x0000000000000aAbbcfCA8100a9ee78124E97B33, address(newSfpm).code);
 
         // deploy new PanopticPool reference w/ new events and console logs
         PanopticPool newPPV1_1Reference = new PanopticPool(
-            SemiFungiblePositionManager(0x0000000000000aAbbcfCA8100a9ee78124E97B33), _manager
+            SemiFungiblePositionManager(0x0000000000000aAbbcfCA8100a9ee78124E97B33),
+            _manager
         );
 
         // vm.etch to replace existing PanopticPool reference address code with modified PanopticPool code
@@ -8015,10 +8075,18 @@ contract PanopticPoolTest is PositionUtils {
         vm.etch(existingPanopticPoolV1_1_Base_Reference, address(newPPV1_1Reference).code);
 
         // vm etch to replace CollateralTracker too for logging
-        CollateralTracker newCollateralV1_1Reference = new CollateralTracker(10, 2_000, 1_000, -128, 5_000, 9_000, 20, _manager);
+        CollateralTracker newCollateralV1_1Reference = new CollateralTracker(
+            10,
+            2_000,
+            1_000,
+            -128,
+            5_000,
+            9_000,
+            20,
+            _manager
+        );
         address existingCollateralV1_1_Base_Reference = 0x00000000000308eA65EdD5142b8189A17D2DEcFA;
         vm.etch(existingCollateralV1_1_Base_Reference, address(newCollateralV1_1Reference).code);
-
 
         // Replay the txn
         // Impersonate original sender
@@ -8027,12 +8095,14 @@ contract PanopticPoolTest is PositionUtils {
 
         address ethUsdc5BpsPanopticPool = 0x36a3088B94f73853a3964a0352B47605C6354f27;
 
-        console2.log('block.number', block.number);
+        console2.log("block.number", block.number);
 
         // Copy txn input data from etherscan to replay calling optionMint() on the pan pool
         // Make sure to run test on base w/ fork block right before txn took place, e.g.
         // forge test --match-test test_inspectCollateral --fork-block-number 29580325 --rpc-url https://base-mainnet.g.alchemy.com/v2/<alchemy_api_key> -vvvv
-        (bool success, bytes memory ret) = ethUsdc5BpsPanopticPool.call(hex"ab6faa7200000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000163d253d52420000000000000000000000000000000000000000000000000000000000000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceec2fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced31000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000001e0fcf2206021e0fcf220002000a684739288c0a");
+        (bool success, bytes memory ret) = ethUsdc5BpsPanopticPool.call(
+            hex"ab6faa7200000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000163d253d52420000000000000000000000000000000000000000000000000000000000000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceec2fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced31000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000001e0fcf2206021e0fcf220002000a684739288c0a"
+        );
         console2.log("success?", success);
     }
 }

@@ -543,6 +543,8 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
                 tokenId,
                 isBurn
             );
+        console.log("totalMoved0", totalMoved.rightSlot());
+        console.log("totalMoved1", totalMoved.leftSlot());
         return abi.encode(collectedByLeg, totalMoved);
     }
 
@@ -832,11 +834,15 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
                     _isBurn
                 );
 
-                console.log('leg: ', leg);
-                console.log('movedLeg: ',  movedLeg);
+                console.log("leg: ", leg);
+                console.log("movedLeg0: ", movedLeg.rightSlot());
+                console.log("movedLeg1: ", movedLeg.leftSlot());
+                // LeftRightSigned moved, LeftRightUnsigned collectedSingleLeg
 
                 totalMoved = totalMoved.add(movedLeg);
                 totalCollected = totalCollected.add(collectedByLeg[leg]);
+                console.log("totalCollected0: ", totalCollected.rightSlot());
+                console.log("totalCollected1: ", totalCollected.leftSlot());
 
                 // if tokenType is 1, and we transacted some currency0: then this leg is ITM
                 // if tokenType is 0, and we transacted some currency1: then this leg is ITM
@@ -861,7 +867,11 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
         if (tickLimitLow > tickLimitHigh) {
             // if the in-the-money amount is not zero (i.e. positions were minted ITM) and the user did provide tick limits LOW > HIGH, then swap necessary amounts
             if ((LeftRightSigned.unwrap(itmAmounts) != 0)) {
-                totalMoved = totalMoved.add(swapInAMM(key, itmAmounts));
+                LeftRightSigned swappedDeltas = swapInAMM(key, itmAmounts);
+                console.log("[_createPositionInAMM] adding swappedDeltas to totalMoved");
+                console.log("[_createPositionInAMM] swappedDeltas0", swappedDeltas.rightSlot());
+                console.log("[_createPositionInAMM] swappedDeltas1", swappedDeltas.leftSlot());
+                totalMoved = totalMoved.add(swappedDeltas);
             }
 
             (tickLimitLow, tickLimitHigh) = (tickLimitHigh, tickLimitLow);
@@ -1037,7 +1047,6 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
             ),
             ""
         );
-        
 
         unchecked {
             moved = LeftRightSigned
@@ -1045,6 +1054,10 @@ contract SemiFungiblePositionManager is ERC1155, Multicall, TransientReentrancyG
                 .toRightSlot(feesAccrued.amount0() - delta.amount0())
                 .toLeftSlot(feesAccrued.amount1() - delta.amount1());
         }
+        console.log("[_createLegInAMM] feesAccrued.amount0", feesAccrued.amount0());
+        console.log("[_createLegInAMM] feesAccrued.amount1", feesAccrued.amount1());
+        console.log("[_createLegInAMM] delta.amount0", delta.amount0());
+        console.log("[_createLegInAMM] delta.amount1", delta.amount1());
 
         // (premium can only be collected if liquidity existed in the chunk prior to this mint)
         if (currentLiquidity.rightSlot() > 0) {
