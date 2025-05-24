@@ -8,17 +8,16 @@ import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 contract ChainLinkToV3OracleTest is Test {
     ChainLinkToV3Oracle oracle;
-    AggregatorV3Interface aggregator = AggregatorV3Interface(
-        0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 // ETH/USD aggregator on mainnet
-    );
+    AggregatorV3Interface aggregator =
+        AggregatorV3Interface(
+            0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 // ETH/USD aggregator on mainnet
+        );
 
     function setUp() public {
         uint256 forkId = vm.createFork(vm.envString("MAINNET_RPC_URL"));
         vm.selectFork(forkId);
 
-        oracle = new ChainLinkToV3Oracle(
-            aggregator
-        );
+        oracle = new ChainLinkToV3Oracle(aggregator);
     }
 
     function testSlot0ReturnsValidPrice() public {
@@ -39,7 +38,12 @@ contract ChainLinkToV3OracleTest is Test {
         assertTrue(unlocked, "unlocked always true");
 
         uint160 sqrtPriceFromTick = TickMath.getSqrtRatioAtTick(tick);
-        uint256 diff = sqrtPriceX96 > sqrtPriceFromTick ? sqrtPriceX96 - sqrtPriceFromTick : sqrtPriceFromTick - sqrtPriceX96;
-        assertTrue(diff * 1e5 / fromTick <= 1 || diff <= 1, "sqrtPrice vs TickMath mismatch >0.1% & > 1 whole unit");
+        uint256 diff = sqrtPriceX96 > sqrtPriceFromTick
+            ? sqrtPriceX96 - sqrtPriceFromTick
+            : sqrtPriceFromTick - sqrtPriceX96;
+        assertTrue(
+            (diff * 1e5) / fromTick <= 1 || diff <= 1,
+            "sqrtPrice vs TickMath mismatch >0.1% & > 1 whole unit"
+        );
     }
 }

@@ -30,33 +30,34 @@ contract ChainLinkToV3Oracle {
     /// @return feeProtocol The protocol fee for this pool (not used in V4, always 0)
     /// @return unlocked Whether the pool is currently unlocked (always true for V4)
     function slot0()
-      external view
-      returns (
-        uint160 sqrtPriceX96,
-        int24 tick,
-        uint16 observationIndex,
-        uint16 observationCardinality,
-        uint16 observationCardinalityNext,
-        uint8 feeProtocol,
-        bool unlocked
-      )
+        external
+        view
+        returns (
+            uint160 sqrtPriceX96,
+            int24 tick,
+            uint16 observationIndex,
+            uint16 observationCardinality,
+            uint16 observationCardinalityNext,
+            uint8 feeProtocol,
+            bool unlocked
+        )
     {
-      (, int256 answer,,,) = aggregator.latestRoundData();
-      require(answer > 0, "bad price");
+        (, int256 answer, , , ) = aggregator.latestRoundData();
+        require(answer > 0, "bad price");
 
-      uint256 uAnswer = uint256(answer);
-      uint256 priceQ128 = (uAnswer << 128) / (10 ** DECIMALS);
-      uint128 rootQ64 = sqrt(priceQ128);
-      sqrtPriceX96 = uint160(uint256(rootQ64) << 32);
+        uint256 uAnswer = uint256(answer);
+        uint256 priceQ128 = (uAnswer << 128) / (10 ** DECIMALS);
+        uint128 rootQ64 = sqrt(priceQ128);
+        sqrtPriceX96 = uint160(uint256(rootQ64) << 32);
 
-      tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+        tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
 
-      // TODO: Decide what to return here - they don't mean much in this context, unless we actually want to stamp oracles.
-      /*(observationIndex, observationCardinality, observationCardinalityNext) =
+        // TODO: Decide what to return here - they don't mean much in this context, unless we actually want to stamp oracles.
+        /*(observationIndex, observationCardinality, observationCardinalityNext) =
         baseOracleHook.stateById(poolId);*/
 
-      feeProtocol = 0;
-      unlocked = true;
+        feeProtocol = 0;
+        unlocked = true;
     }
 
     // TODO: Replace with a standard lib
@@ -112,5 +113,4 @@ contract ChainLinkToV3Oracle {
     /// @param observationCardinalityNext The desired minimum number of observations for the oracle to store
     function increaseObservationCardinalityNext(uint16 observationCardinalityNext) external { }
     */
-
 }
