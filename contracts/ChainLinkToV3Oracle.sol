@@ -47,9 +47,7 @@ contract ChainLinkToV3Oracle {
 
         uint256 uAnswer = uint256(answer);
         uint256 priceQ128 = (uAnswer << 128) / (10 ** DECIMALS);
-        uint128 rootQ64 = sqrt(priceQ128);
-        sqrtPriceX96 = uint160(uint256(rootQ64) << 32);
-
+        sqrtPriceX96 = uint160(uint256(priceQ128)) << 32;
         tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
 
         // TODO: Decide what to return here - they don't mean much in this context, unless we actually want to stamp oracles.

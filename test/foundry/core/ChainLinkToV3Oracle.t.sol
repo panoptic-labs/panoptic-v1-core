@@ -42,7 +42,7 @@ contract ChainLinkToV3OracleTest is Test {
             ? sqrtPriceX96 - sqrtPriceFromTick
             : sqrtPriceFromTick - sqrtPriceX96;
         assertTrue(
-            (diff * 1e5) / fromTick <= 1 || diff <= 1,
+            (diff * 1e5) / sqrtPriceFromTick <= 1 || diff <= 1,
             "sqrtPrice vs TickMath mismatch >0.1% & > 1 whole unit"
         );
     }
