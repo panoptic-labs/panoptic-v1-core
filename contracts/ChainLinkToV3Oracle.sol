@@ -77,7 +77,9 @@ contract ChainLinkToV3Oracle {
     {
         // Use a blockTimestamp close to now, but unique per-observation
         blockTimestamp = uint32(block.timestamp - index);
-        tickCumulative = int56(TickMath.getTickAtSqrtRatio(chainlinkPriceToSqrtRatioX96(getChainlinkPrice()))) * int56(int32(blockTimestamp));
+        tickCumulative =
+            int56(TickMath.getTickAtSqrtRatio(chainlinkPriceToSqrtRatioX96(getChainlinkPrice()))) *
+            int56(int32(blockTimestamp));
 
         // Always 0 in v4
         secondsPerLiquidityCumulativeX128 = 0;
@@ -109,7 +111,9 @@ contract ChainLinkToV3Oracle {
             // Use the same current tick for all observations
             // The cumulative = tick * timestamp at that point in time
             // This ensures TWAP calculations will always result in the current tick
-            tickCumulatives[i] = int56(currentTick) * int56(int256(block.timestamp - secondsAgos[i]));
+            tickCumulatives[i] =
+                int56(currentTick) *
+                int56(int256(block.timestamp - secondsAgos[i]));
         }
 
         // DEV: *If we wanted* we could actually get historical price at each secondsAgo -
