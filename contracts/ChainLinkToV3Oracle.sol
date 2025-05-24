@@ -75,9 +75,9 @@ contract ChainLinkToV3Oracle {
     {
         int24 tick = chainlinkPriceToTick(getChainlinkPrice());
 
-        // Return a blockTimestamp close to now, but unique per-observation
+        // Use a blockTimestamp close to now, but unique per-observation
         blockTimestamp = uint32(block.timestamp - index);
-        tickCumulative = int56(tick) * int56(blockTimestamp);
+        tickCumulative = int56(tick) * int56(int32(blockTimestamp));
 
         // Always 0 in v4
         secondsPerLiquidityCumulativeX128 = 0;
@@ -108,7 +108,7 @@ contract ChainLinkToV3Oracle {
             // The cumulative = tick * timestamp at that point in time
             // This ensures TWAP calculations will always result in the current tick
             uint256 timestamp = block.timestamp - secondsAgos[i];
-            tickCumulatives[i] = int56(currentTick) * int56(timestamp);
+            tickCumulatives[i] = int56(currentTick) * int56(int256(timestamp));
         }
 
         // DEV: *If we wanted* we could actually get historical price at each secondsAgo -
@@ -129,7 +129,7 @@ contract ChainLinkToV3Oracle {
 
     /// @notice Convert a ChainLink price to a Uniswap tick.
     /// @param currentPrice Price returned from ChainLink
-    /// @returns The same value, converted to a tick.
+    /// @return The same value, converted to a tick.
     function chainlinkPriceToTick(int256 currentPrice) internal pure returns (int24) {
         return
             TickMath.getTickAtSqrtRatio(
