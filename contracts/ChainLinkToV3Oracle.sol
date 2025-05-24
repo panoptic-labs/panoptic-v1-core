@@ -63,16 +63,16 @@ contract ChainLinkToV3Oracle {
     /// @return secondsPerLiquidityCumulativeX128 The seconds per in range liquidity for the life of the pool (always 0 in V4)
     /// @return initialized Whether the observation has been initialized and the values are safe to use
     function observations(
-       uint256 index
+        uint256 index
     )
-       external
-       view
-       returns (
-           uint32 blockTimestamp,
-           int56 tickCumulative,
-           uint160 secondsPerLiquidityCumulativeX128,
-           bool initialized
-       )
+        external
+        view
+        returns (
+            uint32 blockTimestamp,
+            int56 tickCumulative,
+            uint160 secondsPerLiquidityCumulativeX128,
+            bool initialized
+        )
     {
         int24 tick = chainlinkPriceToTick(mockHistoricalPrice(0, 0));
 
@@ -123,7 +123,7 @@ contract ChainLinkToV3Oracle {
     /// @notice Get the current price from ChainLink with adjustable variation.
     /// @return The current price from the aggregator
     function getChainlinkPrice() internal view returns (int256) {
-        (, int256 currentPrice,,,) = aggregator.latestRoundData();
+        (, int256 currentPrice, , , ) = aggregator.latestRoundData();
 
         return currentPrice;
     }
@@ -132,9 +132,10 @@ contract ChainLinkToV3Oracle {
     /// @param currentPrice Price returned from ChainLink
     /// @returns The same value, converted to a tick.
     function chainlinkPriceToTick(int256 currentPrice) internal pure returns (int24) {
-        return TickMath.getTickAtSqrtRatio(
-            uint160(uint256((uint256(currentPrice) << 128) / (10 ** DECIMALS))) << 32
-        );
+        return
+            TickMath.getTickAtSqrtRatio(
+                uint160(uint256((uint256(currentPrice) << 128) / (10 ** DECIMALS))) << 32
+            );
     }
 
     // TODO: Replace with a standard lib
@@ -150,5 +151,5 @@ contract ChainLinkToV3Oracle {
     /// @notice This method is typically used to increase the maximum number of price observations, but we just no-op.
     /// @dev PanopticFactory relies on this method, so we wanted to expose it, even if it does nothing.
     /// @param observationCardinalityNext The desired minimum number of observations for the oracle to store
-    function increaseObservationCardinalityNext(uint16 observationCardinalityNext) external { }
+    function increaseObservationCardinalityNext(uint16 observationCardinalityNext) external {}
 }
