@@ -75,11 +75,9 @@ contract ChainLinkToV3Oracle {
             bool initialized
         )
     {
-        int24 tick = TickMath.getTickAtSqrtRatio(chainlinkPriceToSqrtRatioX96(getChainlinkPrice()));
-
         // Use a blockTimestamp close to now, but unique per-observation
         blockTimestamp = uint32(block.timestamp - index);
-        tickCumulative = int56(tick) * int56(int32(blockTimestamp));
+        tickCumulative = int56(TickMath.getTickAtSqrtRatio(chainlinkPriceToSqrtRatioX96(getChainlinkPrice()))) * int56(int32(blockTimestamp));
 
         // Always 0 in v4
         secondsPerLiquidityCumulativeX128 = 0;
@@ -111,8 +109,7 @@ contract ChainLinkToV3Oracle {
             // Use the same current tick for all observations
             // The cumulative = tick * timestamp at that point in time
             // This ensures TWAP calculations will always result in the current tick
-            uint256 timestamp = block.timestamp - secondsAgos[i];
-            tickCumulatives[i] = int56(currentTick) * int56(int256(timestamp));
+            tickCumulatives[i] = int56(currentTick) * int56(int256(block.timestamp - secondsAgos[i]));
         }
 
         // DEV: *If we wanted* we could actually get historical price at each secondsAgo -
@@ -135,12 +132,9 @@ contract ChainLinkToV3Oracle {
     /// @param price raw ChainLink answer (has DECIMALS decimals)
     /// @return sqrtPriceX96 = sqrt(price/10^DECIMALS) * 2^96
     function chainlinkPriceToSqrtRatioX96(int256 price) internal pure returns (uint160) {
-        uint256 p = uint256(price);
         // sqrt(p) has price’s decimals baked in; since price has 8 decimals,
         // we divide out √(10^8) = 10^4 after shifting.
-        uint256 root = sqrt(p);
-        uint256 scaled = (root << 96) / (10 ** (DECIMALS / 2));
-        return uint160(scaled);
+        return uint160((sqrt(uint256(price)) << 96) / (10 ** (DECIMALS / 2)));
     }
 
     // TODO: Replace with standard lib
