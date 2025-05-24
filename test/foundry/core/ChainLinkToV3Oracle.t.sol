@@ -75,7 +75,11 @@ contract ChainLinkToV3OracleTest is Test {
             assertTrue(initialized, "All observations should be initialized");
             assertEq(secondsPerLiquidityX128, 0, "secondsPerLiquidity always 0 in V4");
             assertLe(blockTimestamp, block.timestamp, "blockTimestamp shouldn't be in future");
-            assertEq(blockTimestamp, uint32(block.timestamp - i), "blockTimestamp should be now - index");
+            assertEq(
+                blockTimestamp,
+                uint32(block.timestamp - i),
+                "blockTimestamp should be now - index"
+            );
 
             // tickCumulative should be reasonable
             assertGt(int256(tickCumulative), 0, "tickCumulative should be positive for ETH/USD");
@@ -92,21 +96,31 @@ contract ChainLinkToV3OracleTest is Test {
 
         // Should match current tick from slot0
         (, int24 currentTick, , , , , ) = oracle.slot0();
-        assertEq(derivedTick, currentTick, "Derived tick from observations should match slot0 tick");
+        assertEq(
+            derivedTick,
+            currentTick,
+            "Derived tick from observations should match slot0 tick"
+        );
     }
 
     function testObserveReturnsValidData() public {
         uint32[] memory secondsAgos = new uint32[](5);
-        secondsAgos[0] = 0;    // now
-        secondsAgos[1] = 60;   // 1 minute ago
-        secondsAgos[2] = 300;  // 5 minutes ago
-        secondsAgos[3] = 600;  // 10 minutes ago
+        secondsAgos[0] = 0; // now
+        secondsAgos[1] = 60; // 1 minute ago
+        secondsAgos[2] = 300; // 5 minutes ago
+        secondsAgos[3] = 600; // 10 minutes ago
         secondsAgos[4] = 1800; // 30 minutes ago
 
-        (int56[] memory tickCumulatives, uint160[] memory liquidityCumulatives) = oracle.observe(secondsAgos);
+        (int56[] memory tickCumulatives, uint160[] memory liquidityCumulatives) = oracle.observe(
+            secondsAgos
+        );
 
         assertEq(tickCumulatives.length, secondsAgos.length, "Should return same length arrays");
-        assertEq(liquidityCumulatives.length, secondsAgos.length, "Should return same length arrays");
+        assertEq(
+            liquidityCumulatives.length,
+            secondsAgos.length,
+            "Should return same length arrays"
+        );
 
         // All liquidity cumulatives should be 0
         for (uint256 i = 0; i < liquidityCumulatives.length; i++) {
@@ -115,13 +129,17 @@ contract ChainLinkToV3OracleTest is Test {
 
         // Tick cumulatives should be decreasing (older timestamps = smaller cumulatives)
         for (uint256 i = 0; i < tickCumulatives.length - 1; i++) {
-            assertGt(tickCumulatives[i], tickCumulatives[i + 1], "Newer observations should have larger cumulatives");
+            assertGt(
+                tickCumulatives[i],
+                tickCumulatives[i + 1],
+                "Newer observations should have larger cumulatives"
+            );
         }
     }
 
     function testObserveTWAPCalculation() public {
         uint32[] memory secondsAgos = new uint32[](2);
-        secondsAgos[0] = 0;   // now
+        secondsAgos[0] = 0; // now
         secondsAgos[1] = 600; // 10 minutes ago
 
         (int56[] memory tickCumulatives, ) = oracle.observe(secondsAgos);
@@ -136,7 +154,9 @@ contract ChainLinkToV3OracleTest is Test {
 
     function testObserveEmptyArray() public {
         uint32[] memory emptyArray = new uint32[](0);
-        (int56[] memory tickCumulatives, uint160[] memory liquidityCumulatives) = oracle.observe(emptyArray);
+        (int56[] memory tickCumulatives, uint160[] memory liquidityCumulatives) = oracle.observe(
+            emptyArray
+        );
 
         assertEq(tickCumulatives.length, 0, "Should return empty array");
         assertEq(liquidityCumulatives.length, 0, "Should return empty array");
@@ -148,7 +168,9 @@ contract ChainLinkToV3OracleTest is Test {
             largeArray[i] = uint32(i * 60); // Every minute for 100 minutes
         }
 
-        (int56[] memory tickCumulatives, uint160[] memory liquidityCumulatives) = oracle.observe(largeArray);
+        (int56[] memory tickCumulatives, uint160[] memory liquidityCumulatives) = oracle.observe(
+            largeArray
+        );
 
         assertEq(tickCumulatives.length, 100, "Should handle large arrays");
         assertEq(liquidityCumulatives.length, 100, "Should handle large arrays");
@@ -175,7 +197,11 @@ contract ChainLinkToV3OracleTest is Test {
 
         // Values should be the same (since we use current chainlink price)
         (, int24 laterTick, , , , , ) = oracle.slot0();
-        assertEq(laterTick, initialTick, "Tick should be consistent across time (same chainlink round)");
+        assertEq(
+            laterTick,
+            initialTick,
+            "Tick should be consistent across time (same chainlink round)"
+        );
     }
 
     function testChainlinkPriceToTickConversion() public {
