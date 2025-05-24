@@ -250,16 +250,34 @@ contract ChainLinkToV3OracleTest is Test {
 
         // Convert to human-readable prices for comparison
         // For ETH/USD: price = (sqrtPriceX96)^2 / 2^192
+        // 1) Oracle price = USD per ETH:
         uint256 oraclePrice = FullMath.mulDiv(
             uint256(oracleSqrtPriceX96),
             uint256(oracleSqrtPriceX96),
             1 << 192
         );
-        uint256 poolPrice = FullMath.mulDiv(
+        // 2) Pool raw ratio = (token1/token0)*(10^dec0/10^dec1):
+        //    token0 = USDC (6 decimals), token1 = WETH (18 decimals)
+        //    so raw = (WETH/USDC)*1e12
+        uint256 poolRaw = FullMath.mulDiv(
             uint256(poolSqrtPriceX96),
             uint256(poolSqrtPriceX96),
             1 << 192
         );
+        // 3) Normalize decimals _and invert_ to get USD per ETH:
+        //    USD/ETH = (1 / (WETH/USDC)) = 1e12 / poolRaw
+        uint256 poolPrice = FullMath.mulDiv(
+            1e12,    // numerator
+            1,       // second factor
+            poolRaw  // denominator
+        );
+
+        console2.log("oracleTick", oracleTick);
+        console2.log("oracleSqrtPriceX96", oracleSqrtPriceX96);
+        console2.log("poolSqrtPriceX96", poolSqrtPriceX96);
+        console2.log("oraclePrice", oraclePrice);
+        console2.log("poolRaw", poolRaw);
+        console2.log("poolPrice", poolPrice);
 
         // Calculate percentage difference
         uint256 diff = oraclePrice > poolPrice ? oraclePrice - poolPrice : poolPrice - oraclePrice;

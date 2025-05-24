@@ -42,10 +42,8 @@ contract ChainLinkToV3Oracle {
             bool unlocked
         )
     {
-        tick = chainlinkPriceToTick(getChainlinkPrice());
-        // DEV: Returning the exact raw ratio here, rather than the tick-snapped one - LMK if you prefer
-        // tick-snapped, like: TickMath.getSqrtRatioAtTick(tick)
-        sqrtPriceX96 = uint160((uint256(getChainlinkPrice()) << 128) / (10**DECIMALS)) << 32;
+        sqrtPriceX96 = chainlinkPriceToSqrtRatioX96(getChainlinkPrice());
+        tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
 
         // TODO: what to return for these? need to look at how they're consumed in panoptic
         observationIndex = uint16(block.timestamp % 65536); // Cycling index based on time
@@ -76,7 +74,7 @@ contract ChainLinkToV3Oracle {
             bool initialized
         )
     {
-        int24 tick = chainlinkPriceToTick(getChainlinkPrice());
+        int24 tick = TickMath.getTickAtSqrtRatio(chainlinkPriceToSqrtRatioX96(getChainlinkPrice()));
 
         // Use a blockTimestamp close to now, but unique per-observation
         blockTimestamp = uint32(block.timestamp - index);
@@ -104,7 +102,7 @@ contract ChainLinkToV3Oracle {
     {
         tickCumulatives = new int56[](secondsAgos.length);
 
-        int24 currentTick = chainlinkPriceToTick(getChainlinkPrice());
+        int24 currentTick = TickMath.getTickAtSqrtRatio(chainlinkPriceToSqrtRatioX96(getChainlinkPrice()));
 
         for (uint256 i = 0; i < secondsAgos.length; i++) {
             // Use the same current tick for all observations
@@ -130,14 +128,28 @@ contract ChainLinkToV3Oracle {
         return currentPrice;
     }
 
-    /// @notice Convert a ChainLink price to a Uniswap tick.
-    /// @param currentPrice Price returned from ChainLink
-    /// @return The same value, converted to a tick.
-    function chainlinkPriceToTick(int256 currentPrice) internal pure returns (int24) {
-        return
-            TickMath.getTickAtSqrtRatio(
-                uint160(uint256((uint256(currentPrice) << 128) / (10 ** DECIMALS))) << 32
-            );
+    /// @notice Take the square root of a ChainLink price and put it into X96 format.
+    /// @param price raw ChainLink answer (has DECIMALS decimals)
+    /// @return sqrtPriceX96 = sqrt(price/10^DECIMALS) * 2^96
+    function chainlinkPriceToSqrtRatioX96(int256 price) internal pure returns (uint160) {
+        uint256 p = uint256(price);
+        // sqrt(p) has price’s decimals baked in; since price has 8 decimals,
+        // we divide out √(10^8) = 10^4 after shifting.
+        uint256 root = sqrt(p);
+        uint256 scaled = (root << 96) / (10 ** (DECIMALS / 2));
+        return uint160(scaled);
+    }
+
+    // TODO: Replace with standard lib
+    function sqrt(uint256 x) internal pure returns (uint256) {
+        if (x == 0) return 0;
+        uint256 z = (x + 1) / 2;
+        uint256 y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+        return y;
     }
 
     /// @notice This method is typically used to increase the maximum number of price observations, but we just no-op.
