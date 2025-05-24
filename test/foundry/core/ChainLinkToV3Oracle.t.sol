@@ -2,10 +2,12 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Test.sol";
-import "../../../contracts/ChainLinkToV3Oracle.sol";
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {FullMath} from "v3-core/libraries/FullMath.sol";
+
+import "../../../contracts/ChainLinkToV3Oracle.sol";
 
 contract ChainLinkToV3OracleTest is Test {
     ChainLinkToV3Oracle oracle;
@@ -248,8 +250,16 @@ contract ChainLinkToV3OracleTest is Test {
 
         // Convert to human-readable prices for comparison
         // For ETH/USD: price = (sqrtPriceX96)^2 / 2^192
-        uint256 oraclePrice = (uint256(oracleSqrtPriceX96) * uint256(oracleSqrtPriceX96)) >> 192;
-        uint256 poolPrice = (uint256(poolSqrtPriceX96) * uint256(poolSqrtPriceX96)) >> 192;
+        uint256 oraclePrice = FullMath.mulDiv(
+            uint256(oracleSqrtPriceX96),
+            uint256(oracleSqrtPriceX96),
+            1 << 192
+        );
+        uint256 poolPrice = FullMath.mulDiv(
+            uint256(poolSqrtPriceX96),
+            uint256(poolSqrtPriceX96),
+            1 << 192
+        );
 
         // Calculate percentage difference
         uint256 diff = oraclePrice > poolPrice ? oraclePrice - poolPrice : poolPrice - oraclePrice;

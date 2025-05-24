@@ -43,7 +43,9 @@ contract ChainLinkToV3Oracle {
         )
     {
         tick = chainlinkPriceToTick(getChainlinkPrice());
-        sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick);
+        // DEV: Returning the exact raw ratio here, rather than the tick-snapped one - LMK if you prefer
+        // tick-snapped, like: TickMath.getSqrtRatioAtTick(tick)
+        sqrtPriceX96 = uint160((uint256(getChainlinkPrice()) << 128) / (10**DECIMALS)) << 32;
 
         // TODO: what to return for these? need to look at how they're consumed in panoptic
         observationIndex = uint16(block.timestamp % 65536); // Cycling index based on time
@@ -136,16 +138,6 @@ contract ChainLinkToV3Oracle {
             TickMath.getTickAtSqrtRatio(
                 uint160(uint256((uint256(currentPrice) << 128) / (10 ** DECIMALS))) << 32
             );
-    }
-
-    // TODO: Replace with a standard lib
-    function sqrt(uint256 x) internal pure returns (uint128 y) {
-        uint256 z = (x + 1) / 2;
-        y = uint128(x);
-        while (z < y) {
-            y = uint128(z);
-            z = (x / z + z) / 2;
-        }
     }
 
     /// @notice This method is typically used to increase the maximum number of price observations, but we just no-op.
