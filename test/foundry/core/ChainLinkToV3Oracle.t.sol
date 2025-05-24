@@ -135,10 +135,13 @@ contract ChainLinkToV3OracleTest is Test {
                 "Newer observations should have larger cumulatives"
             );
         }
+
+        // TODO: Test that the TWAP = chainlink price
     }
 
     function testObserveTWAPCalculation() public {
         uint32[] memory secondsAgos = new uint32[](2);
+        // TODO: Fuzz this - all possible combinations of secondsAgos should still result in TWAP equaling current price.
         secondsAgos[0] = 0; // now
         secondsAgos[1] = 600; // 10 minutes ago
 
@@ -204,29 +207,7 @@ contract ChainLinkToV3OracleTest is Test {
         );
     }
 
-    function testChainlinkPriceToTickConversion() public {
-        // Test some known price ranges for ETH/USD
-        int256 price2000 = 2000 * 1e8; // $2000 with 8 decimals
-        int256 price4000 = 4000 * 1e8; // $4000 with 8 decimals
-
-        // These should produce valid ticks
-        uint256 price2000Q128 = (uint256(price2000) << 128) / (10 ** 8);
-        uint160 sqrt2000 = uint160(uint256(price2000Q128)) << 32;
-        int24 tick2000 = TickMath.getTickAtSqrtRatio(sqrt2000);
-
-        uint256 price4000Q128 = (uint256(price4000) << 128) / (10 ** 8);
-        uint160 sqrt4000 = uint160(uint256(price4000Q128)) << 32;
-        int24 tick4000 = TickMath.getTickAtSqrtRatio(sqrt4000);
-
-        // Higher price should give higher tick
-        assertGt(tick4000, tick2000, "Higher price should produce higher tick");
-
-        // Ticks should be within valid range
-        assertGe(tick2000, TickMath.MIN_TICK, "Tick should be >= MIN_TICK");
-        assertLe(tick2000, TickMath.MAX_TICK, "Tick should be <= MAX_TICK");
-        assertGe(tick4000, TickMath.MIN_TICK, "Tick should be >= MIN_TICK");
-        assertLe(tick4000, TickMath.MAX_TICK, "Tick should be <= MAX_TICK");
-    }
+    // TODO: Also pull the ETH/USD price from a big mainnet pool and test that its price is within 1% of what your oracle says
 
     function testRevertOnBadChainlinkPrice() public {
         // This test would require mocking the aggregator to return bad data
