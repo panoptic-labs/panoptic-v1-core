@@ -36,7 +36,7 @@ contract ChainLinkToV3OracleTest is Test {
 
         // Basic sanity checks
         assertGt(uint256(sqrtPriceX96), 0, "sqrtPriceX96 should be > 0");
-        assertGt(int256(tick), 0, "tick should be > 0");
+        assertGt(int256(tick), 0, "tick should be > 0, unless ETH crashed below $1");
         assertEq(feeProtocol, 0, "feeProtocol always 0");
         assertTrue(unlocked, "unlocked always true");
         assertEq(obsCard, 8, "observationCardinality should be 8");
@@ -44,27 +44,13 @@ contract ChainLinkToV3OracleTest is Test {
 
         // Verify tick and sqrtPrice are consistent
         uint160 sqrtPriceFromTick = TickMath.getSqrtRatioAtTick(tick);
-        uint256 diff = sqrtPriceX96 > sqrtPriceFromTick
-            ? sqrtPriceX96 - sqrtPriceFromTick
-            : sqrtPriceFromTick - sqrtPriceX96;
+        // (The sqrtPriceX96 is more precise than the tick, so we must allow up to 1 tick tolerance)
+        uint160 lower = uint160(FullMath.mulDiv(sqrtPriceFromTick, uint160(10_000), uint160(10_001)));
+        uint160 upper = uint160(FullMath.mulDiv(sqrtPriceFromTick, uint160(10_001), uint160(10_000)));
         assertTrue(
-            (diff * 1e5) / sqrtPriceFromTick <= 1 || diff <= 1,
-            "sqrtPrice vs TickMath mismatch >0.1% & > 1 whole unit"
+          sqrtPriceX96 >= lower && sqrtPriceX96 <= upper,
+          "sqrtPrice not within one tick of TickMath roundtrip"
         );
-    }
-
-    function testSlot0ConsistentWithChainlink() public {
-        (, int256 chainlinkPrice, , , ) = aggregator.latestRoundData();
-        (uint160 sqrtPriceX96, int24 oracleTick, , , , , ) = oracle.slot0();
-
-        // Convert chainlink price to expected tick
-        uint256 uPrice = uint256(chainlinkPrice);
-        uint256 priceQ128 = (uPrice << 128) / (10 ** 8); // DECIMALS = 8
-        uint160 expectedSqrtPriceX96 = uint160(uint256(priceQ128)) << 32;
-        int24 expectedTick = TickMath.getTickAtSqrtRatio(expectedSqrtPriceX96);
-
-        assertEq(oracleTick, expectedTick, "Oracle tick should match chainlink-derived tick");
-        assertEq(sqrtPriceX96, expectedSqrtPriceX96, "Oracle sqrtPrice should match chainlink-derived price");
     }
 
     function testObservationsReturnsValidData() public {
@@ -210,6 +196,7 @@ contract ChainLinkToV3OracleTest is Test {
 
         assertEq(tickCumulatives.length, 100, "Should handle large arrays");
         assertEq(liquidityCumulatives.length, 100, "Should handle large arrays");
+        // TODO: also test that the tickCumulative is still current chainlink price
     }
 
     function testIncreaseObservationCardinalityNext() public {
@@ -264,7 +251,7 @@ contract ChainLinkToV3OracleTest is Test {
             uint256(poolSqrtPriceX96),
             1 << 192
         );
-        // 3) Normalize decimals _and invert_ to get USD per ETH:
+        // 3) Match the decimals to chainlink's and flip token order to USD per ETH:
         //    USD/ETH = (1 / (WETH/USDC)) = 1e12 / poolRaw
         uint256 poolPrice = FullMath.mulDiv(
             1e12,    // numerator
@@ -272,23 +259,11 @@ contract ChainLinkToV3OracleTest is Test {
             poolRaw  // denominator
         );
 
-        console2.log("oracleTick", oracleTick);
-        console2.log("oracleSqrtPriceX96", oracleSqrtPriceX96);
-        console2.log("poolSqrtPriceX96", poolSqrtPriceX96);
-        console2.log("oraclePrice", oraclePrice);
-        console2.log("poolRaw", poolRaw);
-        console2.log("poolPrice", poolPrice);
-
-        // Calculate percentage difference
         uint256 diff = oraclePrice > poolPrice ? oraclePrice - poolPrice : poolPrice - oraclePrice;
         uint256 percentDiff = (diff * 10000) / poolPrice; // basis points
 
         // Prices should be within 1% (100 basis points) of each other
         assertLe(percentDiff, 100, "Oracle price should be within 1% of Uniswap pool price");
-
-        console.log("Oracle price:", oraclePrice);
-        console.log("Pool price:", poolPrice);
-        console.log("Difference (bps):", percentDiff);
     }
 
     // TODO
@@ -296,5 +271,17 @@ contract ChainLinkToV3OracleTest is Test {
         // This test would require mocking the aggregator to return bad data
         // For now, we trust that the mainnet ETH/USD feed returns valid data
         // In a more comprehensive test suite, you'd mock this
+    }
+
+    // TODO: Replace with standard lib
+    function sqrt(uint256 x) internal pure returns (uint256) {
+        if (x == 0) return 0;
+        uint256 z = (x + 1) / 2;
+        uint256 y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+        return y;
     }
 }

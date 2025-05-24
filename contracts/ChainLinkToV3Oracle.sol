@@ -46,6 +46,7 @@ contract ChainLinkToV3Oracle {
         tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
 
         // TODO: what to return for these? need to look at how they're consumed in panoptic
+        // Maybe always return cardinality >= 100? Isn't that a constraint for pool readiness somewhere?
         observationIndex = uint16(block.timestamp % 65536); // Cycling index based on time
         observationCardinality = 8; // Match the 8-slot median queue
         observationCardinalityNext = 8;
