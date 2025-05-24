@@ -103,7 +103,9 @@ contract ChainLinkToV3Oracle {
     {
         tickCumulatives = new int56[](secondsAgos.length);
 
-        int24 currentTick = TickMath.getTickAtSqrtRatio(chainlinkPriceToSqrtRatioX96(getChainlinkPrice()));
+        int24 currentTick = TickMath.getTickAtSqrtRatio(
+            chainlinkPriceToSqrtRatioX96(getChainlinkPrice())
+        );
 
         for (uint256 i = 0; i < secondsAgos.length; i++) {
             // Use the same current tick for all observations

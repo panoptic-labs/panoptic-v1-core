@@ -45,11 +45,15 @@ contract ChainLinkToV3OracleTest is Test {
         // Verify tick and sqrtPrice are consistent
         uint160 sqrtPriceFromTick = TickMath.getSqrtRatioAtTick(tick);
         // (The sqrtPriceX96 is more precise than the tick, so we must allow up to 1 tick tolerance)
-        uint160 lower = uint160(FullMath.mulDiv(sqrtPriceFromTick, uint160(10_000), uint160(10_001)));
-        uint160 upper = uint160(FullMath.mulDiv(sqrtPriceFromTick, uint160(10_001), uint160(10_000)));
+        uint160 lower = uint160(
+            FullMath.mulDiv(sqrtPriceFromTick, uint160(10_000), uint160(10_001))
+        );
+        uint160 upper = uint160(
+            FullMath.mulDiv(sqrtPriceFromTick, uint160(10_001), uint160(10_000))
+        );
         assertTrue(
-          sqrtPriceX96 >= lower && sqrtPriceX96 <= upper,
-          "sqrtPrice not within one tick of TickMath roundtrip"
+            sqrtPriceX96 >= lower && sqrtPriceX96 <= upper,
+            "sqrtPrice not within one tick of TickMath roundtrip"
         );
     }
 
@@ -254,9 +258,9 @@ contract ChainLinkToV3OracleTest is Test {
         // 3) Match the decimals to chainlink's and flip token order to USD per ETH:
         //    USD/ETH = (1 / (WETH/USDC)) = 1e12 / poolRaw
         uint256 poolPrice = FullMath.mulDiv(
-            1e12,    // numerator
-            1,       // second factor
-            poolRaw  // denominator
+            1e12, // numerator
+            1, // second factor
+            poolRaw // denominator
         );
 
         uint256 diff = oraclePrice > poolPrice ? oraclePrice - poolPrice : poolPrice - oraclePrice;
