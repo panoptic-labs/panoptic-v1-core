@@ -67,7 +67,7 @@ contract PanopticFactory is FactoryNFT, Multicall {
     address internal immutable COLLATERAL_REFERENCE;
 
     /// @notice The `observationCardinalityNext` to set on the Uniswap pool when a new PanopticPool is deployed.
-    uint16 internal constant CARDINALITY_INCREASE = 51;
+    uint16 internal constant CARDINALITY_INCREASE = 601;
 
     /*//////////////////////////////////////////////////////////////
                                 STORAGE
