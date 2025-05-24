@@ -43,6 +43,7 @@ contract ChainLinkToV3Oracle {
         )
     {
         tick = chainlinkPriceToTick(getChainlinkPrice());
+        sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick);
 
         // TODO: what to return for these? need to look at how they're consumed in panoptic
         observationIndex = uint16(block.timestamp % 65536); // Cycling index based on time

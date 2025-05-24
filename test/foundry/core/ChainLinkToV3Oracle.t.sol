@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../../../contracts/ChainLinkToV3Oracle.sol";
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 contract ChainLinkToV3OracleTest is Test {
     ChainLinkToV3Oracle oracle;
@@ -12,6 +13,7 @@ contract ChainLinkToV3OracleTest is Test {
         AggregatorV3Interface(
             0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 // ETH/USD aggregator on mainnet
         );
+    IUniswapV3Pool ethUsdcPool = IUniswapV3Pool(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640);
 
     function setUp() public {
         uint256 forkId = vm.createFork(vm.envString("MAINNET_RPC_URL"));
@@ -51,7 +53,7 @@ contract ChainLinkToV3OracleTest is Test {
 
     function testSlot0ConsistentWithChainlink() public {
         (, int256 chainlinkPrice, , , ) = aggregator.latestRoundData();
-        (, int24 oracleTick, , , , , ) = oracle.slot0();
+        (uint160 sqrtPriceX96, int24 oracleTick, , , , , ) = oracle.slot0();
 
         // Convert chainlink price to expected tick
         uint256 uPrice = uint256(chainlinkPrice);
@@ -60,6 +62,7 @@ contract ChainLinkToV3OracleTest is Test {
         int24 expectedTick = TickMath.getTickAtSqrtRatio(expectedSqrtPriceX96);
 
         assertEq(oracleTick, expectedTick, "Oracle tick should match chainlink-derived tick");
+        assertEq(sqrtPriceX96, expectedSqrtPriceX96, "Oracle sqrtPrice should match chainlink-derived price");
     }
 
     function testObservationsReturnsValidData() public {
@@ -88,11 +91,11 @@ contract ChainLinkToV3OracleTest is Test {
 
     function testObservationsConsistency() public {
         // Get two consecutive observations
-        (uint32 ts0, int56 cum0, , ) = oracle.observations(0);
-        (uint32 ts1, int56 cum1, , ) = oracle.observations(1);
+        (uint32 ts0, int56 cumulative0, , ) = oracle.observations(0);
+        (uint32 ts1, int56 cumulative1, , ) = oracle.observations(1);
 
         // Calculate the tick from cumulative difference
-        int24 derivedTick = int24((cum0 - cum1) / int56(uint56(ts0 - ts1)));
+        int24 derivedTick = int24((cumulative0 - cumulative1) / int56(uint56(ts0 - ts1)));
 
         // Should match current tick from slot0
         (, int24 currentTick, , , , , ) = oracle.slot0();
@@ -155,6 +158,34 @@ contract ChainLinkToV3OracleTest is Test {
         assertEq(twap, currentTick, "TWAP should equal current tick");
     }
 
+    function testFuzzObserveTWAPCalculation(uint32 secondsAgo1, uint32 secondsAgo2) public {
+        // Ensure reasonable bounds and ordering
+        vm.assume(secondsAgo1 <= 86400); // max 1 day
+        vm.assume(secondsAgo2 <= 86400);
+        vm.assume(secondsAgo1 != secondsAgo2); // must be different
+
+        // Ensure proper ordering (secondsAgo2 > secondsAgo1)
+        if (secondsAgo1 > secondsAgo2) {
+            (secondsAgo1, secondsAgo2) = (secondsAgo2, secondsAgo1);
+        }
+
+        uint32[] memory secondsAgos = new uint32[](2);
+        secondsAgos[0] = secondsAgo1;
+        secondsAgos[1] = secondsAgo2;
+
+        (int56[] memory tickCumulatives, ) = oracle.observe(secondsAgos);
+
+        // Calculate TWAP manually
+        uint32 timeDiff = secondsAgo2 - secondsAgo1;
+        int24 twap = int24((tickCumulatives[0] - tickCumulatives[1]) / int56(uint56(timeDiff)));
+
+        // Should equal current tick since we use same tick for all observations
+        (, int24 currentTick, , , , , ) = oracle.slot0();
+        assertEq(twap, currentTick, "TWAP should equal current tick for any time period");
+    }
+
+    // TODO: Also fuzz test different length arrays (e.g. anywhere from 1 to max array length secondsAgos)
+
     function testObserveEmptyArray() public {
         uint32[] memory emptyArray = new uint32[](0);
         (int56[] memory tickCumulatives, uint160[] memory liquidityCumulatives) = oracle.observe(
@@ -207,8 +238,32 @@ contract ChainLinkToV3OracleTest is Test {
         );
     }
 
-    // TODO: Also pull the ETH/USD price from a big mainnet pool and test that its price is within 1% of what your oracle says
+    function testPriceComparisonWithUniswapPool() public {
+        // Get price from our oracle
+        (, int24 oracleTick, , , , , ) = oracle.slot0();
+        uint160 oracleSqrtPriceX96 = TickMath.getSqrtRatioAtTick(oracleTick);
 
+        // Get price from actual Uniswap V3 ETH/USDC pool
+        (uint160 poolSqrtPriceX96, , , , , , ) = ethUsdcPool.slot0();
+
+        // Convert to human-readable prices for comparison
+        // For ETH/USD: price = (sqrtPriceX96)^2 / 2^192
+        uint256 oraclePrice = (uint256(oracleSqrtPriceX96) * uint256(oracleSqrtPriceX96)) >> 192;
+        uint256 poolPrice = (uint256(poolSqrtPriceX96) * uint256(poolSqrtPriceX96)) >> 192;
+
+        // Calculate percentage difference
+        uint256 diff = oraclePrice > poolPrice ? oraclePrice - poolPrice : poolPrice - oraclePrice;
+        uint256 percentDiff = (diff * 10000) / poolPrice; // basis points
+
+        // Prices should be within 1% (100 basis points) of each other
+        assertLe(percentDiff, 100, "Oracle price should be within 1% of Uniswap pool price");
+
+        console.log("Oracle price:", oraclePrice);
+        console.log("Pool price:", poolPrice);
+        console.log("Difference (bps):", percentDiff);
+    }
+
+    // TODO
     function testRevertOnBadChainlinkPrice() public {
         // This test would require mocking the aggregator to return bad data
         // For now, we trust that the mainnet ETH/USD feed returns valid data
