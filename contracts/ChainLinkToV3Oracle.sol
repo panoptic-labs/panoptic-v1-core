@@ -19,6 +19,7 @@ contract ChainLinkToV3Oracle {
     /// @param _aggregator The ChainLink price aggregator contract to read from
     constructor(AggregatorV3Interface _aggregator) {
         aggregator = _aggregator;
+        deploymentTimestamp = block.timestamp;
     }
 
     /// @notice Emulates the behavior of the exposed zeroth slot of a Uniswap V3 pool.
@@ -42,46 +43,28 @@ contract ChainLinkToV3Oracle {
             bool unlocked
         )
     {
-        (, int256 answer, , , ) = aggregator.latestRoundData();
-        require(answer > 0, "bad price");
+        tick = chainlinkPriceToTick(mockHistoricalPrice(0, 0));
 
-        uint256 uAnswer = uint256(answer);
-        uint256 priceQ128 = (uAnswer << 128) / (10 ** DECIMALS);
-        sqrtPriceX96 = uint160(uint256(priceQ128)) << 32;
-        tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+        // TODO: what to return for these? need to look at how they're consumed in panoptic
+        observationIndex = uint16(block.timestamp % 65536); // Cycling index based on time
+        observationCardinality = 8; // Match the 8-slot median queue
+        observationCardinalityNext = 8;
 
-        // TODO: Decide what to return here - they don't mean much in this context, unless we actually want to stamp oracles.
-        /*(observationIndex, observationCardinality, observationCardinalityNext) =
-        baseOracleHook.stateById(poolId);*/
-
+        // not used in v4, so always 0
         feeProtocol = 0;
+        // always true in v4
         unlocked = true;
     }
 
-    // TODO: Replace with a standard lib
-    function sqrt(uint256 x) internal pure returns (uint128 y) {
-        uint256 z = (x + 1) / 2;
-        y = uint128(x);
-        while (z < y) {
-            y = uint128(z);
-            z = (x / z + z) / 2;
-        }
-    }
-
-    // TODO: Some of the below should be stubbed with dummy values since they don't mean anything in this context
-    // The biggest remaining decision could be whether to do actual "observations" -
-    // e.g., record the actual returned value from ChainLink on X interval
-    // Or, we could just return an array with [ChainLinkValue - HardcodedDeviance/2, ChainLinkValue + HardcodedDeviance/2, ChainLinkValue]
-    /*
     /// @notice Returns data about a specific observation index.
-   /// @param index The element of the observations array to fetch
-   /// @return blockTimestamp The timestamp of the observation
-   /// @return tickCumulative The tick multiplied by seconds elapsed for the life of the pool as of the observation timestamp.
-   /// @return secondsPerLiquidityCumulativeX128 The seconds per in range liquidity for the life of the pool (always 0 in V4)
-   /// @return initialized Whether the observation has been initialized and the values are safe to use
-   function observations(
+    /// @param index The element of the observations array to fetch
+    /// @return blockTimestamp The timestamp of the observation
+    /// @return tickCumulative The tick multiplied by seconds elapsed for the life of the pool as of the observation timestamp.
+    /// @return secondsPerLiquidityCumulativeX128 The seconds per in range liquidity for the life of the pool (always 0 in V4)
+    /// @return initialized Whether the observation has been initialized and the values are safe to use
+    function observations(
        uint256 index
-   )
+    )
        external
        view
        returns (
@@ -90,9 +73,20 @@ contract ChainLinkToV3Oracle {
            uint160 secondsPerLiquidityCumulativeX128,
            bool initialized
        )
-   { }
+    {
+        int24 tick = chainlinkPriceToTick(mockHistoricalPrice(0, 0));
 
-   /// @notice Returns the cumulative tick and liquidity as of each timestamp `secondsAgo` from the current block timestamp.
+        // Return a blockTimestamp close to now, but unique per-observation
+        blockTimestamp = uint32(block.timestamp - index);
+        tickCumulative = int56(tick) * int56(blockTimestamp);
+
+        // Always 0 in v4
+        secondsPerLiquidityCumulativeX128 = 0;
+        // These values are always safe to use - they're just stubbed based on the chainlink price
+        initialized = true;
+    }
+
+    /// @notice Returns the cumulative tick and liquidity as of each timestamp `secondsAgo` from the current block timestamp.
     /// @param secondsAgos From how long ago each cumulative tick and liquidity value should be returned
     /// @return tickCumulatives Cumulative tick values as of each `secondsAgos` from the current block timestamp
     /// @return secondsPerLiquidityCumulativeX128s Cumulative seconds per liquidity-in-range value (always empty in V4)
@@ -105,10 +99,56 @@ contract ChainLinkToV3Oracle {
             int56[] memory tickCumulatives,
             uint160[] memory secondsPerLiquidityCumulativeX128s
         )
-    { }
+    {
+        tickCumulatives = new int56[](secondsAgos.length);
 
-    /// @notice Increase the maximum number of price observations that this oracle will store.
+        int24 currentTick = chainlinkPriceToTick(mockHistoricalPrice(0, 0));
+
+        for (uint256 i = 0; i < secondsAgos.length; i++) {
+            // Use the same current tick for all observations
+            // The cumulative = tick * timestamp at that point in time
+            // This ensures TWAP calculations will always result in the current tick
+            uint256 timestamp = block.timestamp - secondsAgos[i];
+            tickCumulatives[i] = int56(currentTick) * int56(timestamp);
+        }
+
+        // DEV: *If we wanted* we could actually get historical price at each secondsAgo -
+        // but requires searching through recent `round`s on Chainlink and
+        // finding the one with a timestamp closest to the target: https://docs.chain.link/data-feeds/historical-data
+        // Instead, I just return the current price in each slot
+
+        return (tickCumulatives, new uint160[](secondsAgos.length));
+    }
+
+    /// @notice Get the current price from ChainLink with adjustable variation.
+    /// @return The current price from the aggregator
+    function getChainlinkPrice() internal view returns (int256) {
+        (, int256 currentPrice,,,) = aggregator.latestRoundData();
+
+        return currentPrice;
+    }
+
+    /// @notice Convert a ChainLink price to a Uniswap tick.
+    /// @param currentPrice Price returned from ChainLink
+    /// @returns The same value, converted to a tick.
+    function chainlinkPriceToTick(int256 currentPrice) internal pure returns (int24) {
+        return TickMath.getTickAtSqrtRatio(
+            uint160(uint256((uint256(currentPrice) << 128) / (10 ** DECIMALS))) << 32
+        );
+    }
+
+    // TODO: Replace with a standard lib
+    function sqrt(uint256 x) internal pure returns (uint128 y) {
+        uint256 z = (x + 1) / 2;
+        y = uint128(x);
+        while (z < y) {
+            y = uint128(z);
+            z = (x / z + z) / 2;
+        }
+    }
+
+    /// @notice This method is typically used to increase the maximum number of price observations, but we just no-op.
+    /// @dev PanopticFactory relies on this method, so we wanted to expose it, even if it does nothing.
     /// @param observationCardinalityNext The desired minimum number of observations for the oracle to store
     function increaseObservationCardinalityNext(uint16 observationCardinalityNext) external { }
-    */
 }
