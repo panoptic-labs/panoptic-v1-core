@@ -14,3 +14,4 @@ v4-core/=lib/v4-core/src
 @types/=contracts/types
 @scripts/=scripts
 @uniswap/=lib
+@chainlink/contracts/=lib/chainlink/contracts/
