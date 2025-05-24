@@ -19,7 +19,6 @@ contract ChainLinkToV3Oracle {
     /// @param _aggregator The ChainLink price aggregator contract to read from
     constructor(AggregatorV3Interface _aggregator) {
         aggregator = _aggregator;
-        deploymentTimestamp = block.timestamp;
     }
 
     /// @notice Emulates the behavior of the exposed zeroth slot of a Uniswap V3 pool.
@@ -43,7 +42,7 @@ contract ChainLinkToV3Oracle {
             bool unlocked
         )
     {
-        tick = chainlinkPriceToTick(mockHistoricalPrice(0, 0));
+        tick = chainlinkPriceToTick(getChainlinkPrice());
 
         // TODO: what to return for these? need to look at how they're consumed in panoptic
         observationIndex = uint16(block.timestamp % 65536); // Cycling index based on time
@@ -74,7 +73,7 @@ contract ChainLinkToV3Oracle {
             bool initialized
         )
     {
-        int24 tick = chainlinkPriceToTick(mockHistoricalPrice(0, 0));
+        int24 tick = chainlinkPriceToTick(getChainlinkPrice());
 
         // Return a blockTimestamp close to now, but unique per-observation
         blockTimestamp = uint32(block.timestamp - index);
@@ -102,7 +101,7 @@ contract ChainLinkToV3Oracle {
     {
         tickCumulatives = new int56[](secondsAgos.length);
 
-        int24 currentTick = chainlinkPriceToTick(mockHistoricalPrice(0, 0));
+        int24 currentTick = chainlinkPriceToTick(getChainlinkPrice());
 
         for (uint256 i = 0; i < secondsAgos.length; i++) {
             // Use the same current tick for all observations
