@@ -107,9 +107,7 @@ contract PythToV3Oracle {
     {
         tickCumulatives = new int56[](secondsAgos.length);
 
-        int24 currentTick = TickMath.getTickAtSqrtRatio(
-            pythPriceToSqrtRatioX96(getPythPrice())
-        );
+        int24 currentTick = TickMath.getTickAtSqrtRatio(pythPriceToSqrtRatioX96(getPythPrice()));
 
         for (uint256 i = 0; i < secondsAgos.length; i++) {
             // Use the same current tick for all observations

@@ -228,11 +228,7 @@ contract PythToV3OracleTest is Test {
 
         // Values should be the same (since we use current Pyth price)
         (, int24 laterTick, , , , , ) = oracle.slot0();
-        assertEq(
-            laterTick,
-            initialTick,
-            "Tick should be consistent across time (same Pyth round)"
-        );
+        assertEq(laterTick, initialTick, "Tick should be consistent across time (same Pyth round)");
     }
 
     function testPriceComparisonWithUniswapPool() public {
