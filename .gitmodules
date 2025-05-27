@@ -25,3 +25,6 @@
 [submodule "lib/chainlink"]
 	path = lib/chainlink
 	url = https://github.com/smartcontractkit/chainlink
+[submodule "lib/pyth-sdk-solidity"]
+	path = lib/pyth-sdk-solidity
+	url = https://github.com/pyth-network/pyth-sdk-solidity

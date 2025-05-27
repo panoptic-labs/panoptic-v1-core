@@ -15,3 +15,4 @@ v4-core/=lib/v4-core/src
 @scripts/=scripts
 @uniswap/=lib
 @chainlink/contracts/=lib/chainlink/contracts/
+@pythnetwork/pyth-sdk-solidity/=lib/pyth-sdk-solidity/

@@ -2,25 +2,29 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Test.sol";
-import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {FullMath} from "v3-core/libraries/FullMath.sol";
 
-import "../../../contracts/ChainLinkToV3Oracle.sol";
+import "../../../contracts/PythToV3Oracle.sol";
 
-contract ChainLinkToV3OracleTest is Test {
-    ChainLinkToV3Oracle oracle;
-    AggregatorV3Interface aggregator =
-        AggregatorV3Interface(
-            0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 // ETH/USD aggregator on mainnet
+contract PythToV3OracleTest is Test {
+    PythToV3Oracle oracle;
+    IPyth pyth =
+        IPyth(
+            // From: https://docs.pyth.network/price-feeds/contract-addresses/evm
+            0x2880aB155794e7179c9eE2e38200202908C17B43 // Pyth on unichain
         );
-    IUniswapV3Pool ethUsdcPool = IUniswapV3Pool(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640);
+    // From: https://www.pyth.network/developers/price-feed-ids
+    bytes32 ethUsdPriceFeedId = 0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
+    // https://uniscan.xyz/address/0x65081CB48d74A32e9CCfED75164b8c09972DBcF1
+    IUniswapV3Pool ethUsdcPool = IUniswapV3Pool(0x65081CB48d74A32e9CCfED75164b8c09972DBcF1);
 
     function setUp() public {
-        uint256 forkId = vm.createFork(vm.envString("MAINNET_RPC_URL"));
+        uint256 forkId = vm.createFork(vm.envString("UNICHAIN_RPC_URL"));
         vm.selectFork(forkId);
-        oracle = new ChainLinkToV3Oracle(aggregator);
+        oracle = new PythToV3Oracle(pyth, ethUsdPriceFeedId);
     }
 
     function testSlot0ReturnsValidPrice() public {
@@ -131,7 +135,7 @@ contract ChainLinkToV3OracleTest is Test {
             );
         }
 
-        // TODO: Test that the TWAP = chainlink price
+        // TODO: Test that the TWAP = Pyth price
     }
 
     function testObserveTWAPCalculation() public {
@@ -200,7 +204,7 @@ contract ChainLinkToV3OracleTest is Test {
 
         assertEq(tickCumulatives.length, 100, "Should handle large arrays");
         assertEq(liquidityCumulatives.length, 100, "Should handle large arrays");
-        // TODO: also test that the tickCumulative is still current chainlink price
+        // TODO: also test that the tickCumulative is still current Pyth price
     }
 
     function testIncreaseObservationCardinalityNext() public {
@@ -222,12 +226,12 @@ contract ChainLinkToV3OracleTest is Test {
         // Fast forward time
         vm.warp(block.timestamp + 1000);
 
-        // Values should be the same (since we use current chainlink price)
+        // Values should be the same (since we use current Pyth price)
         (, int24 laterTick, , , , , ) = oracle.slot0();
         assertEq(
             laterTick,
             initialTick,
-            "Tick should be consistent across time (same chainlink round)"
+            "Tick should be consistent across time (same Pyth round)"
         );
     }
 
@@ -255,7 +259,7 @@ contract ChainLinkToV3OracleTest is Test {
             uint256(poolSqrtPriceX96),
             1 << 192
         );
-        // 3) Match the decimals to chainlink's and flip token order to USD per ETH:
+        // 3) Match the decimals to Pyth's and flip token order to USD per ETH:
         //    USD/ETH = (1 / (WETH/USDC)) = 1e12 / poolRaw
         uint256 poolPrice = FullMath.mulDiv(
             1e12, // numerator
@@ -271,7 +275,7 @@ contract ChainLinkToV3OracleTest is Test {
     }
 
     // TODO
-    function testRevertOnBadChainlinkPrice() public {
+    function testRevertOnBadPythPrice() public {
         // This test would require mocking the aggregator to return bad data
         // For now, we trust that the mainnet ETH/USD feed returns valid data
         // In a more comprehensive test suite, you'd mock this

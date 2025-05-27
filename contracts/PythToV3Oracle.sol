@@ -1,24 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 
 import {TickMath} from "v3-core/libraries/TickMath.sol";
 
-/// @title ChainLinkToV3Oracle
-/// @notice Contract that provides a Uniswap V3-compatible oracle interface on ChainLink-sourced data.
-contract ChainLinkToV3Oracle {
-    /// @notice The ChainLink price aggregator contract this adapter interacts with.
-    AggregatorV3Interface public immutable aggregator;
+/// @title PythToV3Oracle
+/// @notice Contract that provides a Uniswap V3-compatible oracle interface on Pyth-sourced price data.
+contract PythToV3Oracle {
+    /// @notice The Pyth contract this adapter interacts with.
+    IPyth public immutable pyth;
 
-    // TODO: _Should_ be able to pull from aggregator, but .decimals() was reverting in test
-    // Hard-coding the ETH/USD value for now, and could possibly kick this to constructor:
+    /// @notice The Pyth price feed ID for the trading pair
+    bytes32 public immutable priceFeedId;
+
     uint8 public constant DECIMALS = 8;
 
-    /// @notice Initializes the adapter with the BaseOracleHook contract and pool ID.
-    /// @param _aggregator The ChainLink price aggregator contract to read from
-    constructor(AggregatorV3Interface _aggregator) {
-        aggregator = _aggregator;
+    /// @notice Initializes the adapter with the Pyth contract and price feed ID.
+    /// @param _pyth The Pyth contract to read price data from
+    /// @param _priceFeedId The Pyth price feed ID for the desired trading pair
+    constructor(IPyth _pyth, bytes32 _priceFeedId) {
+        pyth = _pyth;
+        priceFeedId = _priceFeedId;
     }
 
     /// @notice Emulates the behavior of the exposed zeroth slot of a Uniswap V3 pool.
@@ -42,7 +46,7 @@ contract ChainLinkToV3Oracle {
             bool unlocked
         )
     {
-        sqrtPriceX96 = chainlinkPriceToSqrtRatioX96(getChainlinkPrice());
+        sqrtPriceX96 = pythPriceToSqrtRatioX96(getPythPrice());
         tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
 
         // TODO: what to return for these? need to look at how they're consumed in panoptic
@@ -78,7 +82,7 @@ contract ChainLinkToV3Oracle {
         // Use a blockTimestamp close to now, but unique per-observation
         blockTimestamp = uint32(block.timestamp - index);
         tickCumulative =
-            int56(TickMath.getTickAtSqrtRatio(chainlinkPriceToSqrtRatioX96(getChainlinkPrice()))) *
+            int56(TickMath.getTickAtSqrtRatio(pythPriceToSqrtRatioX96(getPythPrice()))) *
             int56(int32(blockTimestamp));
 
         // Always 0 in v4
@@ -104,7 +108,7 @@ contract ChainLinkToV3Oracle {
         tickCumulatives = new int56[](secondsAgos.length);
 
         int24 currentTick = TickMath.getTickAtSqrtRatio(
-            chainlinkPriceToSqrtRatioX96(getChainlinkPrice())
+            pythPriceToSqrtRatioX96(getPythPrice())
         );
 
         for (uint256 i = 0; i < secondsAgos.length; i++) {
@@ -116,36 +120,34 @@ contract ChainLinkToV3Oracle {
                 int56(int256(block.timestamp - secondsAgos[i]));
         }
 
-        // DEV: *If we wanted* we could actually get historical price at each secondsAgo -
-        // but requires searching through recent `round`s on Chainlink and
-        // finding the one with a timestamp closest to the target: https://docs.chain.link/data-feeds/historical-data
-        // Instead, I just return the current price in each slot
-
         return (tickCumulatives, new uint160[](secondsAgos.length));
     }
 
-    /// @notice Get the current price from ChainLink with adjustable variation.
-    /// @return The current price from the aggregator
-    function getChainlinkPrice() internal view returns (int256) {
-        (, int256 currentPrice, , , ) = aggregator.latestRoundData();
+    /// @notice Get the current price from Pyth with adjustable variation.
+    /// @return The current price from Pyth
+    function getPythPrice() internal view returns (int64) {
+        PythStructs.Price memory price = pyth.getPriceUnsafe(priceFeedId);
 
-        return currentPrice;
+        // TODO: Note, we get a publishTime back on the returned PythStructs.price too -
+        // we could do a stale check and revert here if we wanted.
+
+        return price.price;
     }
 
-    /// @notice Take the square root of a ChainLink price and put it into X96 format.
+    /// @notice Take the square root of a Pyth price and put it into X96 format.
     /// @param price raw ChainLink answer (has DECIMALS decimals)
     /// @return sqrtPriceX96 = sqrt(price/10^DECIMALS) * 2^96
-    function chainlinkPriceToSqrtRatioX96(int256 price) internal pure returns (uint160) {
+    function pythPriceToSqrtRatioX96(int64 price) internal pure returns (uint160) {
         // sqrt(p) has price’s decimals baked in; since price has 8 decimals,
         // we divide out √(10^8) = 10^4 after shifting.
-        return uint160((sqrt(uint256(price)) << 96) / (10 ** (DECIMALS / 2)));
+        return uint160((sqrt(uint64(price)) << 96) / (10 ** (DECIMALS / 2)));
     }
 
     // TODO: Replace with standard lib
-    function sqrt(uint256 x) internal pure returns (uint256) {
-        if (x == 0) return 0;
-        uint256 z = (x + 1) / 2;
-        uint256 y = x;
+    function sqrt(uint64 x) internal pure returns (uint256) {
+        if (x == 0) return x;
+        uint64 z = (x + 1) / 2;
+        uint64 y = x;
         while (z < y) {
             y = z;
             z = (x / z + z) / 2;
