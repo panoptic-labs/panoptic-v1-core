@@ -2,7 +2,6 @@
 
 This document outlines the design, known vulnerabilities, and proposed remediations for Panoptic's XHASH position fingerprinting mechanism. Read the official [post-mortem](https://panoptic.xyz/blog/position-spoofing-post-mortem) for more details
 
-
 ## TokenId and Position Definition
 
 - Each user position is defined by a `uint256` called a `tokenId`. Source: [types/TokenId.sol](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/types/TokenId.sol)
@@ -10,15 +9,11 @@ This document outlines the design, known vulnerabilities, and proposed remediati
 - The protocol tracks ownership of these positions as Semifungible NFTs using the ERC1155 interface.
 - A user mints a position by supplying a `tokenId`, which the protocol then decodes to create a corresponding Liquidity Provider (LP) position in Uniswap.
 
-
-
 ## Collateral Requirements
 
 - Each `tokenId` effectively represents a **debt position** and has an associated collateral requirement.
 - A user's total portfolio collateral requirement must be less than or equal to their collateral balance.
 - Liquidations are triggered when a user's `totalCollateralRequirements` exceed their `collateralBalance`.
-
-
 
 ## Position Tracking via XHASH for Homomorphic hashing
 
@@ -60,15 +55,15 @@ The XHASH scheme is vulnerable to collision attacks. It is computationally feasi
 
 The protocol was not properly validating the `tokenIds` in the user-supplied list. This allowed an attacker to:
 
--  Supply a list containing `tokenIds` that could never be minted on Panoptic, massively increasing the search space for finding a hash collision.
-    - A tokenId with wrong parameters would fail [this check](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/SemiFungiblePositionManager.sol#L588) at mint, but no such check as done when validating the `positionIsList`
--  Supply positions with zero "legs," which did not correctly factor into the position count.
-    - `tokenId.countLegs()` is allowed to return 0 [here](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/libraries/PanopticMath.sol#L133)
+- Supply a list containing `tokenIds` that could never be minted on Panoptic, massively increasing the search space for finding a hash collision.
+  - A tokenId with wrong parameters would fail [this check](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/SemiFungiblePositionManager.sol#L588) at mint, but no such check as done when validating the `positionIsList`
+- Supply positions with zero "legs," which did not correctly factor into the position count.
+  - `tokenId.countLegs()` is allowed to return 0 [here](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/libraries/PanopticMath.sol#L133)
 
 ### **Design Flaw 2: Lack of Ownership Check**
 
 - The protocol was not verifying that the user actually owned the `tokenIds` in the supplied list. This enabled an attacker's spoofed list to pass the collateral check because the calculated requirement for unowned positions would be zero.
-    - The `positionSize` would return zero when computing the collateral requirements [here](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/CollateralTracker.sol#L1167)
+  - The `positionSize` would return zero when computing the collateral requirements [here](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/CollateralTracker.sol#L1167)
 
 ---
 
