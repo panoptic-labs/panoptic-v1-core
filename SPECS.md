@@ -32,8 +32,8 @@ To save gas, the protocol does not store a list of every user's `tokenIds`. Inst
 - **Operations:**
   - **Minting (Add):** The new `keccak256(abi.encode(tokenId))` is XORed with the user's existing `H`.
   - **Burning (Remove):** The `keccak256(abi.encode(tokenId))` of the burned position is XORed with the user's existing `H` to remove it.
-  - **Reference:** [PanopticPool.sol:_updatePositionsHash()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/PanopticPool.sol#L1295-L1315), called in `_updateSettlementPostMint` and `_updateSettlementPostBurn`.
-- **User-Supplied List:** When a user performs any action (mint, burn, withdraw), they must supply their complete list of positions: `positionIdList = [token_0, token_1, ..., token_n]`. The protocol recalculates the XHASH from this list and proceeds only if it matches the one stored internally. Source: [PanopticPool.sol:_validatePositionList()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/PanopticPool.sol#L1262-L1293)
+  - **Reference:** [PanopticPool.sol:\_updatePositionsHash()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/PanopticPool.sol#L1295-L1315), called in `_updateSettlementPostMint` and `_updateSettlementPostBurn`.
+- **User-Supplied List:** When a user performs any action (mint, burn, withdraw), they must supply their complete list of positions: `positionIdList = [token_0, token_1, ..., token_n]`. The protocol recalculates the XHASH from this list and proceeds only if it matches the one stored internally. Source: [PanopticPool.sol:\_validatePositionList()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/PanopticPool.sol#L1262-L1293)
 - **Implementation Detail:** The number of positions is stored in the upper 8 bits of the hash, and thet 256-bit hash is truncated to 248 bits. Source: [libraries/PanopticMath.sol:updatePositionsHash()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/libraries/PanopticMath.sol#L115-L139)
 - Description from [PanopticPool.sol](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/PanopticPool.sol#L228-L237):
   ```
@@ -87,8 +87,11 @@ The following checks are proposed to mitigate the design flaws.
 These remediation steps are designed to make the original attack vector fail, even with the continued use of XHASH, by severely constraining the attacker's ability to construct a malicious spoofed list.
 
 ---
-# 
-# 
+
+#
+
+#
+
 # Statement Of Work and Open Questions
 
 - Question 1: are those remediation steps enough to prevent any future attack, assuming we still use XHASH?
