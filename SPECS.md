@@ -28,7 +28,7 @@ To save gas, the protocol does not store a list of every user's `tokenIds`. Inst
   - **Burning (Remove):** The `keccak256(abi.encode(tokenId))` of the burned position is XORed with the user's existing `H` to remove it.
   - **Reference:** [PanopticPool.sol:\_updatePositionsHash()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/PanopticPool.sol#L1295-L1315), called in `_updateSettlementPostMint` and `_updateSettlementPostBurn`.
 - **User-Supplied List:** When a user performs any action (mint, burn, withdraw), they must supply their complete list of positions: `positionIdList = [token_0, token_1, ..., token_n]`. The protocol recalculates the XHASH from this list and proceeds only if it matches the one stored internally. Source: [PanopticPool.sol:\_validatePositionList()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/PanopticPool.sol#L1262-L1293)
-- **Implementation Detail:** The number of positions is stored in the upper 8 bits of the hash, and thet 256-bit hash is truncated to 248 bits. Source: [libraries/PanopticMath.sol:updatePositionsHash()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/libraries/PanopticMath.sol#L115-L139)
+- **Implementation Detail:** The number of positions is stored in the upper 8 bits of the hash, so that 256-bit hash is truncated to 248 bits. Source: [libraries/PanopticMath.sol:updatePositionsHash()](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/libraries/PanopticMath.sol#L115-L139)
 - Description from [PanopticPool.sol](https://github.com/panoptic-labs/panoptic-v1-core/blob/specs/homomorphic-hashing/contracts/PanopticPool.sol#L228-L237):
   ```
   /// @notice Tracks the position list hash (i.e `keccak256(XORs of abi.encodePacked(positionIdList))`).
@@ -36,7 +36,7 @@ To save gas, the protocol does not store a list of every user's `tokenIds`. Inst
   /// @dev The purpose of this system is to reduce storage usage when a user has more than one active position.
   /// @dev Instead of having to manage an unwieldy storage array and do lots of loads, we just store a hash of the array.
   /// @dev This hash can be cheaply verified on every operation with a user provided positionIdList - which can then be used for operations
-  /// without having to every load any other data from storage.
+  /// without having to ever load any other data from storage.
   //      numLegs                   user positions hash
   //  |<-- 8 bits -->|<------------------ 248 bits ------------------->|
   //  |<---------------------- 256 bits ------------------------------>|
@@ -114,4 +114,4 @@ LtHash is a type of **incremental hash**, which, like XHASH, allows you to effic
 - **Pros (Security & Efficiency):**
   1.  **High Security:** It is purported to offer strong 128-bit of security. An attacker would have to find a collision in _both_ accumulators simultaneously, which is a fundamentally harder problem than breaking the XOR scheme.
   2.  **Gas Efficient:** Just like XHASH, it's incremental. To add a position, you add its hashes to the running totals. To remove it, you subtract them. This completely avoids the expensive on-chain array management of the first alternative.
-- **Cons:** Unclear if that 128 bits security assumption is valid or cryptographically secure. This would be a slightly higher implementation complexity compared to the simple XOR of XHASH.
+- **Cons:** Unclear if that 128 bits security assumption is valid or cryptographically secure. This would have a slightly higher implementation complexity compared to the simple XOR of XHASH.
