@@ -49,7 +49,7 @@ To save gas, the protocol does not store a list of every user's `tokenIds`. Inst
 
 ### **Cryptographic Flaw**
 
-The XHASH scheme is vulnerable to collision attacks. It is computationally feasible for an attacker to find two different lists of `tokenIds` that hash to the same fingerprint `H`. This is a known weakness of XOR-based accumulators, detailed in papers by Bellare & Micciancio and David Wagner (generalized birthday problem).
+The XHASH scheme is vulnerable to collision attacks. It is computationally feasible for an attacker to find two different lists of `tokenIds` that hash to the same fingerprint `H`. This is a known weakness of XOR-based accumulators, detailed in papers by [Bellare & Micciancio](https://cseweb.ucsd.edu/~mihir/papers/inchash.pdf) and [David Wagner](https://iacr.org/archive/crypto2002/24420288/24420288.pdf) (generalized birthday problem implementation [here](https://github.com/hoytech/birthday-collisions)).
 
 ### **Design Flaw 1: Improper `tokenId` Validation**
 
